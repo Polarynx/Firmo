@@ -1,7 +1,26 @@
 const VERSIONS = [
   {
-    version: 'v1.3',
+    version: 'v2.0',
     label: 'Latest',
+    title: 'The Research Hub',
+    changes: [
+      'Complete pivot: Firmo is now a research assistant for writing essays and papers — from blank page to bibliography',
+      'One smart input — type a topic, thesis, or research question and Firmo detects which and adapts',
+      'Live streaming results: the research brief appears in seconds, papers stream in while ranking finishes',
+      'Research brief with suggested angles for your paper and related topics to explore next',
+      'Evidence stance on every source — Supports, Counterpoint, Mixed, or Background — with filter chips showing the balance of evidence',
+      'Projects: one per paper, with every saved source stored per-project in your browser',
+      'Works Cited panel — a real alphabetized bibliography that builds itself as you save sources',
+      'Correct citations at last: DOI papers are formatted from the publisher\'s full record via CrossRef (journal, volume, issue, pages) in APA 7, MLA 9, Chicago, Harvard, and IEEE',
+      'Copy-all bibliography, plus BibTeX and RIS export for Zotero and Mendeley',
+      'Free PDF badges — legal open-access copies found via Unpaywall',
+      'Faster searches: merged AI calls, a hard time budget so slow databases never block results, and chunked ranking that no longer silently drops papers',
+      'New identity: pine green, paper white, and a proper serif — plus a redesigned walkthrough',
+    ],
+  },
+  {
+    version: 'v1.3',
+    label: null,
     title: 'Extended Sources',
     changes: [
       'Expanded from 6 to 14 academic databases searched simultaneously',

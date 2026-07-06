@@ -4,98 +4,56 @@ const STEPS = [
   {
     icon: '🎓',
     title: 'Welcome to Firmo',
-    body: 'Firmo checks if your claims are backed by real academic research. It searches 6 databases simultaneously — Semantic Scholar, PubMed, CrossRef, OpenAlex, Europe PMC, and BASE — and uses AI to evaluate what the science actually says.',
-    tip: 'Think of it as a fact-checker powered by millions of academic papers.',
+    body: 'Firmo takes you from a blank page to a finished bibliography. Describe what you\'re writing about and it searches 14 academic databases at once, ranks what it finds, and builds your works-cited page as you collect sources.',
+    tip: 'Keep Firmo open in a tab while you write — your project and bibliography stay put between searches.',
   },
   {
     icon: '🔍',
-    title: 'Single Claim Search',
-    body: 'Type any factual statement or opinion into the search bar and hit Enter or Search. Firmo works best with specific, testable claims — not vague questions or commands.',
-    tip: 'Best use: Write it like you\'re making a point in an essay. "Coffee improves short-term memory" works great. "Tell me about coffee" does not.',
+    title: 'One box, three kinds of input',
+    body: 'Type a topic ("microplastics in drinking water"), a thesis ("school uniforms improve focus"), or a research question ("does remote work reduce productivity?"). Firmo detects which one you gave it and adapts — a thesis gets an honest evidence assessment, a topic gets a map of the field.',
+    tip: 'Being specific pays off. "Sleep deprivation and memory in college students" beats "sleep".',
   },
   {
-    icon: '📄',
-    title: 'Essay Check Mode',
-    body: 'Switch to "Essay check" and paste a full paragraph or essay. Firmo automatically extracts up to 8 distinct factual claims from your text and evaluates each one individually with a confidence score.',
-    tip: 'Best use: Paste a draft of something you\'re writing. Each claim gets its own color-coded confidence bar — green means well-supported, red means questionable.',
-  },
-  {
-    icon: '🗂️',
-    title: 'Topic Explorer',
-    body: 'Switch to "Topic explorer" and type a single keyword or topic area — like "CRISPR", "sleep deprivation", or "microplastics". Firmo returns an overview of the research landscape, related topics to explore, and the most important papers on that subject.',
-    tip: 'Best use: Use this at the start of a research project when you don\'t yet have a specific claim in mind — it maps out the field and suggests adjacent topics worth diving into.',
-  },
-  {
-    icon: '🤖',
-    title: 'Firmo\'s AI Response',
-    body: 'After every search, Firmo gives you an AI evaluation of the claim — explaining what the evidence says, where there\'s consensus, and where it\'s complicated. The confidence score (0–100%) tells you how strongly the literature supports or refutes the claim.',
-    tip: 'Best use: Read this first before diving into sources. Low confidence (under 40%) often means the claim is contested or lacks strong evidence.',
+    icon: '🧭',
+    title: 'The research brief',
+    body: 'Every search opens with a brief: what the evidence says, strong angles for your paper, and related topics worth exploring next. Results stream in live underneath while Firmo ranks them.',
+    tip: 'The suggested angles are essay outlines in disguise — each one can be a body paragraph.',
   },
   {
     icon: '⚖️',
-    title: 'Debatable Claims',
-    body: 'When a claim is genuinely contested in the literature, you\'ll see two tabs appear: "Main view" (the dominant position) and "Other perspectives" (alternative angles). Each tab shows its own set of sources.',
-    tip: 'Best use: Toggle between both views when writing balanced arguments. The "Other perspectives" tab is gold for finding counterarguments before your reader does.',
+    title: 'Supports vs. Counterpoint',
+    body: 'Each ranked source is tagged by its role: Supports, Counterpoint, Mixed evidence, or Background. The filter chips above the results show the balance of evidence at a glance.',
+    tip: 'Great papers address the counterargument. Grab at least one "Counterpoint" source and answer it in your essay.',
   },
   {
-    icon: '⚡',
-    title: 'Stress Test',
-    body: 'Click "What argues against this?" under Firmo\'s response to run a Stress Test. It finds the strongest academic case against your claim and surfaces the top papers that challenge or complicate it.',
-    tip: 'Best use: Run this before finalizing any argument. If the counterargument is strong, you\'ll want to address it — or rethink your claim entirely.',
-  },
-  {
-    icon: '🔗',
-    title: 'Related Claims',
-    body: 'Below Firmo\'s response, you\'ll see 3 related claims as clickable chips. These are adjacent ideas worth exploring that connect to your original claim.',
-    tip: 'Best use: Use these to build a fuller picture of a topic. Great for finding the next claim to check when building a larger argument.',
-  },
-  {
-    icon: '📚',
-    title: 'Source Cards',
-    body: 'Each paper found appears as a source card showing the title, authors, year, abstract preview, and which database it came from. Click the title to open the full paper. Click the abstract to expand it.',
-    tip: 'Best use: Check the year and citation count to gauge how established the research is. Older papers with high citation counts are usually foundational work.',
-  },
-  {
-    icon: '🔬',
-    title: 'Summarize & Dig Deep',
-    body: '"Summarize" generates a one-sentence plain-English summary of the abstract. "Dig Deep" gives you a 3–4 sentence analysis of exactly what the paper studied and how it relates to your specific claim.',
-    tip: 'Best use: Use Summarize for a quick read. Use Dig Deep when a paper looks relevant but you\'re not sure — it connects the dots between the paper\'s findings and your claim.',
-  },
-  {
-    icon: '📝',
-    title: 'Citation Generator',
-    body: 'Click the cite button on any source card to instantly generate a formatted citation. Choose APA, MLA, or Chicago from the selector at the top. Each citation includes both a full reference and an in-text version — both are copy-to-clipboard.',
-    tip: 'Best use: Set your preferred citation style once at the top and it applies to all cards. The in-text version is especially handy for dropping directly into your writing.',
-  },
-  {
-    icon: '🧩',
-    title: 'Synthesize Sources',
-    body: 'Once you have 3 or more sources, a "Synthesize N sources" button appears. Click it to get an AI-generated synthesis of all papers — a one-sentence verdict plus a detailed breakdown of what the literature collectively says.',
-    tip: 'Best use: Run this after finding 8–12 sources for the richest synthesis. It\'s the fastest way to write a literature review paragraph.',
-  },
-  {
-    icon: '➕',
-    title: 'Find More Sources',
-    body: 'Click "Find more sources" to generate 5 alternative search queries from different angles. Firmo searches again using those queries and adds new papers to your results — with no duplicates.',
-    tip: 'Best use: Run this when your initial results feel too narrow or all come from the same field. The alternative queries often uncover papers from unexpected disciplines.',
-  },
-  {
-    icon: '💬',
-    title: 'Ask Sources',
-    body: 'At the bottom of your results, type any question into the "Ask a question about these sources…" box. Firmo answers based strictly on what the papers you found actually say.',
-    tip: 'Best use: Ask specific methodological questions like "What populations were studied?" or "Do any of these papers mention long-term effects?" — it\'s grounded in your actual sources, not general AI knowledge.',
+    icon: '📄',
+    title: 'Free PDFs and quality signals',
+    body: 'A "Free PDF" badge means a legal open-access copy exists (via Unpaywall) — one click to the actual paper. Journal names and citation counts help you judge how established a source is.',
+    tip: 'Older paper with thousands of citations? That\'s foundational work — great for your introduction.',
   },
   {
     icon: '🔖',
-    title: 'Save & History',
-    body: 'Bookmark any paper using the bookmark icon on its card — it\'s saved to your browser with the original claim context. Access saved papers from the bookmark icon in the navbar. Your last 20 searches are in the history panel (clock icon).',
-    tip: 'Best use: Save papers as you go, then open the saved panel at the end of a research session to build your reference list all at once.',
+    title: 'Projects: one per paper',
+    body: 'The "Your paper" panel holds a project for each assignment. Bookmark any source and it lands in the active project. Switch projects from the dropdown when you\'re juggling classes.',
+    tip: 'Name projects after the assignment ("HIST200 — Cold War essay") so future-you can find them.',
   },
   {
-    icon: '🔗',
-    title: 'Share Results',
-    body: 'The share icon appears in the navbar after a search. Clicking it copies a direct URL to your clipboard — anyone with the link opens the same search automatically.',
-    tip: 'Best use: Share a specific claim search with a collaborator or teacher so they can see exactly what sources you found and what Firmo said about it.',
+    icon: '📚',
+    title: 'The works-cited page writes itself',
+    body: 'As you save sources, the Works Cited panel builds a real, alphabetized bibliography in APA 7, MLA 9, Chicago, Harvard, or IEEE. Sources with a DOI are formatted from the publisher\'s full record — journal, volume, issue, pages.',
+    tip: 'One click on "Copy all" and your reference list is done. Or download .bib / .ris for Zotero and Mendeley.',
+  },
+  {
+    icon: '📝',
+    title: 'Check my draft',
+    body: 'Switch to "Check my draft" and paste what you\'ve written. Firmo extracts every factual claim, scores how well-supported each one is, and lets you jump straight to finding sources for any claim that needs backup.',
+    tip: 'Run your draft through before submitting — a red claim means you should find a source or soften the wording.',
+  },
+  {
+    icon: '💬',
+    title: 'Dig deeper anywhere',
+    body: '"Summarize" turns any abstract into one plain sentence. "Why it matters" explains what a paper means for your argument. "Ask a question" answers from your actual sources. "Synthesize" writes an overview of all the evidence.',
+    tip: 'The synthesis makes a great starting point for a literature-review paragraph — in your own words, of course.',
   },
 ]
 
@@ -109,7 +67,7 @@ export default function Walkthrough({ onClose }) {
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeInUp"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-2xl w-full max-w-lg flex flex-col">
+      <div className="bg-white dark:bg-ink-900 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-2xl w-full max-w-lg flex flex-col">
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-3">
@@ -164,11 +122,8 @@ export default function Walkthrough({ onClose }) {
           </button>
 
           {isLast ? (
-            <button
-              onClick={onClose}
-              className="btn-primary text-sm px-5"
-            >
-              Start using Firmo
+            <button onClick={onClose} className="btn-primary text-sm px-5">
+              Start researching
             </button>
           ) : (
             <button

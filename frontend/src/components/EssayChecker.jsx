@@ -32,7 +32,7 @@ function ClaimCard({ item, index, onSearch }) {
       <ConfidenceBar value={item.confidence} />
       <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">{item.response}</p>
       <button onClick={() => onSearch(item.claim)} className="self-start btn-secondary text-xs mt-1">
-        Search sources →
+        Find sources for this claim →
       </button>
     </div>
   )
@@ -45,10 +45,10 @@ export default function EssayChecker({ text = '', onTextChange, results, loading
       <textarea
         value={text}
         onChange={e => onTextChange(e.target.value)}
-        placeholder="Paste a paragraph or essay — Firmo will identify and evaluate every factual claim in it."
+        placeholder="Paste your draft — Firmo identifies every factual claim, scores how well-supported it is, and helps you find sources for the shaky ones."
         rows={6}
         className="w-full resize-none rounded-xl border border-gray-200 dark:border-gray-800
-          bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100
+          bg-white dark:bg-ink-900 text-gray-900 dark:text-gray-100
           placeholder-gray-400 dark:placeholder-gray-600
           px-4 py-3 text-sm
           focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-400 dark:focus:border-brand-600
@@ -76,7 +76,7 @@ export default function EssayChecker({ text = '', onTextChange, results, loading
             disabled={!text.trim()}
             className="btn-primary flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            Check essay
+            Check draft
           </button>
         )}
       </div>

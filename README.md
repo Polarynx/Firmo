@@ -1,4 +1,5 @@
 # Firmo
+<<<<<<< HEAD
 
 **From blank page to bibliography.** Firmo is a free research hub for students writing essays and papers. Describe what you're writing about — a topic, a thesis, or a research question — and Firmo finds real, citable academic sources, shows you what the evidence says, and builds your works-cited page as you go.
 
@@ -32,35 +33,134 @@ firmo/
         ├── lib/          # api (NDJSON stream reader), projects store, constants
         └── components/   # ResearchInput, BriefCard, PaperCard,
                           # ProjectSidebar, EssayChecker, …
+=======
+ 
+**Firmo** is a full-stack academic source finder and citation generator. Enter any claim, essay, or research topic and Firmo queries 14 academic databases (2B+ papers) simultaneously, evaluates evidence using Mistral LLM, and generates properly formatted citations.
+ 
+🔗 **Live:** [firmo-delta.vercel.app](https://firmo-delta.vercel.app)
+ 
+---
+ 
+## How It Works
+ 
+1. **User submits** a claim, essay, or topic through the React frontend
+2. **FastAPI backend** fans out parallel queries across 14 academic database APIs
+3. **Results are deduplicated**, ranked, and enriched with metadata (journal, citation count, database source)
+4. **Mistral LLM** evaluates the claim against returned evidence — generating a confidence score (0–100%), synthesis verdict, and optional counterarguments
+5. **Frontend renders** interactive source cards with one-click citation generation, summarization, and deep-dive analysis
+ 
+---
+ 
+## Features
+ 
+### Search Modes
+- **Single Claim** — paste a factual statement and get papers that support or challenge it
+- **Essay Check** — extracts up to 8 factual claims from pasted text with color-coded confidence bars
+- **Topic Explorer** — search by keyword or topic area with AI-generated research landscape overviews
+ 
+### Source Analysis
+- AI confidence scoring (0–100%) per claim
+- **Debatable mode** — toggle between supporting and opposing sources for contested claims
+- **Stress Test** — generates the strongest academic counterargument + opposing papers
+- **Evidence synthesis** — AI verdict across up to 12 sources at once
+- **Summarize** — one-sentence plain-English summary of any abstract
+- **Dig Deep** — 3–4 sentence analysis of what a paper studied and how it relates to your claim
+- **Ask Sources** — free-form questions answered based on what the found papers actually say
+- **Find More Sources** — 5 alternative search queries, no duplicates with existing results
+ 
+### Citations
+- APA, MLA, Chicago — full reference + in-text format
+- One-click copy to clipboard
+ 
+### UX
+- Dark / light mode with system preference detection
+- Related claims and related topics chips for exploration
+- Save papers with original claim context (browser storage)
+- Search history — last 20 searches, re-runnable with one click
+- Share via URL — copy a direct link to any search result
+- Database filter chips — filter results by source with live count per database
+- Source badge on every paper card showing database origin, journal, and citation count
+- Guided 16-step walkthrough tutorial with pro tips
+- IP-based rate limiting: 50 searches/user/day
+ 
+---
+ 
+## Databases (14)
+ 
+| Database | Estimated Papers |
+|---|---|
+| Semantic Scholar | 200M+ |
+| OpenAlex | 250M+ |
+| BASE | 300M+ |
+| CrossRef | 150M+ |
+| Europe PMC | 45M+ |
+| PubMed | 35M+ |
+| DOAJ | 20M+ |
+| arXiv | 2.4M+ |
+| Zenodo | 3M+ |
+| ERIC | 2M+ |
+| HAL | 1.5M+ |
+| INSPIRE-HEP | 1.5M+ |
+| PLOS | 300K+ |
+| fatcat | 900M+ |
+ 
+**Total: ~2 billion+ academic papers searchable simultaneously**
+ 
+---
+ 
+## Project Structure
+ 
 ```
-
-## Running locally
-
+firmo/
+├── backend/              # FastAPI Python backend
+│   ├── main.py
+│   └── requirements.txt
+└── frontend/             # React + Vite + Tailwind frontend
+    ├── src/
+    │   ├── App.jsx
+    │   ├── main.jsx
+    │   ├── index.css
+    │   └── components/
+    │       ├── SearchBar.jsx
+    │       ├── SourceCard.jsx
+    │       └── ThemeToggle.jsx
+    ├── index.html
+    ├── package.json
+    ├── vite.config.js
+    └── tailwind.config.js
+>>>>>>> 0ea62073e92a44786ae982623293807ebbc4e034
+```
+ 
+---
+ 
+## Running Locally
+ 
 ### Backend
-
 ```bash
 cd backend
 python -m venv .venv
-# Windows
-.venv\Scripts\activate
-# macOS/Linux
-source .venv/bin/activate
-
+source .venv/bin/activate   # macOS/Linux
+.venv\Scripts\activate      # Windows
 pip install -r requirements.txt
 uvicorn main:app --reload
 ```
+<<<<<<< HEAD
 
 Requires a `.env` with `MISTRAL_API_KEY=...` (never commit it). Optional: `UNPAYWALL_EMAIL`, `ALLOWED_ORIGINS`.
 
 API: `http://localhost:8000` · interactive docs at `/docs`.
 
+=======
+API available at `http://localhost:8000` · Interactive docs at `http://localhost:8000/docs`
+ 
+>>>>>>> 0ea62073e92a44786ae982623293807ebbc4e034
 ### Frontend
-
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
+<<<<<<< HEAD
 
 Opens at `http://localhost:5173`; `/api` calls proxy to the backend automatically.
 
@@ -68,9 +168,19 @@ Opens at `http://localhost:5173`; `/api` calls proxy to the backend automaticall
 
 ### `POST /api/research` — the main event (streaming)
 
+=======
+App opens at `http://localhost:5173`. API calls proxy to `localhost:8000` via Vite.
+ 
+---
+ 
+## API Reference
+ 
+### `POST /api/search`
+>>>>>>> 0ea62073e92a44786ae982623293807ebbc4e034
 ```json
 { "query": "caffeine improves athletic performance", "year_from": 2015 }
 ```
+<<<<<<< HEAD
 
 Streams NDJSON events: `status` → `brief` (type, assessment, angles, related) → `papers` (provisional preview) → `ranked` (final list with `stance`, `relevanceScore`, `oa_pdf`) → `done`.
 
@@ -88,3 +198,49 @@ Styles: `apa`, `mla`, `chicago`, `harvard`, `ieee`. `exact: true` means it was r
 `/api/claimchain` (draft checker) · `/api/more-sources` · `/api/summarize` · `/api/digdeep` · `/api/synthesize-sources` · `/api/ask-sources`
 
 Rate limit: 50 searches/day per IP on `/api/research` and `/api/claimchain`.
+=======
+Returns a list of papers with `title`, `authors`, `year`, `abstract`, `url`, `doi`, `source_db`.
+ 
+### `POST /api/cite`
+```json
+{
+  "title": "...",
+  "authors": ["Jane Doe", "John Smith"],
+  "year": 2023,
+  "doi": "10.1234/example",
+  "url": "https://...",
+  "style": "apa"
+}
+```
+Returns `{ "citation": "...", "intext": "...", "style": "apa" }`.
+ 
+---
+ 
+## Deployment
+ 
+- **Frontend:** Vercel (auto-deploy via GitHub CI/CD)
+- **Backend:** Render
+- 9 REST API endpoints
+- Sub-2s response time (warm)
+- ~300 searches/month on free tier
+ 
+---
+ 
+## Version History
+ 
+| Version | Name | Highlights |
+|---|---|---|
+| **v1.3** | Extended Sources | Expanded to 14 databases, source badges, database filter chips |
+| **v1.2** | Topic Explorer | Topic search mode, research landscape overviews, changelog viewer |
+| **v1.1** | Guidance | 16-step guided tutorial with pro tips, startup fix |
+| **v1.0** | Foundation | Claim search, essay checker, stress test, citations, debatable mode, evidence synthesis |
+ 
+---
+ 
+## Tech Stack
+ 
+**Frontend:** React, Vite, Tailwind CSS
+**Backend:** FastAPI, Python
+**LLM:** Mistral AI
+**Deployment:** Vercel + Render
+>>>>>>> 0ea62073e92a44786ae982623293807ebbc4e034

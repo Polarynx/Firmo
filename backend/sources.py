@@ -31,7 +31,13 @@ PLOS_URL = "https://api.plos.org/search"
 HAL_URL = "https://api.archives-ouvertes.fr/search/"
 INSPIRE_URL = "https://inspirehep.net/api/literature"
 FATCAT_URL = "https://api.fatcat.wiki/v0/release/search"
+OPENAIRE_URL = "https://api.openaire.eu/search/publications"
 UNPAYWALL_URL = "https://api.unpaywall.org/v2"
+DOAB_URL = "https://directory.doabooks.org/rest/search"
+
+# Optional — the keyless Semantic Scholar endpoint is aggressively throttled and
+# usually returns nothing; a free API key makes it a reliable source again.
+_S2_KEY = os.getenv("SEMANTIC_SCHOLAR_API_KEY")
 
 _client: Optional[httpx.AsyncClient] = None
 
@@ -47,8 +53,8 @@ def get_client() -> httpx.AsyncClient:
     return _client
 
 
-async def _get(url: str, params: dict, timeout: float = 15.0) -> httpx.Response:
-    resp = await get_client().get(url, params=params, timeout=timeout)
+async def _get(url: str, params: dict, timeout: float = 15.0, headers: Optional[dict] = None) -> httpx.Response:
+    resp = await get_client().get(url, params=params, timeout=timeout, headers=headers)
     resp.raise_for_status()
     return resp
 
@@ -62,8 +68,9 @@ async def search_semantic_scholar(query: str, limit: int = 10, year_from: Option
     }
     if year_from:
         params["year"] = f"{year_from}-"
+    headers = {"x-api-key": _S2_KEY} if _S2_KEY else None
     try:
-        data = (await _get(SEMANTIC_SCHOLAR_URL, params)).json()
+        data = (await _get(SEMANTIC_SCHOLAR_URL, params, headers=headers)).json()
     except Exception:
         return []
 
@@ -91,11 +98,13 @@ async def search_semantic_scholar(query: str, limit: int = 10, year_from: Option
 
 
 async def search_crossref(query: str, limit: int = 8, year_from: Optional[int] = None) -> list[dict]:
-    filter_str = "type:journal-article"
+    # Repeated type filters are OR'd by Crossref; books/chapters/monographs are
+    # essential for humanities coverage.
+    filter_str = "type:journal-article,type:book-chapter,type:book,type:monograph,type:edited-book"
     if year_from:
         filter_str += f",from-pub-date:{year_from}"
     params = {
-        "query": query,
+        "query.bibliographic": query,
         "rows": limit,
         "filter": filter_str,
         "sort": "relevance",
@@ -344,7 +353,9 @@ async def search_base(query: str, limit: int = 8, year_from: Optional[int] = Non
 
 
 async def search_openalex(query: str, limit: int = 8, year_from: Optional[int] = None) -> list[dict]:
-    filter_str = "type:article"
+    # Books, chapters, and dissertations matter as much as articles in the
+    # humanities — filtering to articles only starves history/culture topics.
+    filter_str = "type:article|review|book|book-chapter|dissertation"
     if year_from:
         filter_str += f",publication_year:>{year_from - 1}"
     params = {
@@ -710,9 +721,143 @@ async def search_fatcat(query: str, limit: int = 8, year_from: Optional[int] = N
     return results
 
 
+def _oaf_first(v):
+    """OpenAIRE OAF fields are dict-or-list-of-dicts; return the first dict."""
+    if isinstance(v, list):
+        return v[0] if v else {}
+    return v or {}
+
+
+async def search_openaire(query: str, limit: int = 8, year_from: Optional[int] = None) -> list[dict]:
+    """OpenAIRE — EU aggregator of institutional repositories; strong humanities coverage."""
+    params = {"keywords": query, "format": "json", "size": limit, "sortBy": "resultdateofacceptance,descending"}
+    if year_from:
+        params["fromDateAccepted"] = f"{year_from}-01-01"
+    try:
+        data = (await _get(OPENAIRE_URL, params)).json()
+    except Exception:
+        return []
+
+    raw = ((data.get("response", {}).get("results") or {}).get("result")) or []
+    if isinstance(raw, dict):
+        raw = [raw]
+
+    results = []
+    for res in raw:
+        ent = (res.get("metadata", {}).get("oaf:entity", {}) or {}).get("oaf:result", {}) or {}
+
+        title = _oaf_first(ent.get("title")).get("$", "")
+        if not title:
+            continue
+
+        creators = ent.get("creator")
+        if isinstance(creators, dict):
+            creators = [creators]
+        authors = [c.get("$", "") for c in (creators or []) if isinstance(c, dict)]
+
+        abstract = _oaf_first(ent.get("description")).get("$", "") or ""
+        if not abstract:
+            continue
+
+        year = None
+        date = _oaf_first(ent.get("dateofacceptance")).get("$", "")
+        m = re.search(r"\d{4}", str(date))
+        if m:
+            year = int(m.group())
+        if year_from and year and year < year_from:
+            continue
+
+        pids = ent.get("pid")
+        if isinstance(pids, dict):
+            pids = [pids]
+        doi = next(
+            (str(p.get("$", "")) for p in (pids or []) if isinstance(p, dict) and p.get("@classid") == "doi"),
+            None,
+        ) or None
+
+        journal = _oaf_first(ent.get("journal")).get("$") or None
+        if doi:
+            url = f"https://doi.org/{doi}"
+        else:
+            obj_id = (res.get("header", {}).get("dri:objIdentifier") or {}).get("$", "")
+            url = f"https://explore.openaire.eu/search/publication?articleId={obj_id}" if obj_id else ""
+
+        results.append({"title": title, "authors": authors, "year": year, "abstract": abstract,
+                        "url": url, "doi": doi, "journal": journal, "citationCount": 0,
+                        "source": "openaire"})
+    return results
+
+
+async def search_doab(query: str, limit: int = 6, year_from: Optional[int] = None) -> list[dict]:
+    """DOAB — Directory of Open Access Books: peer-reviewed scholarly books.
+
+    Books are badly under-covered by the article-first databases, so DOAB is the
+    difference-maker for humanities and history topics.
+    """
+    params = {"query": query, "expand": "metadata"}
+    try:
+        data = (await _get(DOAB_URL, params)).json()
+    except Exception:
+        return []
+    if not isinstance(data, list):
+        return []
+
+    results = []
+    for item in data[:limit]:
+        md = item.get("metadata", [])
+        if not isinstance(md, list):
+            continue
+        vals: dict = {}
+        for m in md:
+            k, v = m.get("key"), m.get("value")
+            if k is not None and v is not None:
+                vals.setdefault(k, []).append(v)
+
+        def first(key: str) -> str:
+            xs = vals.get(key) or []
+            return xs[0] if xs else ""
+
+        title = first("dc.title")
+        abstract = first("dc.description.abstract")
+        if not title or not abstract:
+            continue
+
+        year = None
+        m = re.search(r"\d{4}", first("dc.date.issued"))
+        if m:
+            year = int(m.group())
+        if year_from and year and year < year_from:
+            continue
+
+        doi = first("oapen.identifier.doi") or None
+        handle = item.get("handle", "")
+        if doi:
+            url = f"https://doi.org/{doi}"
+        elif handle:
+            url = f"https://directory.doabooks.org/handle/{handle}"
+        else:
+            url = first("dc.identifier.uri")
+
+        results.append({
+            "title": title,
+            "authors": vals.get("dc.contributor.author", []) or [],
+            "year": year,
+            "abstract": abstract,
+            "url": url,
+            "doi": doi,
+            "journal": first("oapen.relation.isPublishedBy") or None,
+            "citationCount": 0,
+            "source": "doab",
+        })
+    return results
+
+
 # ── Fan-out search ────────────────────────────────────────────────────────────
 
 # (connector, per-query result limit). Ordered roughly by quality of results.
+# fatcat was removed: its endpoint reliably times out at 15s and returns nothing,
+# so it only ever occupied a task slot and dragged the progress bar. DOAB (open
+# access books) took its place to broaden humanities/history coverage.
 ALL_CONNECTORS: list[tuple] = [
     (search_semantic_scholar, 15),
     (search_openalex, 12),
@@ -724,10 +869,11 @@ ALL_CONNECTORS: list[tuple] = [
     (search_arxiv, 8),
     (search_plos, 6),
     (search_hal, 8),
+    (search_openaire, 8),
     (search_base, 8),
     (search_zenodo, 8),
     (search_inspire, 8),
-    (search_fatcat, 8),
+    (search_doab, 6),
 ]
 
 
@@ -812,6 +958,66 @@ def quality_score(paper: dict) -> float:
     if citations > 0:
         score += math.log(citations + 1) * 4
     return score
+
+
+# ── Lexical relevance ─────────────────────────────────────────────────────────
+# The non-LLM relevance signal the ranker was missing. Without it, everything was
+# ordered by citation count until the LLM ran, so the most-cited paper that merely
+# shared a keyword ("The CES-D Scale" for a bilingual-education query) floated to
+# the top of the preview, and a flaky LLM call left that citation-ranked noise in
+# place. These functions give every ranking step a cheap topical signal to lean on.
+
+_STOPWORDS = frozenset("""
+a an and are as at be by for from has have how in into is it its of on or that the
+their to was were what when where which who why will with about above after again
+against all also am been before being below between both but can cannot could did do
+does doing down during each few further here more most no nor not now off once only
+other over own same should so some such than then there these they this those through
+too under until up very while would your you our may might must shall these toward
+towards study studies research paper papers review reviews analysis effect effects
+impact impacts role using use used based examine examines examining
+""".split())
+
+
+def _terms(text: str) -> set:
+    if not text:
+        return set()
+    return {w for w in re.findall(r"[a-z0-9]{3,}", text.lower()) if w not in _STOPWORDS}
+
+
+def build_query_terms(queries: list[str]) -> set:
+    """Union of content words across the corrected input and every fan-out query."""
+    terms: set = set()
+    for q in queries:
+        terms |= _terms(q or "")
+    return terms
+
+
+def relevance_score(paper: dict, query_terms: set) -> float:
+    """Lexical overlap between the query vocabulary and a paper's title/abstract.
+
+    Title hits weigh most; covering more of the query at all is rewarded, so a
+    paper touching several query facets beats one that just repeats a single shared
+    word. Returns 0.0 when nothing overlaps — callers use that to drop obvious junk.
+    """
+    if not query_terms:
+        return 0.0
+    title_terms = _terms(paper.get("title", ""))
+    abstract_terms = _terms((paper.get("abstract") or "")[:1200])
+    title_hits = len(query_terms & title_terms)
+    abstract_hits = len(query_terms & abstract_terms)
+    covered = len(query_terms & (title_terms | abstract_terms)) / len(query_terms)
+    return 3.0 * title_hits + 1.0 * abstract_hits + 5.0 * covered
+
+
+def candidate_rank(paper: dict, query_terms: set) -> float:
+    """Relevance-first ordering for the preview and the rerank candidate pool.
+
+    Weighted so topical fit dominates but a well-cited, well-formed paper with only
+    modest overlap can still make the pool (the LLM may still judge it relevant),
+    while citation count alone can never carry an off-topic paper to the top.
+    """
+    return relevance_score(paper, query_terms) * 3.0 + quality_score(paper)
 
 
 def deduplicate(papers: list[dict]) -> list[dict]:

@@ -3,7 +3,7 @@ export default function ThemeToggle({ dark, onToggle }) {
     <button
       onClick={onToggle}
       aria-label="Toggle dark mode"
-      className="p-2 rounded-lg text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+      className="p-2 rounded-[3px] text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
     >
       {dark ? (
         // Sun icon

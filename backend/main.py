@@ -2,6 +2,8 @@ import asyncio
 import json
 import os
 import re
+import traceback
+from typing import Optional
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
@@ -26,10 +28,13 @@ from schemas import (
 )
 from sources import (
     ALL_CONNECTORS,
+    build_query_terms,
+    candidate_rank,
     enrich_unpaywall,
     paper_id,
     process_papers,
     quality_score,
+    relevance_score,
     search_all,
 )
 import citations
@@ -93,7 +98,7 @@ Step 4 — angles: 3 or 4 strong angles for their paper. Each is an object with 
 
 Step 5 — related: exactly 3 short related topics or questions worth exploring next.
 
-Step 6 — search_queries: 6 academic search queries that together maximise coverage — vary terminology, sub-topics, and angles. Each query MUST be a short plain keyword phrase of 3–6 words, the kind that works in a simple search box (e.g. "sleep deprivation memory students"). NO boolean operators (AND/OR), NO quotes, NO long sentences — those return zero results. If input_type is "thesis" or "question", make 2 of the 6 target counter-evidence or complicating factors, because a good paper must address them.
+Step 6 — search_queries: 6 academic search queries that together maximise coverage — vary terminology, sub-topics, and angles. Each query MUST be a short plain keyword phrase of 3–6 words, the kind that works in a simple search box (e.g. "sleep deprivation memory students"). NO boolean operators (AND/OR), NO quotes, NO long sentences — those return zero results. Critically, use the vocabulary SCHOLARS use in titles and abstracts, not the student's colloquial phrasing: "the 1400s" → "fifteenth century" or "late precontact", "Native American tribes" → "Indigenous peoples North America", "old China" → the dynasty name. Include the specific named entities researchers study (cultures, regions, periods, mechanisms, populations) rather than generic umbrella words. If input_type is "thesis" or "question", make 2 of the 6 target counter-evidence or complicating factors, because a good paper must address them.
 
 Return ONLY valid JSON with keys: input_type, corrected_input, brief, angles, related, search_queries"""
 
@@ -115,7 +120,7 @@ def _fallback_plan(query: str) -> dict:
 
 async def plan_research(query: str) -> dict:
     try:
-        plan = await chat_json(RESEARCH_PROMPT.format(query=query[:600]), max_tokens=1000)
+        plan = await chat_json(RESEARCH_PROMPT.format(query=query[:600]), max_tokens=1800)
         if plan.get("input_type") != "invalid" and not plan.get("search_queries"):
             raise ValueError("no search_queries")
         plan.setdefault("corrected_input", query)
@@ -123,8 +128,8 @@ async def plan_research(query: str) -> dict:
         plan.setdefault("angles", [])
         plan.setdefault("related", [])
         return plan
-    except Exception as e:
-        print(f"[plan_research ERROR] {type(e).__name__}: {e}")
+    except Exception:
+        traceback.print_exc()
         return _fallback_plan(query)
 
 
@@ -157,16 +162,28 @@ Return ONLY valid JSON: {{"papers": [{{"index": 0, "score": 8, "stance": "suppor
 VALID_STANCES = {"supports", "counters", "mixed", "background"}
 
 
-async def rerank_and_tag(query: str, brief: str, papers: list[dict], max_candidates: int = 80) -> list[dict]:
+async def rerank_and_tag(
+    query: str,
+    brief: str,
+    papers: list[dict],
+    max_candidates: int = 80,
+    query_terms: Optional[set] = None,
+) -> list[dict]:
     """Chunked LLM rerank so long candidate lists are never silently truncated.
 
-    Pre-cuts to the best candidates by metadata quality, scores 20 at a time in
-    parallel, and fails open per-chunk (a failed chunk keeps its papers rather
-    than dropping them).
+    Pre-cuts to the best candidates by lexical relevance + metadata quality (not
+    citations alone, which used to crowd relevant low-citation papers out of the
+    pool before the LLM ever saw them), scores 20 at a time in parallel, and — when
+    a chunk's LLM call fails — falls back to the lexical relevance score instead of
+    keeping every paper at a neutral 5. That fallback is what keeps a flaky Mistral
+    call from dumping citation-ranked, off-topic noise on the student.
     """
     if not papers:
         return []
-    candidates = sorted(papers, key=quality_score, reverse=True)[:max_candidates]
+    if query_terms is None:
+        query_terms = build_query_terms([query])
+
+    candidates = sorted(papers, key=lambda p: candidate_rank(p, query_terms), reverse=True)[:max_candidates]
     chunks = [candidates[i:i + 20] for i in range(0, len(candidates), 20)]
 
     async def score_chunk(chunk: list[dict]) -> list[dict]:
@@ -178,15 +195,19 @@ async def rerank_and_tag(query: str, brief: str, papers: list[dict], max_candida
         try:
             parsed = await chat_json(prompt, max_tokens=1200)
             entries = {e["index"]: e for e in parsed.get("papers", []) if isinstance(e.get("index"), int)}
-        except Exception as e:
-            print(f"[rerank chunk ERROR] {type(e).__name__}: {e}")
+        except Exception:
+            print("[rerank chunk ERROR]")
+            traceback.print_exc()
             entries = {}
         out = []
         for i, p in enumerate(chunk):
             e = entries.get(i)
             if e is None:
-                # fail open: unscored papers stay with a neutral score
-                out.append({**p, "relevanceScore": 5, "stance": "background"})
+                # fail open on the lexical signal: an on-topic paper keeps a usable
+                # score, an off-topic one scores ~0 and drops out — far better than
+                # blanket-keeping everything when the LLM is unavailable.
+                lex = relevance_score(p, query_terms)
+                out.append({**p, "relevanceScore": min(10, round(lex)), "stance": "background"})
                 continue
             stance = e.get("stance") if e.get("stance") in VALID_STANCES else "background"
             out.append({**p, "relevanceScore": e.get("score", 0), "stance": stance})
@@ -198,7 +219,7 @@ async def rerank_and_tag(query: str, brief: str, papers: list[dict], max_candida
     kept = [p for p in scored if p["relevanceScore"] >= 5]
     if not kept:
         kept = [p for p in scored if p["relevanceScore"] >= 4]
-    kept.sort(key=lambda p: (p["relevanceScore"], quality_score(p)), reverse=True)
+    kept.sort(key=lambda p: (p["relevanceScore"], relevance_score(p, query_terms), quality_score(p)), reverse=True)
     return kept
 
 
@@ -248,8 +269,15 @@ async def research(req: ResearchRequest, request: Request):
                         done=done, total=total, papers=count,
                     ))
 
+            # the topic itself is often the single best search string — always include it
+            fanout_queries = [final_query[:120]] + [
+                q for q in plan["search_queries"][:6] if q.lower() != final_query.lower()
+            ]
+            # the vocabulary the LLM chose (scholarly synonyms + named entities) is the
+            # yardstick for lexical relevance, used for the preview and the rerank pool
+            query_terms = build_query_terms(fanout_queries)
             search_task = asyncio.create_task(
-                search_all(plan["search_queries"][:6], year_from=req.year_from,
+                search_all(fanout_queries, year_from=req.year_from,
                            budget=10.0, on_progress=on_progress)
             )
 
@@ -267,13 +295,22 @@ async def research(req: ResearchRequest, request: Request):
 
             papers = process_papers(await search_task, year_from=req.year_from)
 
-            # provisional preview so the student sees papers immediately
-            preview = sorted(papers, key=quality_score, reverse=True)[:12]
+            # provisional preview so the student sees papers immediately — ranked by
+            # topical relevance, not raw citations, and with zero-overlap papers
+            # dropped so obvious off-topic noise never appears even for a moment.
+            relevant = [p for p in papers if relevance_score(p, query_terms) > 0]
+            preview_pool = relevant if len(relevant) >= 8 else papers
+            preview = sorted(
+                preview_pool,
+                key=lambda p: (relevance_score(p, query_terms), quality_score(p)),
+                reverse=True,
+            )[:12]
             yield _ev("papers", results=preview, provisional=True, total_found=len(papers))
             yield _ev("status", stage="rank",
                       message=f"Ranking {len(papers)} papers for relevance…")
 
-            ranked = await rerank_and_tag(final_query, plan.get("brief", ""), papers)
+            ranked = await rerank_and_tag(final_query, plan.get("brief", ""), papers,
+                                          query_terms=query_terms)
 
             yield _ev("status", stage="enrich", message="Checking for free PDF versions…")
             await enrich_unpaywall(ranked, top_n=25)
@@ -285,8 +322,9 @@ async def research(req: ResearchRequest, request: Request):
             yield _ev("ranked", results=ranked, stance_counts=stance_counts,
                       total_considered=len(papers))
             yield _ev("done")
-        except Exception as e:
-            print(f"[research ERROR] {type(e).__name__}: {e}")
+        except Exception:
+            print("[research ERROR]")
+            traceback.print_exc()
             yield _ev("error", message="Something went wrong during the search. Please try again.")
 
     return StreamingResponse(generate(), media_type="application/x-ndjson")

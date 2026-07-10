@@ -67,8 +67,8 @@ function SynthesisPanel({ query, papers }) {
 
   if (result) {
     return (
-      <div className="card bg-brand-50/40 dark:bg-brand-950/10 border-brand-200 dark:border-brand-800/40 p-4 flex flex-col gap-1.5 animate-fadeInUp">
-        <span className="text-xs font-semibold text-brand-600 dark:text-brand-400">What the evidence says overall</span>
+      <div className="card border-l-2 border-l-brand-500 p-4 flex flex-col gap-1.5 animate-fadeInUp">
+        <span className="eyebrow !text-brand-700 dark:!text-brand-400">What the evidence says overall</span>
         <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
           {expanded ? result.synthesis || result.summary : result.summary}
           {result.synthesis && result.synthesis !== result.summary && (
@@ -93,7 +93,7 @@ function SynthesisPanel({ query, papers }) {
 
 const IDLE_STEPS = [
   { n: '1', title: 'Describe your paper', body: 'A topic, a thesis, or a research question — Firmo figures out which and maps the field for you.' },
-  { n: '2', title: 'Collect real sources', body: '14 academic databases searched at once, ranked for relevance, tagged by whether they support or challenge your argument.' },
+  { n: '2', title: 'Collect real sources', body: '15 academic databases searched at once, ranked for relevance, tagged by whether they support or challenge your argument.' },
   { n: '3', title: 'Copy your bibliography', body: 'Save sources to your project and your works-cited page writes itself — APA, MLA, Chicago, Harvard, or IEEE.' },
 ]
 
@@ -359,19 +359,20 @@ export default function App() {
   return (
     <div className="min-h-screen bg-paper-50 dark:bg-ink-950 text-gray-900 dark:text-gray-100 transition-colors duration-200">
 
-      {/* Header */}
-      <header className="border-b border-gray-200/70 dark:border-gray-800 bg-paper-50/90 dark:bg-ink-950/90 backdrop-blur-sm sticky top-0 z-10">
+      {/* Masthead */}
+      <header className="bg-paper-50/90 dark:bg-ink-950/90 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-baseline gap-3">
             <button
               onClick={() => { setView('research'); setPhase('idle'); setError(''); window.history.replaceState({}, '', window.location.pathname) }}
-              className="font-display italic font-bold text-2xl tracking-tight text-brand-700 dark:text-brand-300"
+              className="font-display font-bold text-2xl tracking-tight text-gray-900 dark:text-gray-100"
             >
               Firmo
             </button>
+            <span className="hidden sm:inline eyebrow">Sources · Briefs · Citations</span>
             <button
               onClick={() => setShowChangelog(true)}
-              className="text-xs font-mono text-gray-400 dark:text-gray-600 hover:text-brand-500 dark:hover:text-brand-400 transition-colors"
+              className="text-xs font-mono text-gray-400 dark:text-gray-600 hover:text-brand-600 dark:hover:text-brand-400 transition-colors"
               title="View project progress"
             >v2.0</button>
           </div>
@@ -379,7 +380,7 @@ export default function App() {
             {searchedQuery && phase === 'done' && (
               <button
                 onClick={handleShare}
-                className="p-2 rounded-lg text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-paper-100 dark:hover:bg-ink-800 transition-colors"
+                className="p-2 rounded-[3px] text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-paper-100 dark:hover:bg-ink-800 transition-colors"
                 aria-label="Copy share link"
                 title="Copy share link"
               >
@@ -390,7 +391,7 @@ export default function App() {
             )}
             <button
               onClick={() => setShowHistory(h => !h)}
-              className="p-2 rounded-lg text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-paper-100 dark:hover:bg-ink-800 transition-colors relative"
+              className="p-2 rounded-[3px] text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-paper-100 dark:hover:bg-ink-800 transition-colors relative"
               aria-label="Search history"
               title="Search history"
             >
@@ -403,7 +404,7 @@ export default function App() {
             </button>
             <button
               onClick={() => setShowWalkthrough(true)}
-              className="p-2 rounded-lg text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-paper-100 dark:hover:bg-ink-800 transition-colors"
+              className="p-2 rounded-[3px] text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-paper-100 dark:hover:bg-ink-800 transition-colors"
               aria-label="How to use Firmo"
               title="How to use Firmo"
             >
@@ -413,6 +414,11 @@ export default function App() {
             </button>
             <ThemeToggle dark={dark} onToggle={() => setDark(d => !d)} />
           </div>
+        </div>
+
+        {/* journal-masthead double rule */}
+        <div className="max-w-6xl mx-auto px-4">
+          <div className="rule-double text-gray-900/80 dark:text-gray-400/60" />
         </div>
 
         {showHistory && (
@@ -456,11 +462,12 @@ export default function App() {
 
           {/* Hero */}
           {phase === 'idle' && view === 'research' && (
-            <div className="flex flex-col gap-2 pt-6">
-              <h1 className="font-display font-semibold text-4xl sm:text-5xl tracking-tight leading-[1.1]">
-                From blank page<br />to <span className="italic text-brand-600 dark:text-brand-400">bibliography</span>.
+            <div className="flex flex-col gap-3 pt-6">
+              <span className="eyebrow !text-brand-700 dark:!text-brand-400">For every paper you'll ever write</span>
+              <h1 className="font-display font-semibold text-4xl sm:text-5xl tracking-tight leading-[1.08]">
+                From blank page<br />to <span className="italic text-brand-700 dark:text-brand-400">bibliography</span>.
               </h1>
-              <p className="text-gray-500 dark:text-gray-400 text-[15px] max-w-lg mt-2">
+              <p className="text-gray-500 dark:text-gray-400 text-[15px] max-w-lg mt-1">
                 Tell Firmo what you're writing about. It finds real, citable academic sources,
                 shows you what the evidence says, and builds your works-cited page as you go.
               </p>
@@ -469,16 +476,16 @@ export default function App() {
 
           {/* Mode toggle */}
           <div className="flex flex-col gap-3">
-            <div className="flex rounded-lg overflow-hidden border border-gray-200 dark:border-gray-800 self-start text-xs font-medium">
+            <div className="flex rounded-[3px] overflow-hidden border border-gray-300 dark:border-gray-700 self-start text-xs font-medium">
               <button
                 onClick={() => setView('research')}
-                className={`px-3.5 py-1.5 transition-colors ${view === 'research' ? 'bg-brand-600 text-white' : 'bg-white dark:bg-ink-900 text-gray-500 dark:text-gray-400 hover:bg-paper-100 dark:hover:bg-ink-800'}`}
+                className={`px-3.5 py-1.5 transition-colors ${view === 'research' ? 'bg-brand-700 text-white' : 'bg-white dark:bg-ink-900 text-gray-500 dark:text-gray-400 hover:bg-paper-100 dark:hover:bg-ink-800'}`}
               >
                 Find sources
               </button>
               <button
                 onClick={() => setView('essay')}
-                className={`px-3.5 py-1.5 transition-colors ${view === 'essay' ? 'bg-brand-600 text-white' : 'bg-white dark:bg-ink-900 text-gray-500 dark:text-gray-400 hover:bg-paper-100 dark:hover:bg-ink-800'}`}
+                className={`px-3.5 py-1.5 transition-colors ${view === 'essay' ? 'bg-brand-700 text-white' : 'bg-white dark:bg-ink-900 text-gray-500 dark:text-gray-400 hover:bg-paper-100 dark:hover:bg-ink-800'}`}
               >
                 Check my draft
               </button>
@@ -512,8 +519,8 @@ export default function App() {
           {phase === 'idle' && view === 'research' && (
             <div className="grid sm:grid-cols-3 gap-3">
               {IDLE_STEPS.map(s => (
-                <div key={s.n} className="card p-4 flex flex-col gap-1.5">
-                  <span className="font-display italic font-semibold text-brand-500 dark:text-brand-400 text-lg leading-none">{s.n}.</span>
+                <div key={s.n} className="border-t-2 border-gray-900/80 dark:border-gray-400/60 pt-3 flex flex-col gap-1.5">
+                  <span className="font-mono text-[10px] font-medium tracking-[0.18em] text-brand-700 dark:text-brand-400">0{s.n}</span>
                   <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">{s.title}</p>
                   <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">{s.body}</p>
                 </div>
@@ -535,7 +542,7 @@ export default function App() {
 
               {/* Errors */}
               {error === 'invalid_query' ? (
-                <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-ink-900 p-5 flex flex-col gap-1.5 animate-fadeInUp">
+                <div className="rounded-[3px] border border-gray-200 dark:border-gray-700 bg-white dark:bg-ink-900 p-5 flex flex-col gap-1.5 animate-fadeInUp">
                   <p className="text-sm font-medium text-gray-800 dark:text-gray-100">Firmo needs a research subject</p>
                   <p className="text-sm text-gray-500 dark:text-gray-400">
                     Try a topic ("microplastics in drinking water"), a thesis ("school uniforms improve focus"),
@@ -543,7 +550,7 @@ export default function App() {
                   </p>
                 </div>
               ) : error ? (
-                <div className="rounded-xl border border-red-200 dark:border-red-800/60 bg-red-50 dark:bg-red-950/30 p-4 text-red-700 dark:text-red-300 text-sm">
+                <div className="rounded-[3px] border border-red-200 dark:border-red-800/60 bg-red-50 dark:bg-red-950/30 p-4 text-red-700 dark:text-red-300 text-sm">
                   {error}
                 </div>
               ) : null}
@@ -576,9 +583,9 @@ export default function App() {
               {results.length > 0 && (
                 <div className="flex flex-col gap-3">
                   <div className="flex items-center justify-between flex-wrap gap-2">
-                    <p className="text-xs text-gray-400 dark:text-gray-600">
-                      {provisional ? 'First results — still ranking…' : `${results.length} sources, ranked by relevance`}
-                      {(stanceFilter || hiddenSources.size > 0) && <span className="ml-1 text-brand-500">· {filteredResults.length} shown</span>}
+                    <p className="eyebrow">
+                      {provisional ? 'First results — still ranking…' : `${results.length} sources · ranked by relevance`}
+                      {(stanceFilter || hiddenSources.size > 0) && <span className="ml-1 !text-brand-600 dark:!text-brand-400">· {filteredResults.length} shown</span>}
                     </p>
                     {!provisional && results.length >= 3 && (
                       <SynthesisPanel query={searchedQuery} papers={results} />
@@ -596,13 +603,13 @@ export default function App() {
                           <button
                             key={key}
                             onClick={() => setStanceFilter(active ? null : key)}
-                            className={`inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full border transition-all ${
+                            className={`inline-flex items-center gap-1.5 font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] px-2 py-1 rounded-[2px] border transition-all ${
                               active ? cfg.chip + ' ring-1 ring-current' : cfg.chip + ' opacity-70 hover:opacity-100'
                             }`}
                           >
                             <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
                             {cfg.label}
-                            <span className="opacity-60 font-mono">{count}</span>
+                            <span className="opacity-60">{count}</span>
                           </button>
                         )
                       })}
@@ -617,17 +624,17 @@ export default function App() {
                   {/* Database filter */}
                   {Object.keys(sourceCounts).length > 1 && (
                     <div className="flex flex-wrap gap-1.5 items-center">
-                      <span className="text-[10px] text-gray-400 dark:text-gray-600 font-medium shrink-0">Databases:</span>
+                      <span className="eyebrow shrink-0">Databases</span>
                       {Object.entries(sourceCounts).sort((a, b) => b[1] - a[1]).map(([src, count]) => {
                         const hidden = hiddenSources.has(src)
                         return (
                           <button
                             key={src}
                             onClick={() => toggleSource(src)}
-                            className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border transition-all ${
+                            className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-[2px] border transition-all ${
                               hidden
                                 ? 'border-gray-200 dark:border-gray-700 text-gray-300 dark:text-gray-700 line-through'
-                                : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-brand-400 dark:hover:border-brand-600 hover:text-brand-600 dark:hover:text-brand-400'
+                                : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-brand-500 dark:hover:border-brand-600 hover:text-brand-700 dark:hover:text-brand-400'
                             }`}
                           >
                             {SOURCE_LABELS[src] || src}
@@ -686,7 +693,7 @@ export default function App() {
                           onChange={e => setAskQuestion(e.target.value)}
                           onKeyDown={e => e.key === 'Enter' && handleAsk()}
                           placeholder="Ask a question about these sources…"
-                          className="flex-1 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-ink-900 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-400 dark:focus:border-brand-600 transition-all"
+                          className="flex-1 rounded-[3px] border border-gray-200 dark:border-gray-800 bg-white dark:bg-ink-900 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-400 dark:focus:border-brand-600 transition-all"
                         />
                         <button
                           onClick={handleAsk}
@@ -697,8 +704,8 @@ export default function App() {
                         </button>
                       </div>
                       {askAnswer && (
-                        <div className="card bg-brand-50/40 dark:bg-brand-950/10 border-brand-200 dark:border-brand-800/40 p-4 flex flex-col gap-1.5 animate-fadeInUp">
-                          <span className="text-xs font-semibold text-brand-600 dark:text-brand-400">Answer</span>
+                        <div className="card border-l-2 border-l-brand-500 p-4 flex flex-col gap-1.5 animate-fadeInUp">
+                          <span className="eyebrow !text-brand-700 dark:!text-brand-400">Answer</span>
                           <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{askAnswer}</p>
                         </div>
                       )}
@@ -768,7 +775,7 @@ export default function App() {
       )}
 
       <footer className="border-t border-gray-200/60 dark:border-gray-800/60 py-6 text-center text-xs text-gray-400 dark:text-gray-600">
-        Firmo · sources from Semantic Scholar, PubMed, OpenAlex, CrossRef + 10 more · citations via CrossRef · PDFs via Unpaywall
+        Firmo · sources from Semantic Scholar, PubMed, OpenAlex, CrossRef + 11 more · citations via CrossRef · PDFs via Unpaywall
       </footer>
 
       {showWalkthrough && <Walkthrough onClose={() => setShowWalkthrough(false)} />}

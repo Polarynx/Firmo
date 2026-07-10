@@ -82,10 +82,10 @@ export default function ProjectSidebar({
   }
 
   return (
-    <div className="card flex flex-col overflow-hidden">
+    <div className="card border-t-2 border-t-gray-900/80 dark:border-t-gray-400/60 flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800 bg-paper-50 dark:bg-ink-950">
-        <span className="font-display italic font-semibold text-sm text-gray-800 dark:text-gray-200">
+        <span className="font-display font-semibold text-sm text-gray-800 dark:text-gray-200">
           Your paper
         </span>
         <div className="flex items-center gap-1">
@@ -116,7 +116,7 @@ export default function ProjectSidebar({
               onChange={e => setNewName(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleCreate()}
               placeholder="e.g. PSYC100 — sleep essay"
-              className="flex-1 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-ink-900 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500/50"
+              className="flex-1 rounded-[3px] border border-gray-200 dark:border-gray-800 bg-white dark:bg-ink-900 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500/50"
             />
             <button onClick={handleCreate} disabled={!newName.trim()} className="btn-primary text-xs px-3 py-1.5 disabled:opacity-40">
               Create
@@ -144,7 +144,7 @@ export default function ProjectSidebar({
             <select
               value={activeId || ''}
               onChange={e => onSelectProject(e.target.value)}
-              className="flex-1 text-xs font-medium px-2 py-1.5 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-ink-900 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-500/50 cursor-pointer"
+              className="flex-1 text-xs font-medium px-2 py-1.5 rounded-[3px] border border-gray-200 dark:border-gray-800 bg-white dark:bg-ink-900 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-500/50 cursor-pointer"
             >
               {projects.map(p => (
                 <option key={p.id} value={p.id}>{p.name} ({p.sources.length})</option>
@@ -170,7 +170,7 @@ export default function ProjectSidebar({
 
         {/* Empty project — guide */}
         {active && sources.length === 0 && (
-          <div className="rounded-lg border border-dashed border-gray-200 dark:border-gray-700 px-3 py-4 text-center">
+          <div className="rounded-[3px] border border-dashed border-gray-200 dark:border-gray-700 px-3 py-4 text-center">
             <p className="text-xs text-gray-400 dark:text-gray-500 leading-relaxed">
               Save sources with the bookmark on any result.<br />
               Aim for 5+ before you start writing.
@@ -181,7 +181,7 @@ export default function ProjectSidebar({
         {/* Sources list */}
         {sources.length > 0 && (
           <div className="flex flex-col gap-1.5 max-h-48 overflow-y-auto pr-1">
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-600">
+            <span className="eyebrow">
               {sources.length} source{sources.length === 1 ? '' : 's'}
             </span>
             {sources.map(s => (
@@ -212,7 +212,7 @@ export default function ProjectSidebar({
         {sources.length > 0 && (
           <div className="flex flex-col gap-2.5 pt-3 border-t border-gray-100 dark:border-gray-800">
             <div className="flex items-center justify-between">
-              <span className="font-display italic font-semibold text-sm text-gray-800 dark:text-gray-200">
+              <span className="font-display font-semibold text-sm text-gray-800 dark:text-gray-200">
                 Works cited
               </span>
               <div className="relative">
@@ -238,9 +238,9 @@ export default function ProjectSidebar({
                 <button
                   key={s.key}
                   onClick={() => onStyleChange(s.key)}
-                  className={`text-[10px] font-medium px-2 py-1 rounded transition-colors ${
+                  className={`text-[10px] font-medium px-2 py-1 rounded-[2px] transition-colors ${
                     citationStyle === s.key
-                      ? 'bg-brand-600 text-white'
+                      ? 'bg-brand-700 text-white'
                       : 'bg-paper-100 dark:bg-ink-800 text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
                   }`}
                 >
@@ -250,7 +250,7 @@ export default function ProjectSidebar({
             </div>
 
             {/* The page itself */}
-            <div className="rounded-lg bg-paper-50 dark:bg-ink-950 border border-paper-200 dark:border-gray-800 px-3.5 py-3 flex flex-col gap-2.5 max-h-72 overflow-y-auto">
+            <div className="rounded-[3px] bg-paper-50 dark:bg-ink-950 border border-paper-200 dark:border-gray-800 px-3.5 py-3 flex flex-col gap-2.5 max-h-72 overflow-y-auto">
               {bibLoading ? (
                 <div className="flex flex-col gap-2 py-1">
                   <div className="skeleton h-3 w-full" />

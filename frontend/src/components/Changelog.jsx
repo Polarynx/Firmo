@@ -92,7 +92,7 @@ export default function Changelog({ onClose }) {
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeInUp"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-2xl w-full max-w-lg flex flex-col max-h-[85vh]">
+      <div className="bg-white dark:bg-gray-900 rounded-[3px] border border-gray-200 dark:border-gray-700 shadow-2xl w-full max-w-lg flex flex-col max-h-[85vh]">
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800 shrink-0">

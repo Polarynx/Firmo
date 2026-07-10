@@ -47,7 +47,7 @@ export default function EssayChecker({ text = '', onTextChange, results, loading
         onChange={e => onTextChange(e.target.value)}
         placeholder="Paste your draft — Firmo identifies every factual claim, scores how well-supported it is, and helps you find sources for the shaky ones."
         rows={6}
-        className="w-full resize-none rounded-xl border border-gray-200 dark:border-gray-800
+        className="w-full resize-none rounded-[3px] border border-gray-200 dark:border-gray-800
           bg-white dark:bg-ink-900 text-gray-900 dark:text-gray-100
           placeholder-gray-400 dark:placeholder-gray-600
           px-4 py-3 text-sm
@@ -60,7 +60,7 @@ export default function EssayChecker({ text = '', onTextChange, results, loading
         {loading ? (
           <button
             onClick={onCancel}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700
+            className="flex items-center gap-2 px-4 py-2 rounded-[3px] border border-gray-200 dark:border-gray-700
               bg-white dark:bg-gray-900 text-gray-500 dark:text-gray-400
               hover:border-red-300 hover:text-red-500 dark:hover:border-red-700 dark:hover:text-red-400
               text-sm font-medium transition-all duration-150"
@@ -101,7 +101,7 @@ export default function EssayChecker({ text = '', onTextChange, results, loading
       )}
 
       {error && (
-        <div className="rounded-xl border border-red-200 dark:border-red-800/60 bg-red-50 dark:bg-red-950/30 p-4 text-red-700 dark:text-red-300 text-sm">
+        <div className="rounded-[3px] border border-red-200 dark:border-red-800/60 bg-red-50 dark:bg-red-950/30 p-4 text-red-700 dark:text-red-300 text-sm">
           {error}
         </div>
       )}

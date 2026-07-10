@@ -4,7 +4,7 @@ const STEPS = [
   {
     icon: '🎓',
     title: 'Welcome to Firmo',
-    body: 'Firmo takes you from a blank page to a finished bibliography. Describe what you\'re writing about and it searches 14 academic databases at once, ranks what it finds, and builds your works-cited page as you collect sources.',
+    body: 'Firmo takes you from a blank page to a finished bibliography. Describe what you\'re writing about and it searches 15 academic databases at once, ranks what it finds, and builds your works-cited page as you collect sources.',
     tip: 'Keep Firmo open in a tab while you write — your project and bibliography stay put between searches.',
   },
   {
@@ -67,7 +67,7 @@ export default function Walkthrough({ onClose }) {
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeInUp"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="bg-white dark:bg-ink-900 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-2xl w-full max-w-lg flex flex-col">
+      <div className="bg-white dark:bg-ink-900 rounded-[3px] border border-gray-200 dark:border-gray-700 shadow-2xl w-full max-w-lg flex flex-col">
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-3">
@@ -102,7 +102,7 @@ export default function Walkthrough({ onClose }) {
             <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">{current.body}</p>
           </div>
 
-          <div className="rounded-xl bg-brand-50 dark:bg-brand-950/20 border border-brand-100 dark:border-brand-900/40 px-4 py-3">
+          <div className="rounded-[3px] bg-brand-50 dark:bg-brand-950/20 border border-brand-100 dark:border-brand-900/40 px-4 py-3">
             <p className="text-xs font-semibold text-brand-600 dark:text-brand-400 mb-1">Pro tip</p>
             <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{current.tip}</p>
           </div>

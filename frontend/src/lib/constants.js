@@ -13,6 +13,8 @@ export const SOURCE_LABELS = {
   hal: 'HAL',
   inspire_hep: 'INSPIRE-HEP',
   fatcat: 'Internet Archive Scholar',
+  openaire: 'OpenAIRE',
+  doab: 'DOAB (Open Access Books)',
 }
 
 export const CITATION_STYLES = [
@@ -26,23 +28,27 @@ export const CITATION_STYLES = [
 export const STANCE = {
   supports: {
     label: 'Supports',
-    chip: 'bg-brand-50 text-brand-700 border-brand-200 dark:bg-brand-950/40 dark:text-brand-300 dark:border-brand-800',
+    chip: 'text-brand-700 border-brand-400/60 dark:text-brand-300 dark:border-brand-700',
     dot: 'bg-brand-500',
+    rail: 'border-l-brand-500 dark:border-l-brand-500',
   },
   counters: {
     label: 'Counterpoint',
-    chip: 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/30 dark:text-orange-300 dark:border-orange-900',
+    chip: 'text-orange-700 border-orange-400/60 dark:text-orange-300 dark:border-orange-800',
     dot: 'bg-orange-500',
+    rail: 'border-l-orange-500 dark:border-l-orange-500',
   },
   mixed: {
     label: 'Mixed evidence',
-    chip: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-900',
+    chip: 'text-amber-700 border-amber-400/60 dark:text-amber-300 dark:border-amber-800',
     dot: 'bg-amber-400',
+    rail: 'border-l-amber-400 dark:border-l-amber-400',
   },
   background: {
     label: 'Background',
-    chip: 'bg-gray-50 text-gray-600 border-gray-200 dark:bg-gray-800/60 dark:text-gray-400 dark:border-gray-700',
+    chip: 'text-gray-600 border-gray-300 dark:text-gray-400 dark:border-gray-600',
     dot: 'bg-gray-400',
+    rail: 'border-l-gray-300 dark:border-l-gray-600',
   },
 }
 

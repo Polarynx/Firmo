@@ -10,34 +10,56 @@
 
 @layer components {
   .btn-primary {
-    @apply px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-500 active:scale-[.98]
+    @apply px-4 py-2 rounded-[3px] bg-brand-700 hover:bg-brand-600 active:scale-[.98]
       text-white font-semibold text-sm
       transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-brand-500/60 focus:ring-offset-2
       dark:focus:ring-offset-ink-950;
   }
   .btn-secondary {
-    @apply px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700
+    @apply px-4 py-2 rounded-[3px] border border-gray-300 dark:border-gray-700
       bg-white dark:bg-ink-900
       text-gray-600 dark:text-gray-400 font-medium text-sm
-      hover:bg-paper-100 dark:hover:bg-ink-800 hover:text-gray-900 dark:hover:text-gray-200
+      hover:border-brand-500 dark:hover:border-brand-600 hover:text-brand-700 dark:hover:text-brand-300
       transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-brand-500/60 focus:ring-offset-1
       dark:focus:ring-offset-ink-950;
   }
 
   .card {
-    @apply bg-white dark:bg-ink-900 border border-gray-200/70 dark:border-gray-800
-      rounded-xl shadow-sm;
+    @apply bg-white dark:bg-ink-900 border border-gray-200 dark:border-gray-800
+      rounded-[3px];
   }
 
+  /* Catalog card: the signature element. Rank + metadata read like a call
+     number; the left rail carries the stance color (set inline per card). */
   .source-card {
-    @apply card p-5 flex flex-col gap-3
-      hover:border-brand-300/60 dark:hover:border-brand-800
+    @apply card p-5 flex flex-col gap-3 border-l-2
       transition-colors duration-150;
   }
 
+  /* Small-caps mono label — the "section heading" voice of the whole app */
+  .eyebrow {
+    @apply font-mono text-[10px] font-medium uppercase tracking-[0.18em]
+      text-gray-500 dark:text-gray-500;
+  }
+
+  /* Journal-masthead divider: thick over thin */
+  .rule-double {
+    border-top: 2px solid currentColor;
+    position: relative;
+  }
+  .rule-double::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 0;
+    right: 0;
+    border-top: 1px solid currentColor;
+    margin-top: 2px;
+  }
+
   .terminal-box {
-    @apply bg-paper-50 dark:bg-ink-950 border border-gray-200/70 dark:border-gray-800
-      rounded-lg p-3 font-mono text-sm leading-relaxed
+    @apply bg-paper-50 dark:bg-ink-950 border border-gray-200 dark:border-gray-800
+      rounded-[3px] p-3 font-mono text-sm leading-relaxed
       text-gray-700 dark:text-gray-300;
   }
 
@@ -50,7 +72,7 @@
   }
 
   .skeleton {
-    @apply rounded bg-gray-100 dark:bg-gray-800;
+    @apply rounded-[2px] bg-gray-100 dark:bg-gray-800;
     animation: shimmer 1.4s infinite linear;
     background-image: linear-gradient(
       90deg,

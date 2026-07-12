@@ -1,5 +1,6 @@
 import asyncio
 import json
+import math
 import os
 import re
 import traceback
@@ -14,7 +15,7 @@ from slowapi.errors import RateLimitExceeded
 
 load_dotenv()
 
-from llm import chat, chat_json
+from llm import chat, chat_json, embed_texts
 from schemas import (
     AskSourcesRequest,
     CitationRequest,
@@ -29,7 +30,6 @@ from schemas import (
 from sources import (
     ALL_CONNECTORS,
     build_query_terms,
-    candidate_rank,
     enrich_unpaywall,
     paper_id,
     process_papers,
@@ -133,23 +133,92 @@ async def plan_research(query: str) -> dict:
         return _fallback_plan(query)
 
 
+# ── Semantic relevance (embeddings) ───────────────────────────────────────────
+# The heart of the relevance fix: rank papers by how close their MEANING is to the
+# topic, not by shared keywords. "high-conflict divorce" and "armed conflict" share
+# words but not meaning; embeddings tell them apart, keyword overlap cannot.
+
+def _cosine(a: list, b: list) -> float:
+    dot = na = nb = 0.0
+    for x, y in zip(a, b):
+        dot += x * y
+        na += x * x
+        nb += y * y
+    if na == 0.0 or nb == 0.0:
+        return 0.0
+    return dot / math.sqrt(na * nb)
+
+
+def _topic_anchor(final_query: str, plan: dict) -> str:
+    """What Firmo will judge relevance against: the student's corrected input plus
+    the LLM's own analysis of the topic (the brief) plus two scholarly query
+    phrasings for domain vocabulary. This is 'critically analyse what the topic is'
+    turned into the yardstick every source is measured by."""
+    parts = [final_query]
+    brief = (plan.get("brief") or "").strip()
+    if brief and "temporarily unavailable" not in brief:
+        parts.append(brief)
+    for q in (plan.get("search_queries") or [])[:2]:
+        if isinstance(q, str) and q.strip():
+            parts.append(q)
+    return " ".join(parts)[:1500]
+
+
+def _paper_embed_text(p: dict) -> str:
+    title = p.get("title") or ""
+    abstract = (p.get("abstract") or "")[:480]
+    text = f"{title}. {abstract}".strip()
+    return text[:1200] or title or "untitled"
+
+
+async def attach_semantic_scores(anchor: str, papers: list[dict]) -> bool:
+    """Attach p['semanticScore'] = cosine(topic, paper) in ~[0,1] to every paper.
+
+    Returns True when embeddings worked for the anchor and most papers, so callers
+    can rank by meaning. Returns False if the embedding endpoint is unavailable, in
+    which case callers fall back to the lexical signal.
+    """
+    if not papers:
+        return False
+    texts = [anchor] + [_paper_embed_text(p) for p in papers]
+    vecs = await embed_texts(texts)
+    if not vecs or vecs[0] is None:
+        for p in papers:
+            p["semanticScore"] = None
+        return False
+    anchor_vec = vecs[0]
+    got = 0
+    for p, v in zip(papers, vecs[1:]):
+        if v is None:
+            p["semanticScore"] = None
+        else:
+            p["semanticScore"] = _cosine(anchor_vec, v)
+            got += 1
+    return got >= max(1, int(0.6 * len(papers)))
+
+
 # ── Rerank + stance tagging ───────────────────────────────────────────────────
 
-RERANK_PROMPT = """You are a strict academic paper filter for a student research tool. The student is researching:
+RERANK_PROMPT = """You are a strict academic relevance judge for a student's research project.
 
+The student is researching:
 "{query}"
 
-Firmo's assessment: "{brief}"
+Firmo's analysis of what this topic is really about:
+"{brief}"
 
-For each paper below decide (a) how relevant it genuinely is to the student's research — not mere keyword overlap — and (b) its role relative to the research query.
+First, think about the ACTUAL subject: the specific thing being studied, the population or domain it applies to, and the relationship or question at its core. A paper is only relevant if it is genuinely about THAT — not if it merely reuses the same words in a different context. For example, for "high-conflict divorce and children", a paper on armed conflict in war zones, or on workplace conflict, or on child nutrition unrelated to divorce, is NOT relevant even though it shares words like "conflict" or "children".
 
-score 0–10:
-- 8–10: directly studies the specific subject or relationship
-- 5–7: closely related, meaningful supporting or contextual evidence
-- 0–4: only shares surface keywords, different population/outcome/subject
+For each paper below, judge how genuinely it belongs in this student's bibliography.
 
-stance (role of the paper's findings relative to the query):
-- "supports": provides evidence for the thesis/topic as stated
+score 0–10 (be strict — most surface matches are NOT relevant):
+- 8–10: directly studies this specific subject/relationship in the right population or domain
+- 5–7: genuinely related and useful as supporting or contextual evidence for THIS topic
+- 1–4: wrong subject, wrong population, or wrong domain — only shares surface words
+- 0: unrelated
+
+stance (role of the paper relative to the topic):
+- "supports": evidence for the thesis/topic as stated
 - "counters": challenges, contradicts, or significantly complicates it
 - "mixed": genuinely both
 - "background": useful context, methods, or foundational work rather than direct evidence
@@ -159,7 +228,20 @@ Papers:
 
 Return ONLY valid JSON: {{"papers": [{{"index": 0, "score": 8, "stance": "supports"}}, ...]}} — one entry per paper, every index present."""
 
+# Relevance gate. A paper must clear STRONG_KEEP to count as genuinely relevant; we
+# only drop to MIN_KEEP when strong matches are too few to give the student a usable
+# set. MAX_RESULTS caps the output so Firmo never pads a bibliography with noise.
+STRONG_KEEP = 7
+MIN_KEEP = 5
+MIN_STRONG_SET = 8
+MAX_RESULTS = 50
+
 VALID_STANCES = {"supports", "counters", "mixed", "background"}
+
+
+def _semantic_of(p: dict) -> Optional[float]:
+    s = p.get("semanticScore")
+    return s if isinstance(s, (int, float)) else None
 
 
 async def rerank_and_tag(
@@ -169,21 +251,53 @@ async def rerank_and_tag(
     max_candidates: int = 80,
     query_terms: Optional[set] = None,
 ) -> list[dict]:
-    """Chunked LLM rerank so long candidate lists are never silently truncated.
+    """Judge relevance and keep only papers that genuinely qualify.
 
-    Pre-cuts to the best candidates by lexical relevance + metadata quality (not
-    citations alone, which used to crowd relevant low-citation papers out of the
-    pool before the LLM ever saw them), scores 20 at a time in parallel, and — when
-    a chunk's LLM call fails — falls back to the lexical relevance score instead of
-    keeping every paper at a neutral 5. That fallback is what keeps a flaky Mistral
-    call from dumping citation-ranked, off-topic noise on the student.
+    Stage 1 — candidate selection by MEANING: the pool handed to the LLM is chosen
+    by semantic similarity to the topic (falling back to lexical only if embeddings
+    were unavailable), so genuinely on-topic papers reach the judge regardless of
+    which exact words they use.
+
+    Stage 2 — strict LLM judgment: 20 papers at a time, in parallel, scored against
+    a critical analysis of what the topic actually is.
+
+    Stage 3 — keep only what qualifies: papers scoring >= STRONG_KEEP form the set;
+    we relax to MIN_KEEP only when strong matches are too few, and cap at MAX_RESULTS.
+    Firmo returns fewer, right sources rather than padding to a number.
+
+    When a chunk's LLM call fails, it falls back to the SEMANTIC score (not keyword
+    overlap), so a flaky Mistral call degrades to 'the semantically closest papers'
+    rather than dumping keyword noise.
     """
     if not papers:
         return []
     if query_terms is None:
         query_terms = build_query_terms([query])
 
-    candidates = sorted(papers, key=lambda p: candidate_rank(p, query_terms), reverse=True)[:max_candidates]
+    have_semantic = any(_semantic_of(p) is not None for p in papers)
+
+    def cand_key(p: dict):
+        sem = _semantic_of(p)
+        if sem is not None:
+            return sem * 100.0 + quality_score(p) * 0.001
+        # lexical fallback lane (embeddings unavailable, or this paper failed to embed)
+        return relevance_score(p, query_terms) * 3.0 + quality_score(p) * 0.01
+
+    candidates = sorted(papers, key=cand_key, reverse=True)[:max_candidates]
+
+    # For the semantic fail-open: spread the observed similarity range onto 2..10 so
+    # only the closest papers in a failed chunk clear the keep bar.
+    sems = [_semantic_of(p) for p in candidates if _semantic_of(p) is not None]
+    hi, lo = (max(sems), min(sems)) if sems else (0.0, 0.0)
+
+    def sem_fallback_score(p: dict) -> int:
+        sem = _semantic_of(p)
+        if sem is None:
+            return min(10, round(relevance_score(p, query_terms)))
+        if hi <= lo:
+            return 5
+        return round(2 + 8 * (sem - lo) / (hi - lo))
+
     chunks = [candidates[i:i + 20] for i in range(0, len(candidates), 20)]
 
     async def score_chunk(chunk: list[dict]) -> list[dict]:
@@ -203,11 +317,7 @@ async def rerank_and_tag(
         for i, p in enumerate(chunk):
             e = entries.get(i)
             if e is None:
-                # fail open on the lexical signal: an on-topic paper keeps a usable
-                # score, an off-topic one scores ~0 and drops out — far better than
-                # blanket-keeping everything when the LLM is unavailable.
-                lex = relevance_score(p, query_terms)
-                out.append({**p, "relevanceScore": min(10, round(lex)), "stance": "background"})
+                out.append({**p, "relevanceScore": sem_fallback_score(p), "stance": "background"})
                 continue
             stance = e.get("stance") if e.get("stance") in VALID_STANCES else "background"
             out.append({**p, "relevanceScore": e.get("score", 0), "stance": stance})
@@ -216,11 +326,21 @@ async def rerank_and_tag(
     scored_chunks = await asyncio.gather(*(score_chunk(c) for c in chunks))
     scored = [p for chunk in scored_chunks for p in chunk]
 
-    kept = [p for p in scored if p["relevanceScore"] >= 5]
-    if not kept:
-        kept = [p for p in scored if p["relevanceScore"] >= 4]
-    kept.sort(key=lambda p: (p["relevanceScore"], relevance_score(p, query_terms), quality_score(p)), reverse=True)
-    return kept
+    # Keep only genuinely relevant papers. Prefer the strong set; only widen to
+    # moderate matches when strong ones are too sparse to be useful.
+    strong = [p for p in scored if p["relevanceScore"] >= STRONG_KEEP]
+    if len(strong) >= MIN_STRONG_SET:
+        kept = strong
+    else:
+        kept = [p for p in scored if p["relevanceScore"] >= MIN_KEEP]
+        if not kept:
+            kept = [p for p in scored if p["relevanceScore"] >= MIN_KEEP - 1]
+
+    def sort_key(p: dict):
+        return (p["relevanceScore"], _semantic_of(p) or 0.0, quality_score(p))
+
+    kept.sort(key=sort_key, reverse=True)
+    return kept[:MAX_RESULTS]
 
 
 # ── The research endpoint (streaming) ─────────────────────────────────────────
@@ -295,16 +415,22 @@ async def research(req: ResearchRequest, request: Request):
 
             papers = process_papers(await search_task, year_from=req.year_from)
 
-            # provisional preview so the student sees papers immediately — ranked by
-            # topical relevance, not raw citations, and with zero-overlap papers
-            # dropped so obvious off-topic noise never appears even for a moment.
-            relevant = [p for p in papers if relevance_score(p, query_terms) > 0]
-            preview_pool = relevant if len(relevant) >= 8 else papers
-            preview = sorted(
-                preview_pool,
-                key=lambda p: (relevance_score(p, query_terms), quality_score(p)),
-                reverse=True,
-            )[:12]
+            # Rank every paper by MEANING against Firmo's read of the topic before
+            # anything is shown or judged. This is the signal that tells "divorce
+            # conflict" apart from "armed conflict"; lexical overlap is only used if
+            # the embedding endpoint is unavailable.
+            anchor = _topic_anchor(final_query, plan)
+            have_semantic = await attach_semantic_scores(anchor, papers)
+
+            # provisional preview so the student sees papers immediately — ordered by
+            # semantic closeness (or lexical overlap as a fallback), so even the first
+            # glimpse is on-topic rather than just the most-cited keyword match.
+            def _prov_key(p):
+                if have_semantic and _semantic_of(p) is not None:
+                    return (_semantic_of(p), quality_score(p))
+                return (relevance_score(p, query_terms) / 30.0, quality_score(p))
+
+            preview = sorted(papers, key=_prov_key, reverse=True)[:12]
             yield _ev("papers", results=preview, provisional=True, total_found=len(papers))
             yield _ev("status", stage="rank",
                       message=f"Ranking {len(papers)} papers for relevance…")
@@ -359,6 +485,7 @@ async def more_sources(req: MoreSourcesRequest):
         seen = set(req.seen_ids)
         papers = [p for p in papers if paper_id(p) not in seen]
 
+    await attach_semantic_scores(req.claim, papers)
     ranked = await rerank_and_tag(req.claim, req.claim, papers, max_candidates=60)
     await enrich_unpaywall(ranked, top_n=15)
     return {"results": ranked}

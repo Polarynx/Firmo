@@ -922,7 +922,17 @@ async def search_all(
 
 # ── Paper utilities ───────────────────────────────────────────────────────────
 
-def clean_text(text: str) -> str:
+def clean_text(text) -> str:
+    # Connectors occasionally hand back a non-string here (e.g. a bare year int or
+    # a list from a quirky API record). Coerce defensively — one such value used to
+    # crash process_papers and wipe the entire search intermittently.
+    if not isinstance(text, str):
+        if text is None:
+            return ""
+        if isinstance(text, (list, tuple)):
+            text = " ".join(str(x) for x in text if x)
+        else:
+            text = str(text)
     if not text:
         return text
     text = re.sub(r'<[^>]+>', '', text)

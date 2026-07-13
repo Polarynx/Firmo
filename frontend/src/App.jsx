@@ -471,18 +471,21 @@ export default function App() {
         {/* ── Left column: research ── */}
         <div className="flex flex-col gap-8 min-w-0">
 
-          {/* Hero */}
-          {phase === 'idle' && view === 'research' && (
+          {/* Hero — shown above whichever tool is open, until its results take over */}
+          {((view === 'research' && phase === 'idle') || (view === 'essay' && !chainResults)) && (
             <div className="relative pt-6">
               <div className="hero-atmos" aria-hidden="true" />
               <div className="hero-seq relative z-10 flex flex-col gap-3">
-                <span className="eyebrow !text-brand-700 dark:!text-brand-400">For every paper you'll ever write</span>
+                <span className="eyebrow !text-brand-700 dark:!text-brand-400">
+                  {view === 'essay' ? 'Before you hand it in' : "For every paper you'll ever write"}
+                </span>
                 <h1 className="font-display font-semibold text-4xl sm:text-5xl tracking-tight leading-[1.08]">
                   From blank page<br />to <span className="hero-word italic text-brand-700 dark:text-brand-400">bibliography</span>.
                 </h1>
                 <p className="text-gray-500 dark:text-gray-400 text-[15px] max-w-lg mt-1">
-                  Tell Firmo what you're writing about. It finds real, citable academic sources,
-                  shows you what the evidence says, and builds your works-cited page as you go.
+                  {view === 'essay'
+                    ? 'Paste your draft and Firmo checks every factual claim against the evidence — then helps you back up the shaky ones.'
+                    : 'Tell Firmo what you\'re writing about. It finds real, citable academic sources, shows you what the evidence says, and builds your works-cited page as you go.'}
                 </p>
               </div>
             </div>

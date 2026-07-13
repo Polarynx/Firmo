@@ -67,7 +67,7 @@ export default function Walkthrough({ onClose }) {
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeInUp"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="bg-white dark:bg-ink-900 rounded-[3px] border border-gray-200 dark:border-gray-700 shadow-2xl w-full max-w-lg flex flex-col">
+      <div className="bg-white dark:bg-ink-900 rounded-[3px] border border-gray-200 dark:border-gray-700 border-t-2 border-t-brand-700 dark:border-t-brand-500 shadow-2xl w-full max-w-lg flex flex-col">
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-3">
@@ -93,17 +93,20 @@ export default function Walkthrough({ onClose }) {
 
         {/* Content */}
         <div className="px-6 pb-4 flex flex-col gap-4 flex-1">
-          <div className="flex flex-col gap-2">
-            <span className="text-3xl">{current.icon}</span>
-            <div className="flex items-baseline gap-2">
-              <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">{current.title}</h2>
-              <span className="text-xs font-mono text-gray-400 dark:text-gray-600">{step + 1} / {STEPS.length}</span>
+          <div className="flex flex-col gap-2.5">
+            <div className="flex items-center justify-between">
+              <span className="eyebrow !text-brand-700 dark:!text-brand-400">How Firmo works</span>
+              <span className="eyebrow">{step + 1} / {STEPS.length}</span>
+            </div>
+            <div className="flex items-center gap-2.5">
+              <span className="text-2xl leading-none">{current.icon}</span>
+              <h2 className="font-display font-semibold text-xl text-gray-900 dark:text-gray-100 leading-tight">{current.title}</h2>
             </div>
             <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">{current.body}</p>
           </div>
 
-          <div className="rounded-[3px] bg-brand-50 dark:bg-brand-950/20 border border-brand-100 dark:border-brand-900/40 px-4 py-3">
-            <p className="text-xs font-semibold text-brand-600 dark:text-brand-400 mb-1">Pro tip</p>
+          <div className="border-l-2 border-l-brand-500 bg-brand-50/60 dark:bg-brand-950/20 rounded-[2px] px-4 py-3">
+            <span className="eyebrow !text-brand-700 dark:!text-brand-400 block mb-1">Pro tip</span>
             <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{current.tip}</p>
           </div>
         </div>

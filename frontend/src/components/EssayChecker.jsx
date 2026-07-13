@@ -28,18 +28,21 @@ const VERDICTS = {
   },
 }
 
-function verdictFor(item) {
+// Fixed order for summaries — attention-first, so problems read left to right.
+const VERDICT_ORDER = ['unsupported', 'contested', 'uncertain', 'supported']
+
+function verdictKey(item) {
   // Trust the model's explicit verdict; fall back to the old numeric signal only
   // for responses that predate the verdict field.
-  if (item.verdict && VERDICTS[item.verdict]) return VERDICTS[item.verdict]
-  if (item.is_debatable) return VERDICTS.contested
-  if (item.confidence >= 65) return VERDICTS.supported
-  if (item.confidence <= 35) return VERDICTS.unsupported
-  return VERDICTS.uncertain
+  if (item.verdict && VERDICTS[item.verdict]) return item.verdict
+  if (item.is_debatable) return 'contested'
+  if (item.confidence >= 65) return 'supported'
+  if (item.confidence <= 35) return 'unsupported'
+  return 'uncertain'
 }
 
 function ClaimCard({ item, index, onSearch }) {
-  const v = verdictFor(item)
+  const v = VERDICTS[verdictKey(item)]
 
   return (
     <div
@@ -79,7 +82,7 @@ export default function EssayChecker({ text = '', onTextChange, results, loading
       />
 
       <div className="flex items-center justify-between">
-        <span className="text-xs text-gray-400 dark:text-gray-600">Up to 8 claims detected</span>
+        <span className="text-xs text-gray-400 dark:text-gray-600">Up to 12 claims detected</span>
         {loading ? (
           <button
             onClick={onCancel}
@@ -133,11 +136,37 @@ export default function EssayChecker({ text = '', onTextChange, results, loading
 
       {results && !loading && (
         <div className="flex flex-col gap-3">
-          <p className="eyebrow">
-            {results.length === 0
-              ? 'No verifiable claims found'
-              : `${results.length} claim${results.length !== 1 ? 's' : ''} checked against the evidence`}
-          </p>
+          <div className="flex flex-col gap-2">
+            <p className="eyebrow">
+              {results.length === 0
+                ? 'No verifiable claims found'
+                : `${results.length} claim${results.length !== 1 ? 's' : ''} checked against the evidence`}
+            </p>
+            {results.length > 0 && (() => {
+              const counts = results.reduce((acc, item) => {
+                const k = verdictKey(item)
+                acc[k] = (acc[k] || 0) + 1
+                return acc
+              }, {})
+              return (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {VERDICT_ORDER.filter(k => counts[k]).map(k => {
+                    const v = VERDICTS[k]
+                    return (
+                      <span
+                        key={k}
+                        className={`inline-flex items-center gap-1.5 font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] px-2 py-0.5 rounded-[2px] border ${v.pill}`}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full ${v.dot}`} />
+                        {v.label}
+                        <span className="opacity-60">{counts[k]}</span>
+                      </span>
+                    )
+                  })}
+                </div>
+              )
+            })()}
+          </div>
           {results.length === 0 ? (
             <p className="text-sm text-gray-500 dark:text-gray-400">
               Nothing here can be verified against evidence — Firmo checks facts, not opinions or wording. Try pasting a paragraph with factual statements.

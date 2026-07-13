@@ -656,13 +656,13 @@ async def ask_sources(req: AskSourcesRequest):
 
 # ── Essay checker ─────────────────────────────────────────────────────────────
 
-CHAIN_EXTRACT_PROMPT = """Extract all distinct factual claims from this text. Only include statements that can be verified or falsified with evidence — skip pure opinions, normative statements ("should", "ought"), and vague assertions.
+CHAIN_EXTRACT_PROMPT = """Extract every distinct factual claim from this text. Only include statements that can be verified or falsified with evidence — skip pure opinions, normative statements ("should", "ought"), and vague assertions.
 
 Text: "{text}"
 
 Return ONLY valid JSON with two fields:
 - "corrected_text": the input text with ONLY spelling and grammar fixed — correct only words you can identify with certainty from their misspelling. Do NOT guess at garbled words — leave those as-is. Do NOT change any word that affects meaning, do NOT correct factual errors. If too garbled to safely correct, return the text unchanged.
-- "claims": array of up to 8 strings, each a concise factual claim extracted or closely paraphrased from the text"""
+- "claims": array of up to 12 strings, one per DISTINCT factual idea. Split a sentence that makes separate assertions into one claim each, but keep a single coherent assertion together — do NOT over-fragment one idea (e.g. "the tongue has taste zones, sweet at the tip and bitter at the back" is ONE claim about the taste-zone myth, not three). Keep the author's wording where possible, rephrasing only enough that each claim stands on its own. Cover every distinct assertion in the text; do not drop any."""
 
 CHAIN_EVAL_PROMPT = """Evaluate this factual claim against the current state of evidence.
 
@@ -709,7 +709,7 @@ async def claimchain(req: ClaimChainRequest, request: Request):
 
     corrected_text = req.text
     try:
-        parsed = await chat_json(CHAIN_EXTRACT_PROMPT.format(text=req.text[:3000]), max_tokens=600)
+        parsed = await chat_json(CHAIN_EXTRACT_PROMPT.format(text=req.text[:4000]), max_tokens=1000)
         if isinstance(parsed, dict):
             corrected_text = parsed.get("corrected_text") or req.text
             claims = parsed.get("claims", [])
@@ -717,7 +717,7 @@ async def claimchain(req: ClaimChainRequest, request: Request):
             claims = parsed
         else:
             claims = []
-        claims = [c for c in claims if isinstance(c, str) and c.strip()][:8]
+        claims = [c for c in claims if isinstance(c, str) and c.strip()][:12]
     except Exception as e:
         print(f"[claimchain extract ERROR] {e}")
         raise HTTPException(status_code=500, detail="Failed to extract claims")

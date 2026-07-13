@@ -20,10 +20,10 @@ const STEPS = [
     tip: 'The suggested angles are essay outlines in disguise — each one can be a body paragraph.',
   },
   {
-    icon: '⚖️',
-    title: 'Supports vs. Counterpoint',
-    body: 'Each ranked source is tagged by its role: Supports, Counterpoint, Mixed evidence, or Background. The filter chips above the results show the balance of evidence at a glance.',
-    tip: 'Great papers address the counterargument. Grab at least one "Counterpoint" source and answer it in your essay.',
+    icon: '🎯',
+    title: 'Relevant first, related on request',
+    body: 'Firmo reads your topic and ranks sources by meaning, not matching keywords. Sources squarely about your subject appear up front as "Relevant"; broader context sits behind a "Show related & background" button so it never buries the good stuff. Each source is also tagged Supports, Counterpoint, Mixed, or Background.',
+    tip: 'Grab at least one "Counterpoint" source and answer it — addressing the counterargument is what makes an essay strong.',
   },
   {
     icon: '📄',
@@ -46,8 +46,8 @@ const STEPS = [
   {
     icon: '📝',
     title: 'Check my draft',
-    body: 'Switch to "Check my draft" and paste what you\'ve written. Firmo extracts every factual claim, scores how well-supported each one is, and lets you jump straight to finding sources for any claim that needs backup.',
-    tip: 'Run your draft through before submitting — a red claim means you should find a source or soften the wording.',
+    body: 'Switch to "Check my draft" and paste what you\'ve written. Firmo pulls out every factual claim and marks each one Well-supported, Uncertain, Contested, or Unsupported — then lets you jump straight to finding sources for anything shaky.',
+    tip: 'An "Unsupported" or "Contested" claim is your cue to add a citation or soften the wording before you submit.',
   },
   {
     icon: '💬',

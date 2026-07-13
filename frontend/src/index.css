@@ -33,7 +33,14 @@
      number; the left rail carries the stance color (set inline per card). */
   .source-card {
     @apply card p-5 flex flex-col gap-3 border-l-2
-      transition-colors duration-150;
+      transition-all duration-200;
+  }
+  .source-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 30px -12px rgba(20, 40, 33, 0.22);
+  }
+  .dark .source-card:hover {
+    box-shadow: 0 12px 32px -14px rgba(0, 0, 0, 0.6);
   }
 
   /* Small-caps mono label — the "section heading" voice of the whole app */
@@ -209,8 +216,68 @@
   50%      { transform: scaleX(0.82); opacity: 0.6; }
 }
 
+/* ── Hero atmosphere: a faint manuscript rule that drifts slowly upward, as if
+   the blank page were quietly filling with lines. Behind the hero, inert. ──── */
+.hero-atmos {
+  position: absolute;
+  inset: -32px -24px -8px;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: 4px;
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 50%, transparent 92%);
+          mask-image: linear-gradient(to bottom, #000 0%, #000 50%, transparent 92%);
+}
+.hero-atmos::before {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; top: -40px; bottom: -40px;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0, transparent 33px,
+    rgba(35, 90, 71, 0.07) 33px, rgba(35, 90, 71, 0.07) 34px
+  );
+  animation: heroRule 24s linear infinite;
+}
+.dark .hero-atmos::before {
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0, transparent 33px,
+    rgba(95, 168, 140, 0.06) 33px, rgba(95, 168, 140, 0.06) 34px
+  );
+}
+@keyframes heroRule {
+  from { transform: translateY(0); }
+  to   { transform: translateY(-34px); }
+}
+
+/* The thesis word earns a drawn-in underline on load */
+.hero-word { position: relative; white-space: nowrap; }
+.hero-word::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: -0.06em;
+  height: 0.1em;
+  border-radius: 2px;
+  background: currentColor;
+  opacity: 0.24;
+  transform-origin: left center;
+  animation: heroUnderline 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) 0.4s both;
+}
+@keyframes heroUnderline {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+/* Orchestrated page-load entrance for the hero */
+.hero-seq > * { animation: fadeInUp 0.5s ease both; }
+.hero-seq > *:nth-child(1) { animation-delay: 0.04s; }
+.hero-seq > *:nth-child(2) { animation-delay: 0.12s; }
+.hero-seq > *:nth-child(3) { animation-delay: 0.22s; }
+
 @media (prefers-reduced-motion: reduce) {
-  .animate-fadeInUp, .skeleton, .animate-pulseDot {
+  .animate-fadeInUp, .skeleton, .animate-pulseDot,
+  .hero-atmos::before, .hero-word::after, .hero-seq > * {
     animation: none !important;
   }
   /* keep the 3D pose, just stop moving */

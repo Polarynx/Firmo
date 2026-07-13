@@ -473,15 +473,18 @@ export default function App() {
 
           {/* Hero */}
           {phase === 'idle' && view === 'research' && (
-            <div className="flex flex-col gap-3 pt-6">
-              <span className="eyebrow !text-brand-700 dark:!text-brand-400">For every paper you'll ever write</span>
-              <h1 className="font-display font-semibold text-4xl sm:text-5xl tracking-tight leading-[1.08]">
-                From blank page<br />to <span className="italic text-brand-700 dark:text-brand-400">bibliography</span>.
-              </h1>
-              <p className="text-gray-500 dark:text-gray-400 text-[15px] max-w-lg mt-1">
-                Tell Firmo what you're writing about. It finds real, citable academic sources,
-                shows you what the evidence says, and builds your works-cited page as you go.
-              </p>
+            <div className="relative pt-6">
+              <div className="hero-atmos" aria-hidden="true" />
+              <div className="hero-seq relative z-10 flex flex-col gap-3">
+                <span className="eyebrow !text-brand-700 dark:!text-brand-400">For every paper you'll ever write</span>
+                <h1 className="font-display font-semibold text-4xl sm:text-5xl tracking-tight leading-[1.08]">
+                  From blank page<br />to <span className="hero-word italic text-brand-700 dark:text-brand-400">bibliography</span>.
+                </h1>
+                <p className="text-gray-500 dark:text-gray-400 text-[15px] max-w-lg mt-1">
+                  Tell Firmo what you're writing about. It finds real, citable academic sources,
+                  shows you what the evidence says, and builds your works-cited page as you go.
+                </p>
+              </div>
             </div>
           )}
 
@@ -785,13 +788,6 @@ export default function App() {
 
         {/* ── Right column: project + works cited ── */}
         <aside className="hidden lg:block sticky top-20">
-          {/* The emblem sits beside the project panel — a quiet, classy accent that
-              keeps the search service itself front and centre in the main column. */}
-          {phase === 'idle' && view === 'research' && (
-            <div className="flex justify-center pb-7 pt-2">
-              <HeroEmblem />
-            </div>
-          )}
           <ProjectSidebar
             projects={store.projects}
             activeId={store.activeId}
@@ -808,6 +804,12 @@ export default function App() {
             citationStyle={style}
             onStyleChange={setStyle}
           />
+          {/* Always present, below the project — a quiet 3D accent that keeps the
+              search service itself front and centre in the main column. */}
+          <div className="flex flex-col items-center gap-2 pt-9 pb-2">
+            <HeroEmblem />
+            <span className="eyebrow opacity-70">15 databases · one bibliography</span>
+          </div>
         </aside>
       </main>
 

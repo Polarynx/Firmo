@@ -1,37 +1,60 @@
 
-function ConfidenceBar({ value }) {
-  const color = value >= 70 ? 'bg-green-500' : value >= 40 ? 'bg-amber-400' : 'bg-red-400'
-  const textColor = value >= 70
-    ? 'text-green-600 dark:text-green-400'
-    : value >= 40
-    ? 'text-amber-500 dark:text-amber-400'
-    : 'text-red-500 dark:text-red-400'
-  return (
-    <div className="flex items-center gap-2 mt-1">
-      <div className="flex-1 h-1 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
-        <div className={`h-full rounded-full transition-all duration-700 ${color}`} style={{ width: `${value}%` }} />
-      </div>
-      <span className={`text-xs font-mono font-semibold tabular-nums shrink-0 ${textColor}`}>{value}%</span>
-    </div>
-  )
+// A claim gets one plain verdict about how the evidence treats it — not a number.
+// "Contested" wins when scholars genuinely disagree; otherwise confidence decides.
+const VERDICTS = {
+  supported: {
+    label: 'Well-supported',
+    pill: 'text-brand-700 border-brand-400/60 dark:text-brand-300 dark:border-brand-700',
+    dot: 'bg-brand-500',
+    rail: 'border-l-brand-500 dark:border-l-brand-500',
+  },
+  contested: {
+    label: 'Contested',
+    pill: 'text-amber-700 border-amber-400/60 dark:text-amber-300 dark:border-amber-800',
+    dot: 'bg-amber-400',
+    rail: 'border-l-amber-400 dark:border-l-amber-400',
+  },
+  uncertain: {
+    label: 'Uncertain',
+    pill: 'text-gray-600 border-gray-300 dark:text-gray-400 dark:border-gray-600',
+    dot: 'bg-gray-400',
+    rail: 'border-l-gray-300 dark:border-l-gray-600',
+  },
+  unsupported: {
+    label: 'Unsupported',
+    pill: 'text-red-600 border-red-300/70 dark:text-red-400 dark:border-red-800/70',
+    dot: 'bg-red-500',
+    rail: 'border-l-red-400 dark:border-l-red-500',
+  },
+}
+
+function verdictFor(item) {
+  // Trust the model's explicit verdict; fall back to the old numeric signal only
+  // for responses that predate the verdict field.
+  if (item.verdict && VERDICTS[item.verdict]) return VERDICTS[item.verdict]
+  if (item.is_debatable) return VERDICTS.contested
+  if (item.confidence >= 65) return VERDICTS.supported
+  if (item.confidence <= 35) return VERDICTS.unsupported
+  return VERDICTS.uncertain
 }
 
 function ClaimCard({ item, index, onSearch }) {
-  const borderColor = item.confidence >= 70
-    ? 'border-l-green-400 dark:border-l-green-600'
-    : item.confidence >= 40
-    ? 'border-l-amber-400 dark:border-l-amber-500'
-    : 'border-l-red-400 dark:border-l-red-500'
+  const v = verdictFor(item)
 
   return (
     <div
-      className={`card p-4 flex flex-col gap-2 border-l-4 ${borderColor} animate-fadeInUp`}
+      className={`card p-4 flex flex-col gap-2.5 border-l-4 ${v.rail} animate-fadeInUp`}
       style={{ animationDelay: `${index * 60}ms` }}
     >
-      <p className="text-sm font-medium text-gray-800 dark:text-gray-100 leading-snug">{item.claim}</p>
-      <ConfidenceBar value={item.confidence} />
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-sm font-medium text-gray-800 dark:text-gray-100 leading-snug">{item.claim}</p>
+        <span className={`shrink-0 inline-flex items-center gap-1.5 font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] px-2 py-0.5 rounded-[2px] border ${v.pill}`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${v.dot}`} />
+          {v.label}
+        </span>
+      </div>
       <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">{item.response}</p>
-      <button onClick={() => onSearch(item.claim)} className="self-start btn-secondary text-xs mt-1">
+      <button onClick={() => onSearch(item.claim)} className="self-start btn-secondary text-xs mt-0.5">
         Find sources for this claim →
       </button>
     </div>
@@ -45,7 +68,7 @@ export default function EssayChecker({ text = '', onTextChange, results, loading
       <textarea
         value={text}
         onChange={e => onTextChange(e.target.value)}
-        placeholder="Paste your draft — Firmo identifies every factual claim, scores how well-supported it is, and helps you find sources for the shaky ones."
+        placeholder="Paste your draft — Firmo pulls out every factual claim, marks each one well-supported, uncertain, contested, or unsupported, and helps you find sources for the shaky ones."
         rows={6}
         className="w-full resize-none rounded-[3px] border border-gray-200 dark:border-gray-800
           bg-white dark:bg-ink-900 text-gray-900 dark:text-gray-100
@@ -91,9 +114,11 @@ export default function EssayChecker({ text = '', onTextChange, results, loading
             Extracting and evaluating claims…
           </div>
           {[0, 1, 2, 3].map(i => (
-            <div key={i} className="card p-4 flex flex-col gap-2 border-l-4 border-l-gray-200 dark:border-l-gray-700 opacity-60">
-              <div className="skeleton h-3.5 w-full" />
-              <div className="skeleton h-1 w-full mt-1" />
+            <div key={i} className="card p-4 flex flex-col gap-2.5 border-l-4 border-l-gray-200 dark:border-l-gray-700 opacity-60">
+              <div className="flex items-start justify-between gap-3">
+                <div className="skeleton h-3.5 flex-1" />
+                <div className="skeleton h-4 w-24 shrink-0" />
+              </div>
               <div className="skeleton h-3 w-4/5" />
             </div>
           ))}
@@ -108,11 +133,15 @@ export default function EssayChecker({ text = '', onTextChange, results, loading
 
       {results && !loading && (
         <div className="flex flex-col gap-3">
-          <p className="text-xs text-gray-400 dark:text-gray-600">
-            {results.length} claim{results.length !== 1 ? 's' : ''} found
+          <p className="eyebrow">
+            {results.length === 0
+              ? 'No verifiable claims found'
+              : `${results.length} claim${results.length !== 1 ? 's' : ''} checked against the evidence`}
           </p>
           {results.length === 0 ? (
-            <p className="text-sm text-gray-400">No verifiable factual claims detected.</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Nothing here can be verified against evidence — Firmo checks facts, not opinions or wording. Try pasting a paragraph with factual statements.
+            </p>
           ) : (
             results.map((item, i) => (
               <ClaimCard key={i} item={item} index={i} onSearch={onSearchClaim} />

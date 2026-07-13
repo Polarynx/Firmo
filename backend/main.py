@@ -664,27 +664,41 @@ Return ONLY valid JSON with two fields:
 - "corrected_text": the input text with ONLY spelling and grammar fixed — correct only words you can identify with certainty from their misspelling. Do NOT guess at garbled words — leave those as-is. Do NOT change any word that affects meaning, do NOT correct factual errors. If too garbled to safely correct, return the text unchanged.
 - "claims": array of up to 8 strings, each a concise factual claim extracted or closely paraphrased from the text"""
 
-CHAIN_EVAL_PROMPT = """Evaluate this factual claim in one pass.
+CHAIN_EVAL_PROMPT = """Evaluate this factual claim against the current state of evidence.
 
 Claim: "{claim}"
 
+Decide the verdict FIRST, then explain it. The verdict must match your explanation:
+if you would explain that the claim is false or a myth, the verdict is "unsupported".
+
 Return ONLY valid JSON:
-- "response": 1–2 sentence honest assessment, plain language
-- "confidence": integer 0–100 rating how well-supported the claim is by evidence (0 = debunked, 100 = confirmed true)
-- "is_debatable": true if contested among scholars, false for settled facts"""
+- "verdict": exactly one of
+    "supported"   = evidence clearly confirms the claim is TRUE
+    "unsupported" = evidence clearly shows the claim is FALSE or a common misconception
+    "contested"   = genuinely debated among experts, no clear consensus either way
+    "uncertain"   = not enough clear evidence to judge
+- "response": 1-2 plain-language sentences explaining the verdict
+- "confidence": integer 0-100, how confident you are in this verdict"""
+
+VALID_VERDICTS = {"supported", "unsupported", "contested", "uncertain"}
 
 
 async def evaluate_claim_light(claim: str) -> dict:
     try:
         parsed = await chat_json(CHAIN_EVAL_PROMPT.format(claim=claim), max_tokens=200)
+        verdict = parsed.get("verdict")
+        if verdict not in VALID_VERDICTS:
+            verdict = "uncertain"
         return {
             "claim": claim,
+            "verdict": verdict,
             "response": parsed.get("response", ""),
             "confidence": int(parsed.get("confidence", 50)),
-            "is_debatable": bool(parsed.get("is_debatable", False)),
+            "is_debatable": verdict == "contested",
         }
     except Exception:
-        return {"claim": claim, "response": "Could not evaluate.", "confidence": 50, "is_debatable": False}
+        return {"claim": claim, "verdict": "uncertain",
+                "response": "Could not evaluate.", "confidence": 50, "is_debatable": False}
 
 
 @app.post("/api/claimchain")

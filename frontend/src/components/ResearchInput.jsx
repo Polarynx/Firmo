@@ -14,7 +14,7 @@ export default function ResearchInput({ query, onQueryChange, yearFrom, onYearFr
         value={query}
         onChange={e => onQueryChange(e.target.value)}
         onKeyDown={handleKey}
-        placeholder={'Your topic, thesis, or research question — e.g. "the effects of sleep deprivation on memory" or "school uniforms improve student focus"'}
+        placeholder={'Your topic, thesis, or research question. For example, "the effects of sleep deprivation on memory" or "school uniforms improve student focus"'}
         rows={3}
         className="w-full resize-none rounded-[3px]
           border border-gray-200 dark:border-gray-800

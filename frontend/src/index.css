@@ -43,10 +43,18 @@
     box-shadow: 0 12px 32px -14px rgba(0, 0, 0, 0.6);
   }
 
-  /* Small-caps mono label — the "section heading" voice of the whole app */
+  /* Small-caps mono label: the "section heading" voice of the whole app */
   .eyebrow {
     @apply font-mono text-[10px] font-medium uppercase tracking-[0.18em]
       text-gray-500 dark:text-gray-500;
+  }
+
+  /* Inline section heading inside a card body (Abstract / Summary / Verdict / What
+     this means). A quieter sibling of .eyebrow that sits directly above its text, so
+     three stacked blocks never blur into one wall of words. */
+  .section-label {
+    @apply block font-mono text-[9.5px] font-medium uppercase tracking-[0.16em]
+      text-gray-400 dark:text-gray-500 mb-1;
   }
 
   /* Journal-masthead divider: thick over thin */
@@ -249,6 +257,33 @@
 @keyframes heroRule {
   from { transform: translateY(0); }
   to   { transform: translateY(-34px); }
+}
+
+/* Masthead wordmark: a brand hairline sweeps in beneath it on hover/focus, the
+   masthead answering to the "underline your sources" idea. */
+.wordmark { position: relative; }
+.wordmark::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: 1px;
+  height: 2px;
+  background: #235a47;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 0.28s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.dark .wordmark::after { background: #5fa88c; }
+.wordmark:hover::after,
+.wordmark:focus-visible::after { transform: scaleX(1); }
+
+/* Editorial kicker: a short rule leads the hero eyebrow, like a dateline. */
+.hero-kicker { display: inline-flex; align-items: center; gap: 0.65rem; }
+.hero-kicker::before {
+  content: '';
+  width: 1.75rem;
+  height: 2px;
+  background: currentColor;
+  opacity: 0.55;
 }
 
 /* The thesis word earns a drawn-in underline on load */

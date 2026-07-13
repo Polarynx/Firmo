@@ -35,7 +35,7 @@ OPENAIRE_URL = "https://api.openaire.eu/search/publications"
 UNPAYWALL_URL = "https://api.unpaywall.org/v2"
 DOAB_URL = "https://directory.doabooks.org/rest/search"
 
-# Optional — the keyless Semantic Scholar endpoint is aggressively throttled and
+# Optional: the keyless Semantic Scholar endpoint is aggressively throttled and
 # usually returns nothing; a free API key makes it a reliable source again.
 _S2_KEY = os.getenv("SEMANTIC_SCHOLAR_API_KEY")
 
@@ -296,7 +296,7 @@ async def search_europe_pmc(query: str, limit: int = 8, year_from: Optional[int]
 
 
 async def search_base(query: str, limit: int = 8, year_from: Optional[int] = None) -> list[dict]:
-    """Bielefeld Academic Search Engine — free, no key, cross-disciplinary."""
+    """Bielefeld Academic Search Engine: free, no key, cross-disciplinary."""
     q = query
     if year_from:
         q += f" year:{year_from}-2099"
@@ -354,7 +354,7 @@ async def search_base(query: str, limit: int = 8, year_from: Optional[int] = Non
 
 async def search_openalex(query: str, limit: int = 8, year_from: Optional[int] = None) -> list[dict]:
     # Books, chapters, and dissertations matter as much as articles in the
-    # humanities — filtering to articles only starves history/culture topics.
+    # humanities, so filtering to articles only starves history/culture topics.
     filter_str = "type:article|review|book|book-chapter|dissertation"
     if year_from:
         filter_str += f",publication_year:>{year_from - 1}"
@@ -364,7 +364,7 @@ async def search_openalex(query: str, limit: int = 8, year_from: Optional[int] =
         "per-page": limit,
         "select": "id,title,authorships,publication_year,abstract_inverted_index,doi,cited_by_count,primary_location",
         "sort": "relevance_score:desc",
-        "mailto": "firmo@example.com",  # polite pool — faster responses
+        "mailto": "firmo@example.com",  # polite pool, faster responses
     }
     try:
         data = (await _get(OPENALEX_URL, params)).json()
@@ -411,7 +411,7 @@ async def search_openalex(query: str, limit: int = 8, year_from: Optional[int] =
 
 
 async def search_arxiv(query: str, limit: int = 8, year_from: Optional[int] = None) -> list[dict]:
-    """arXiv — free preprint server for physics, math, CS, biology, and more."""
+    """arXiv: free preprint server for physics, math, CS, biology, and more."""
     params = {"search_query": f"all:{query}", "start": 0, "max_results": limit, "sortBy": "relevance"}
     try:
         root = ET.fromstring((await _get(ARXIV_URL, params)).text)
@@ -451,7 +451,7 @@ async def search_arxiv(query: str, limit: int = 8, year_from: Optional[int] = No
 
 
 async def search_doaj(query: str, limit: int = 8, year_from: Optional[int] = None) -> list[dict]:
-    """DOAJ — Directory of Open Access Journals, peer-reviewed open-access articles."""
+    """DOAJ: Directory of Open Access Journals, peer-reviewed open-access articles."""
     params = {"q": query, "pageSize": limit}
     try:
         data = (await _get(DOAJ_URL, params)).json()
@@ -487,7 +487,7 @@ async def search_doaj(query: str, limit: int = 8, year_from: Optional[int] = Non
 
 
 async def search_eric(query: str, limit: int = 8, year_from: Optional[int] = None) -> list[dict]:
-    """ERIC — US Dept of Education database for education research papers."""
+    """ERIC: US Dept of Education database for education research papers."""
     params = {"search": query, "fields": "id,title,author,description,publicationdateyear,url",
               "format": "json", "rows": limit}
     try:
@@ -520,7 +520,7 @@ async def search_eric(query: str, limit: int = 8, year_from: Optional[int] = Non
 
 
 async def search_zenodo(query: str, limit: int = 8, year_from: Optional[int] = None) -> list[dict]:
-    """Zenodo — CERN open research repository for papers, datasets, and preprints."""
+    """Zenodo: CERN open research repository for papers, datasets, and preprints."""
     params = {"q": query, "type": "publication", "size": limit, "sort": "bestmatch"}
     try:
         data = (await _get(ZENODO_URL, params)).json()
@@ -554,7 +554,7 @@ async def search_zenodo(query: str, limit: int = 8, year_from: Optional[int] = N
 
 
 async def search_plos(query: str, limit: int = 6, year_from: Optional[int] = None) -> list[dict]:
-    """PLOS — Public Library of Science open-access journals."""
+    """PLOS: Public Library of Science open-access journals."""
     params = {"q": query, "fl": "id,title_display,author_display,abstract,publication_date,journal",
               "wt": "json", "rows": limit}
     try:
@@ -590,7 +590,7 @@ async def search_plos(query: str, limit: int = 6, year_from: Optional[int] = Non
 
 
 async def search_hal(query: str, limit: int = 8, year_from: Optional[int] = None) -> list[dict]:
-    """HAL — French/European open archive of scholarly research across all disciplines."""
+    """HAL: French/European open archive of scholarly research across all disciplines."""
     fq = "docType_s:ART"
     if year_from:
         fq += f" AND producedDate_i:[{year_from} TO *]"
@@ -627,7 +627,7 @@ async def search_hal(query: str, limit: int = 8, year_from: Optional[int] = None
 
 
 async def search_inspire(query: str, limit: int = 8, year_from: Optional[int] = None) -> list[dict]:
-    """INSPIRE-HEP — leading database for high-energy physics and related fields."""
+    """INSPIRE-HEP: leading database for high-energy physics and related fields."""
     q = query
     if year_from:
         q = f"{query} AND date {year_from}--"
@@ -673,7 +673,7 @@ async def search_inspire(query: str, limit: int = 8, year_from: Optional[int] = 
 
 
 async def search_fatcat(query: str, limit: int = 8, year_from: Optional[int] = None) -> list[dict]:
-    """fatcat — Internet Archive Scholar index of hundreds of millions of papers."""
+    """fatcat: Internet Archive Scholar index of hundreds of millions of papers."""
     params = {"q": query, "limit": limit}
     try:
         data = (await _get(FATCAT_URL, params)).json()
@@ -729,7 +729,7 @@ def _oaf_first(v):
 
 
 async def search_openaire(query: str, limit: int = 8, year_from: Optional[int] = None) -> list[dict]:
-    """OpenAIRE — EU aggregator of institutional repositories; strong humanities coverage."""
+    """OpenAIRE: EU aggregator of institutional repositories; strong humanities coverage."""
     params = {"keywords": query, "format": "json", "size": limit, "sortBy": "resultdateofacceptance,descending"}
     if year_from:
         params["fromDateAccepted"] = f"{year_from}-01-01"
@@ -789,7 +789,7 @@ async def search_openaire(query: str, limit: int = 8, year_from: Optional[int] =
 
 
 async def search_doab(query: str, limit: int = 6, year_from: Optional[int] = None) -> list[dict]:
-    """DOAB — Directory of Open Access Books: peer-reviewed scholarly books.
+    """DOAB: Directory of Open Access Books, peer-reviewed scholarly books.
 
     Books are badly under-covered by the article-first databases, so DOAB is the
     difference-maker for humanities and history topics.
@@ -876,23 +876,37 @@ ALL_CONNECTORS: list[tuple] = [
     (search_doab, 6),
 ]
 
+# A fast, broad-coverage subset for latency-sensitive lookups where we only need a
+# handful of solid abstracts per query rather than exhaustive coverage, e.g. checking
+# each claim in a pasted draft against real sources. These four are reliably quick and
+# span the sciences, social sciences, and humanities.
+FAST_CONNECTORS: list[tuple] = [
+    (search_openalex, 8),
+    (search_semantic_scholar, 8),
+    (search_crossref, 6),
+    (search_europe_pmc, 6),
+]
+
 
 async def search_all(
     queries: list[str],
     year_from: Optional[int] = None,
     budget: float = 10.0,
     on_progress: Optional[Callable] = None,
+    connectors: Optional[list[tuple]] = None,
 ) -> list[dict]:
     """Fire every connector for every query in parallel with a hard time budget.
 
-    Whatever has arrived when the budget expires is what we use — one slow
+    Whatever has arrived when the budget expires is what we use: one slow
     database never blocks the whole search. `on_progress(done, total, papers_so_far)`
-    is awaited after each completion batch.
+    is awaited after each completion batch. Pass `connectors` (e.g. FAST_CONNECTORS)
+    to search a smaller, quicker subset instead of every database.
     """
+    connectors = connectors or ALL_CONNECTORS
     tasks = [
         asyncio.create_task(fn(q, limit=limit, year_from=year_from))
         for q in queries
-        for fn, limit in ALL_CONNECTORS
+        for fn, limit in connectors
     ]
     total = len(tasks)
     papers: list[dict] = []
@@ -924,7 +938,7 @@ async def search_all(
 
 def clean_text(text) -> str:
     # Connectors occasionally hand back a non-string here (e.g. a bare year int or
-    # a list from a quirky API record). Coerce defensively — one such value used to
+    # a list from a quirky API record). Coerce defensively, since one such value used to
     # crash process_papers and wipe the entire search intermittently.
     if not isinstance(text, str):
         if text is None:
@@ -1008,7 +1022,7 @@ def relevance_score(paper: dict, query_terms: set) -> float:
 
     Title hits weigh most; covering more of the query at all is rewarded, so a
     paper touching several query facets beats one that just repeats a single shared
-    word. Returns 0.0 when nothing overlaps — callers use that to drop obvious junk.
+    word. Returns 0.0 when nothing overlaps, which callers use to drop obvious junk.
     """
     if not query_terms:
         return 0.0

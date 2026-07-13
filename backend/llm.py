@@ -30,10 +30,13 @@ _client = AsyncOpenAI(
 _RETRYABLE = (RateLimitError, InternalServerError, APIConnectionError, APITimeoutError)
 
 
-async def chat(prompt: str, max_tokens: int = 512, json_mode: bool = False) -> str:
+async def chat(prompt: str, max_tokens: int = 512, json_mode: bool = False,
+               temperature: float | None = None) -> str:
     kwargs = {}
     if json_mode:
         kwargs["response_format"] = {"type": "json_object"}
+    if temperature is not None:
+        kwargs["temperature"] = temperature
     last_exc = None
     for attempt in range(3):
         try:
@@ -45,7 +48,7 @@ async def chat(prompt: str, max_tokens: int = 512, json_mode: bool = False) -> s
             )
             return msg.choices[0].message.content.strip()
         except AuthenticationError as e:
-            # A bad/expired key fails every call — surface it loudly instead of
+            # A bad/expired key fails every call, so surface it loudly instead of
             # silently degrading to fallbacks on every request.
             print(f"[llm AUTH ERROR] Mistral rejected the API key. Check MISTRAL_API_KEY "
                   f"in backend/.env and RESTART the server. {e}")
@@ -60,7 +63,7 @@ async def chat(prompt: str, max_tokens: int = 512, json_mode: bool = False) -> s
 async def embed_texts(texts: list[str], batch_size: int = 32) -> list:
     """Batch-embed texts for semantic relevance ranking.
 
-    Returns one vector per input, with None in any slot that failed — embeddings
+    Returns one vector per input, with None in any slot that failed. Embeddings
     are an enhancement, never a hard dependency, so this never raises. Batches run
     in parallel; a batch that keeps failing leaves its slots None and the caller
     falls back to lexical scoring.
@@ -95,14 +98,16 @@ def parse_json(raw: str):
     return json.loads(raw)
 
 
-async def chat_json(prompt: str, max_tokens: int = 512) -> dict:
-    """One LLM call, JSON mode, parsed. Raises on failure — callers own their fallback.
+async def chat_json(prompt: str, max_tokens: int = 512,
+                    temperature: float | None = None) -> dict:
+    """One LLM call, JSON mode, parsed. Raises on failure so callers own their fallback.
 
     A parse failure usually means the response was truncated at max_tokens, so
-    the single retry runs with double the budget.
+    the single retry runs with double the budget. Pass temperature=0 for tasks that
+    must be deterministic (e.g. claim verdicts that should not flip between runs).
     """
     try:
-        return parse_json(await chat(prompt, max_tokens=max_tokens, json_mode=True))
+        return parse_json(await chat(prompt, max_tokens=max_tokens, json_mode=True, temperature=temperature))
     except json.JSONDecodeError as e:
         print(f"[chat_json parse retry] {e}")
-        return parse_json(await chat(prompt, max_tokens=max_tokens * 2, json_mode=True))
+        return parse_json(await chat(prompt, max_tokens=max_tokens * 2, json_mode=True, temperature=temperature))

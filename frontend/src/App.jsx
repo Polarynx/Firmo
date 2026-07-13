@@ -48,54 +48,10 @@ function SkeletonCard() {
   )
 }
 
-function SynthesisPanel({ query, papers }) {
-  const [result, setResult] = useState(null)
-  const [loading, setLoading] = useState(false)
-  const [expanded, setExpanded] = useState(false)
-
-  async function run() {
-    if (result) return
-    setLoading(true)
-    try {
-      const data = await postJSON('/api/synthesize-sources', { claim: query, papers })
-      setResult(data)
-    } catch {
-      setResult({ summary: 'Could not synthesize sources.', synthesis: '' })
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  if (result) {
-    return (
-      <div className="card border-l-2 border-l-brand-500 p-4 flex flex-col gap-1.5 animate-fadeInUp">
-        <span className="eyebrow !text-brand-700 dark:!text-brand-400">What the evidence says overall</span>
-        <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
-          {expanded ? result.synthesis || result.summary : result.summary}
-          {result.synthesis && result.synthesis !== result.summary && (
-            <button
-              onClick={() => setExpanded(e => !e)}
-              className="ml-1.5 text-brand-500 hover:text-brand-600 dark:hover:text-brand-300 text-xs font-medium transition-colors"
-            >
-              {expanded ? 'Show less' : 'Read more'}
-            </button>
-          )}
-        </p>
-      </div>
-    )
-  }
-
-  return (
-    <button onClick={run} disabled={loading} className="btn-secondary text-xs self-start disabled:opacity-40">
-      {loading ? 'Synthesizing…' : `Synthesize ${papers.length} sources`}
-    </button>
-  )
-}
-
 const IDLE_STEPS = [
-  { n: '1', title: 'Describe your paper', body: 'A topic, a thesis, or a research question — Firmo figures out which and maps the field for you.' },
+  { n: '1', title: 'Describe your paper', body: 'A topic, a thesis, or a research question. Firmo figures out which and maps the field for you.' },
   { n: '2', title: 'Collect real sources', body: '15 academic databases searched at once, ranked for relevance, tagged by whether they support or challenge your argument.' },
-  { n: '3', title: 'Copy your bibliography', body: 'Save sources to your project and your works-cited page writes itself — APA, MLA, Chicago, Harvard, or IEEE.' },
+  { n: '3', title: 'Copy your bibliography', body: 'Save sources to your project and your works-cited page writes itself in APA, MLA, Chicago, Harvard, or IEEE.' },
 ]
 
 export default function App() {
@@ -109,6 +65,7 @@ export default function App() {
   const [phase, setPhase] = useState('idle') // idle | running | done
   const [statusMsg, setStatusMsg] = useState('')
   const [brief, setBrief] = useState(null)
+  const [inputType, setInputType] = useState('topic') // topic | thesis | question
   const [results, setResults] = useState([])
   const [provisional, setProvisional] = useState(false)
   const [stanceCounts, setStanceCounts] = useState(null)
@@ -122,7 +79,7 @@ export default function App() {
   const [asking, setAsking] = useState(false)
   const abortRef = useRef(null)
 
-  // citation style — persists across sessions
+  // citation style, persisted across sessions
   const [style, setStyle] = useState(() => localStorage.getItem('firmo_style') || 'apa')
   useEffect(() => { localStorage.setItem('firmo_style', style) }, [style])
 
@@ -176,6 +133,7 @@ export default function App() {
     setError('')
     setStatusMsg('Reading your topic…')
     setBrief(null)
+    setInputType('topic')
     setResults([])
     setProvisional(false)
     setStanceCounts(null)
@@ -207,6 +165,7 @@ export default function App() {
                 const corrected = ev.corrected_input || activeQuery
                 briefText = ev.brief || ''
                 setBrief(ev)
+                setInputType(ev.input_type || 'topic')
                 setSearchedQuery(corrected)
                 if (corrected !== activeQuery) {
                   setQuery(corrected)
@@ -306,10 +265,6 @@ export default function App() {
     } finally { setAsking(false) }
   }
 
-  function handleShare() {
-    navigator.clipboard.writeText(window.location.origin + window.location.pathname + '?q=' + encodeURIComponent(searchedQuery))
-  }
-
   async function handleEssayCheck(text) {
     if (!text.trim()) return
     setChainLoading(true)
@@ -328,11 +283,6 @@ export default function App() {
       setChainLoading(false)
       chainAbortRef.current = null
     }
-  }
-
-  function handleEssayClaim(claimText) {
-    setQuery(claimText)
-    runResearch(claimText)
   }
 
   // filters
@@ -366,6 +316,9 @@ export default function App() {
   const running = phase === 'running'
   const showResults = view === 'research' && (running || phase === 'done')
   const bibCount = activeProject?.sources.length || 0
+  // A plain topic has no sides to take, so every source is simply background and the
+  // stance chips carry no information. Only an argument (thesis/question) earns them.
+  const isArgument = inputType === 'thesis' || inputType === 'question'
 
   return (
     <div className="min-h-screen bg-paper-50 dark:bg-ink-950 text-gray-900 dark:text-gray-100 transition-colors duration-200">
@@ -376,30 +329,12 @@ export default function App() {
           <div className="flex items-baseline gap-3">
             <button
               onClick={() => { setView('research'); setPhase('idle'); setError(''); window.history.replaceState({}, '', window.location.pathname) }}
-              className="font-display font-bold text-2xl tracking-tight text-gray-900 dark:text-gray-100"
+              className="wordmark font-display font-bold text-2xl tracking-tight text-gray-900 dark:text-gray-100"
             >
               Firmo
             </button>
-            <span className="hidden sm:inline eyebrow">Sources · Briefs · Citations</span>
-            <button
-              onClick={() => setShowChangelog(true)}
-              className="text-xs font-mono text-gray-400 dark:text-gray-600 hover:text-brand-600 dark:hover:text-brand-400 transition-colors"
-              title="View project progress"
-            >v2.0</button>
           </div>
           <div className="flex items-center gap-1">
-            {searchedQuery && phase === 'done' && (
-              <button
-                onClick={handleShare}
-                className="p-2 rounded-[3px] text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-paper-100 dark:hover:bg-ink-800 transition-colors"
-                aria-label="Copy share link"
-                title="Copy share link"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                </svg>
-              </button>
-            )}
             <button
               onClick={() => setShowHistory(h => !h)}
               className="p-2 rounded-[3px] text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-paper-100 dark:hover:bg-ink-800 transition-colors relative"
@@ -471,20 +406,26 @@ export default function App() {
         {/* ── Left column: research ── */}
         <div className="flex flex-col gap-8 min-w-0">
 
-          {/* Hero — shown above whichever tool is open, until its results take over */}
+          {/* Hero: shown above whichever tool is open, until its results take over.
+              `isolate` scopes the hero's internal z-index so it can never paint over
+              the sticky masthead when the page scrolls underneath it. */}
           {((view === 'research' && phase === 'idle') || (view === 'essay' && !chainResults)) && (
-            <div className="relative pt-6">
+            <div className="relative pt-6 isolate">
               <div className="hero-atmos" aria-hidden="true" />
-              <div className="hero-seq relative z-10 flex flex-col gap-3">
-                <span className="eyebrow !text-brand-700 dark:!text-brand-400">
+              <div className="hero-seq relative z-10 flex flex-col gap-3.5">
+                <span className="eyebrow hero-kicker !text-brand-700 dark:!text-brand-400">
                   {view === 'essay' ? 'Before you hand it in' : "For every paper you'll ever write"}
                 </span>
-                <h1 className="font-display font-semibold text-4xl sm:text-5xl tracking-tight leading-[1.08]">
-                  From blank page<br />to <span className="hero-word italic text-brand-700 dark:text-brand-400">bibliography</span>.
+                <h1 className="font-display font-semibold text-[2.75rem] sm:text-6xl tracking-[-0.02em] leading-[1.03]">
+                  {view === 'essay' ? (
+                    <>Every claim,<br />double-<span className="hero-word italic text-brand-700 dark:text-brand-400">checked</span>.</>
+                  ) : (
+                    <>From blank page<br />to <span className="hero-word italic text-brand-700 dark:text-brand-400">bibliography</span>.</>
+                  )}
                 </h1>
-                <p className="text-gray-500 dark:text-gray-400 text-[15px] max-w-lg mt-1">
+                <p className="text-gray-500 dark:text-gray-400 text-[15px] max-w-lg mt-1 leading-relaxed">
                   {view === 'essay'
-                    ? 'Paste your draft and Firmo checks every factual claim against the evidence — then helps you back up the shaky ones.'
+                    ? 'Paste your draft and Firmo checks every factual claim against real evidence, then helps you back up the shaky ones.'
                     : 'Tell Firmo what you\'re writing about. It finds real, citable academic sources, shows you what the evidence says, and builds your works-cited page as you go.'}
                 </p>
               </div>
@@ -527,7 +468,9 @@ export default function App() {
                 error={chainError}
                 onCheck={handleEssayCheck}
                 onCancel={() => { chainAbortRef.current?.abort(); setChainLoading(false) }}
-                onSearchClaim={handleEssayClaim}
+                citationStyle={style}
+                savedIds={savedIds}
+                onToggleSave={handleToggleSave}
               />
             )}
           </div>
@@ -593,7 +536,7 @@ export default function App() {
 
               {results.length === 0 && phase === 'done' && brief && !error && (
                 <p className="text-gray-400 dark:text-gray-600 text-sm py-4">
-                  No directly relevant sources found — try rewording, or explore one of the related topics above.
+                  No directly relevant sources found. Try rewording, or explore one of the related topics above.
                 </p>
               )}
 
@@ -602,17 +545,14 @@ export default function App() {
                   <div className="flex items-center justify-between flex-wrap gap-2">
                     <p className="eyebrow">
                       {provisional
-                        ? 'First results — still ranking…'
+                        ? 'First results, still ranking…'
                         : `${coreResults.length} relevant ${coreResults.length === 1 ? 'source' : 'sources'} · ranked by relevance`}
                       {(stanceFilter || hiddenSources.size > 0) && <span className="ml-1 !text-brand-600 dark:!text-brand-400">· {filteredResults.length} shown</span>}
                     </p>
-                    {!provisional && coreResults.length >= 3 && (
-                      <SynthesisPanel query={searchedQuery} papers={coreResults} />
-                    )}
                   </div>
 
-                  {/* Stance filter */}
-                  {stanceCounts && (
+                  {/* Stance filter: only when the query is an argument with real sides */}
+                  {stanceCounts && isArgument && (
                     <div className="flex flex-wrap gap-1.5 items-center">
                       {Object.entries(STANCE).map(([key, cfg]) => {
                         const count = stanceCounts[key] || 0
@@ -672,14 +612,14 @@ export default function App() {
                     </div>
                   )}
 
-                  {/* Nothing squarely on-topic — be honest, then show the closest */}
+                  {/* Nothing squarely on-topic, so be honest, then show the closest */}
                   {!provisional && coreResults.length === 0 && relatedResults.length > 0 && (
                     <p className="text-sm text-gray-500 dark:text-gray-400">
-                      Nothing landed squarely on your topic — here are the closest related sources.
+                      Nothing landed squarely on your topic, but here are the closest related sources.
                     </p>
                   )}
 
-                  {/* Relevant tier — directly about the topic, shown by default */}
+                  {/* Relevant tier: directly about the topic, shown by default */}
                   {coreResults.map((paper, i) => (
                     <PaperCard
                       key={paperId(paper) || i}
@@ -689,10 +629,11 @@ export default function App() {
                       query={searchedQuery}
                       isSaved={savedIds.has(paperId(paper))}
                       onToggleSave={handleToggleSave}
+                      showStance={isArgument}
                     />
                   ))}
 
-                  {/* Related & background tier — revealed only when the student asks */}
+                  {/* Related & background tier: revealed only when the student asks */}
                   {!provisional && relatedResults.length > 0 && (
                     <div className="flex flex-col gap-3 pt-1">
                       {coreResults.length > 0 && !relatedOpen && (
@@ -704,7 +645,7 @@ export default function App() {
                             Show {relatedResults.length} related &amp; background {relatedResults.length === 1 ? 'source' : 'sources'}
                           </span>
                           <span className="text-xs text-gray-400 dark:text-gray-600">
-                            Tied to your topic but not fully about it — context and adjacent findings
+                            Tied to your topic but not fully about it: context and adjacent findings
                           </span>
                         </button>
                       )}
@@ -730,6 +671,7 @@ export default function App() {
                               query={searchedQuery}
                               isSaved={savedIds.has(paperId(paper))}
                               onToggleSave={handleToggleSave}
+                              showStance={isArgument}
                             />
                           ))}
                         </>
@@ -807,7 +749,7 @@ export default function App() {
             citationStyle={style}
             onStyleChange={setStyle}
           />
-          {/* Always present, below the project — a quiet 3D accent that keeps the
+          {/* Always present, below the project: a quiet 3D accent that keeps the
               search service itself front and centre in the main column. */}
           <div className="flex flex-col items-center gap-2 pt-9 pb-2">
             <HeroEmblem />

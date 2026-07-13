@@ -1,4 +1,4 @@
-// Project store — one project per paper, persisted in localStorage.
+// Project store: one project per paper, persisted in localStorage.
 
 const KEY = 'firmo_projects_v1'
 

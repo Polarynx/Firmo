@@ -26,8 +26,36 @@ export default function ProjectSidebar({
   const [showDownload, setShowDownload] = useState(false)
   const debounceRef = useRef(null)
 
+  // Synthesis lives here, on the sources the student actually chose to keep, and is
+  // weighed against the argument they say they're making, not the last search box.
+  const [argument, setArgument] = useState('')
+  const [synth, setSynth] = useState(null)
+  const [synthLoading, setSynthLoading] = useState(false)
+  const [synthExpanded, setSynthExpanded] = useState(false)
+
   const sources = active?.sources || []
   const sourceKey = sources.map(paperId).join('|')
+
+  // A synthesis is about one project's evidence; drop it when the project changes.
+  useEffect(() => {
+    setSynth(null)
+    setSynthExpanded(false)
+    setArgument('')
+  }, [activeId])
+
+  async function runSynthesis() {
+    if (!argument.trim() || synthLoading || sources.length === 0) return
+    setSynthLoading(true)
+    try {
+      const data = await postJSON('/api/synthesize-sources', { claim: argument.trim(), papers: sources })
+      setSynth(data)
+      setSynthExpanded(false)
+    } catch {
+      setSynth({ summary: 'Could not synthesize your sources right now. Try again in a moment.', synthesis: '' })
+    } finally {
+      setSynthLoading(false)
+    }
+  }
 
   // Regenerate the works-cited list whenever sources or style change
   useEffect(() => {
@@ -115,7 +143,7 @@ export default function ProjectSidebar({
               value={newName}
               onChange={e => setNewName(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleCreate()}
-              placeholder="e.g. PSYC100 — sleep essay"
+              placeholder="e.g. PSYC100 sleep essay"
               className="flex-1 rounded-[3px] border border-gray-200 dark:border-gray-800 bg-white dark:bg-ink-900 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500/50"
             />
             <button onClick={handleCreate} disabled={!newName.trim()} className="btn-primary text-xs px-3 py-1.5 disabled:opacity-40">
@@ -168,7 +196,7 @@ export default function ProjectSidebar({
           </div>
         )}
 
-        {/* Empty project — guide */}
+        {/* Empty project: guide */}
         {active && sources.length === 0 && (
           <div className="rounded-[3px] border border-dashed border-gray-200 dark:border-gray-700 px-3 py-4 text-center">
             <p className="text-xs text-gray-400 dark:text-gray-500 leading-relaxed">
@@ -208,6 +236,59 @@ export default function ProjectSidebar({
           </div>
         )}
 
+        {/* Synthesize evidence, once there's enough saved to weigh */}
+        {sources.length >= 3 && (
+          <div className="flex flex-col gap-2.5 pt-3 border-t border-gray-100 dark:border-gray-800">
+            <span className="font-display font-semibold text-sm text-gray-800 dark:text-gray-200">
+              Synthesize evidence
+            </span>
+            {synth ? (
+              <div className="card border-l-2 border-l-brand-500 p-3 flex flex-col gap-1.5 animate-fadeInUp">
+                <span className="section-label !text-brand-700 dark:!text-brand-400">
+                  What your {sources.length} sources say
+                </span>
+                <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                  {synthExpanded ? (synth.synthesis || synth.summary) : synth.summary}
+                  {synth.synthesis && synth.synthesis !== synth.summary && (
+                    <button
+                      onClick={() => setSynthExpanded(e => !e)}
+                      className="ml-1.5 text-brand-500 hover:text-brand-600 dark:hover:text-brand-300 text-xs font-medium transition-colors"
+                    >
+                      {synthExpanded ? 'Show less' : 'Read more'}
+                    </button>
+                  )}
+                </p>
+                <button
+                  onClick={() => { setSynth(null); setSynthExpanded(false) }}
+                  className="self-start text-xs text-gray-400 dark:text-gray-600 hover:text-brand-500 font-medium transition-colors"
+                >
+                  Redo with a different argument
+                </button>
+              </div>
+            ) : (
+              <>
+                <p className="text-xs text-gray-400 dark:text-gray-500 leading-relaxed">
+                  What are you arguing? Firmo weighs your {sources.length} saved sources for and against it.
+                </p>
+                <textarea
+                  value={argument}
+                  onChange={e => setArgument(e.target.value)}
+                  placeholder="Your thesis or main argument…"
+                  rows={2}
+                  className="w-full resize-none rounded-[3px] border border-gray-200 dark:border-gray-800 bg-white dark:bg-ink-900 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 px-2.5 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500/50 transition-all"
+                />
+                <button
+                  onClick={runSynthesis}
+                  disabled={!argument.trim() || synthLoading}
+                  className="btn-primary text-xs disabled:opacity-40"
+                >
+                  {synthLoading ? 'Reading your sources…' : `Synthesize ${sources.length} sources`}
+                </button>
+              </>
+            )}
+          </div>
+        )}
+
         {/* Works cited */}
         {sources.length > 0 && (
           <div className="flex flex-col gap-2.5 pt-3 border-t border-gray-100 dark:border-gray-800">
@@ -226,7 +307,7 @@ export default function ProjectSidebar({
                   <div className="absolute right-0 top-6 z-20 card p-1 flex flex-col min-w-[140px] shadow-lg">
                     <button onClick={() => handleDownload('text')} className="text-left text-xs px-2.5 py-1.5 rounded hover:bg-paper-100 dark:hover:bg-ink-800 text-gray-600 dark:text-gray-400">Text (.txt)</button>
                     <button onClick={() => handleDownload('bibtex')} className="text-left text-xs px-2.5 py-1.5 rounded hover:bg-paper-100 dark:hover:bg-ink-800 text-gray-600 dark:text-gray-400">BibTeX (.bib)</button>
-                    <button onClick={() => handleDownload('ris')} className="text-left text-xs px-2.5 py-1.5 rounded hover:bg-paper-100 dark:hover:bg-ink-800 text-gray-600 dark:text-gray-400">RIS — Zotero (.ris)</button>
+                    <button onClick={() => handleDownload('ris')} className="text-left text-xs px-2.5 py-1.5 rounded hover:bg-paper-100 dark:hover:bg-ink-800 text-gray-600 dark:text-gray-400">RIS for Zotero (.ris)</button>
                   </div>
                 )}
               </div>
@@ -267,7 +348,7 @@ export default function ProjectSidebar({
             </div>
 
             <button onClick={copyAll} disabled={bibLoading || entries.length === 0} className="btn-primary text-xs disabled:opacity-40">
-              {copiedAll ? '✓ Copied — paste into your paper' : `Copy all ${entries.length} citations`}
+              {copiedAll ? '✓ Copied, paste into your paper' : `Copy all ${entries.length} citations`}
             </button>
           </div>
         )}

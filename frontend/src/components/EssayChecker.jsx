@@ -1,5 +1,8 @@
+import { useState } from 'react'
+import PaperCard from './PaperCard'
+import { paperId } from '../lib/projects'
 
-// A claim gets one plain verdict about how the evidence treats it — not a number.
+// A claim gets one plain verdict about how the evidence treats it, not a number.
 // "Contested" wins when scholars genuinely disagree; otherwise confidence decides.
 const VERDICTS = {
   supported: {
@@ -28,7 +31,7 @@ const VERDICTS = {
   },
 }
 
-// Fixed order for summaries — attention-first, so problems read left to right.
+// Fixed order for summaries, attention-first, so problems read left to right.
 const VERDICT_ORDER = ['unsupported', 'contested', 'uncertain', 'supported']
 
 function verdictKey(item) {
@@ -41,12 +44,16 @@ function verdictKey(item) {
   return 'uncertain'
 }
 
-function ClaimCard({ item, index, onSearch }) {
+function ClaimCard({ item, index, citationStyle, savedIds, onToggleSave }) {
   const v = VERDICTS[verdictKey(item)]
+  const sources = Array.isArray(item.sources) ? item.sources : []
+  // Open the evidence by default on the claims that actually need shoring up.
+  const key = verdictKey(item)
+  const [showSources, setShowSources] = useState(key === 'unsupported' || key === 'contested')
 
   return (
     <div
-      className={`card p-4 flex flex-col gap-2.5 border-l-4 ${v.rail} animate-fadeInUp`}
+      className={`card p-4 flex flex-col gap-3 border-l-4 ${v.rail} animate-fadeInUp`}
       style={{ animationDelay: `${index * 60}ms` }}
     >
       <div className="flex items-start justify-between gap-3">
@@ -56,22 +63,61 @@ function ClaimCard({ item, index, onSearch }) {
           {v.label}
         </span>
       </div>
-      <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">{item.response}</p>
-      <button onClick={() => onSearch(item.claim)} className="self-start btn-secondary text-xs mt-0.5">
-        Find sources for this claim →
-      </button>
+
+      {item.response && (
+        <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+          <span className="section-label">Verdict</span>
+          {item.response}
+        </p>
+      )}
+
+      {sources.length > 0 ? (
+        <div className="flex flex-col gap-2.5">
+          <button
+            onClick={() => setShowSources(s => !s)}
+            className="self-start inline-flex items-center gap-1.5 font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-brand-700 dark:text-brand-400 hover:text-brand-500 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className={`h-3 w-3 transition-transform ${showSources ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+            {sources.length} source{sources.length === 1 ? '' : 's'} checked
+          </button>
+          {showSources && (
+            <div className="flex flex-col gap-2.5 pl-3 border-l border-gray-100 dark:border-gray-800">
+              {sources.map((p, i) => (
+                <PaperCard
+                  key={paperId(p) || i}
+                  paper={p}
+                  citationStyle={citationStyle}
+                  index={i}
+                  query={item.claim}
+                  isSaved={savedIds?.has(paperId(p))}
+                  onToggleSave={onToggleSave}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        <p className="text-xs text-gray-400 dark:text-gray-600">
+          No academic sources turned up for this one, so the verdict leans on general knowledge.
+        </p>
+      )}
     </div>
   )
 }
 
-// Controlled component — all state lives in App.jsx
-export default function EssayChecker({ text = '', onTextChange, results, loading, error, onCheck, onCancel, onSearchClaim }) {
+// Controlled component: all state lives in App.jsx
+export default function EssayChecker({
+  text = '', onTextChange, results, loading, error, onCheck, onCancel,
+  citationStyle = 'apa', savedIds, onToggleSave,
+}) {
   return (
     <div className="w-full flex flex-col gap-4">
       <textarea
         value={text}
         onChange={e => onTextChange(e.target.value)}
-        placeholder="Paste your draft — Firmo pulls out every factual claim, marks each one well-supported, uncertain, contested, or unsupported, and helps you find sources for the shaky ones."
+        placeholder="Paste your draft. Firmo pulls out every factual claim, finds real sources for each, and marks it well-supported, uncertain, contested, or unsupported so you know what still needs backing up."
         rows={6}
         className="w-full resize-none rounded-[3px] border border-gray-200 dark:border-gray-800
           bg-white dark:bg-ink-900 text-gray-900 dark:text-gray-100
@@ -82,7 +128,7 @@ export default function EssayChecker({ text = '', onTextChange, results, loading
       />
 
       <div className="flex items-center justify-between">
-        <span className="text-xs text-gray-400 dark:text-gray-600">Up to 12 claims detected</span>
+        <span className="text-xs text-gray-400 dark:text-gray-600">Up to 10 claims checked</span>
         {loading ? (
           <button
             onClick={onCancel}
@@ -109,12 +155,10 @@ export default function EssayChecker({ text = '', onTextChange, results, loading
 
       {loading && (
         <div className="flex flex-col gap-3">
-          <div className="flex items-center gap-2 text-xs text-gray-400 dark:text-gray-600">
-            <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-            </svg>
-            Extracting and evaluating claims…
+          {/* Same live, blinking-dot status as Find sources, so both modes feel like one tool */}
+          <div className="flex items-center gap-2.5 text-sm text-gray-500 dark:text-gray-400" aria-live="polite">
+            <span className="w-2 h-2 rounded-full bg-brand-500 animate-pulseDot shrink-0" />
+            Pulling out claims and checking each against real sources…
           </div>
           {[0, 1, 2, 3].map(i => (
             <div key={i} className="card p-4 flex flex-col gap-2.5 border-l-4 border-l-gray-200 dark:border-l-gray-700 opacity-60">
@@ -169,11 +213,18 @@ export default function EssayChecker({ text = '', onTextChange, results, loading
           </div>
           {results.length === 0 ? (
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              Nothing here can be verified against evidence — Firmo checks facts, not opinions or wording. Try pasting a paragraph with factual statements.
+              Nothing here can be verified against evidence. Firmo checks facts, not opinions or wording, so try pasting a paragraph with factual statements.
             </p>
           ) : (
             results.map((item, i) => (
-              <ClaimCard key={i} item={item} index={i} onSearch={onSearchClaim} />
+              <ClaimCard
+                key={i}
+                item={item}
+                index={i}
+                citationStyle={citationStyle}
+                savedIds={savedIds}
+                onToggleSave={onToggleSave}
+              />
             ))
           )}
         </div>

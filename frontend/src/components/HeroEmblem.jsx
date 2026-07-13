@@ -1,5 +1,5 @@
 /**
- * A quietly rotating 3D dossier — a small stack of source pages catching the light,
+ * A quietly rotating 3D dossier: a small stack of source pages catching the light,
  * the top one bearing Firmo's serif monogram and a gold reading-ribbon. Pure CSS
  * transforms (no dependency), theme-aware, and it holds still for reduced-motion.
  * It's the "from blank page to bibliography" idea, made into an object.

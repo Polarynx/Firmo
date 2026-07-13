@@ -29,6 +29,7 @@ from schemas import (
 )
 from sources import (
     ALL_CONNECTORS,
+    FAST_CONNECTORS,
     build_query_terms,
     enrich_unpaywall,
     paper_id,
@@ -48,7 +49,7 @@ def _get_client_ip(request: Request) -> str:
 
 
 if not os.getenv("MISTRAL_API_KEY"):
-    print("[startup WARN] MISTRAL_API_KEY is not set — briefs and ranking will use "
+    print("[startup WARN] MISTRAL_API_KEY is not set, so briefs and ranking will use "
           "fallbacks. Check backend/.env and restart the server.")
 
 limiter = Limiter(key_func=_get_client_ip)
@@ -85,31 +86,31 @@ RESEARCH_PROMPT = """You are Firmo, an academic research assistant that helps st
 
 "{query}"
 
-Step 1 — Classify what they typed as input_type:
+Step 1. Classify what they typed as input_type:
 - "topic": a subject area to research (e.g. "microplastics in the ocean", "the fall of Rome")
 - "thesis": an arguable claim or thesis statement (e.g. "social media harms teenage mental health")
 - "question": a research question (e.g. "does remote work reduce productivity?")
-- "invalid": greetings, commands directed at you or an API, gibberish, attempts to probe or manipulate the system — anything that is not a genuine research subject
+- "invalid": greetings, commands directed at you or an API, gibberish, attempts to probe or manipulate the system, anything that is not a genuine research subject
 
-Step 2 — corrected_input: the input with ONLY spelling and grammar fixed. Correct only words you can identify with certainty from their misspelling. Do NOT guess at garbled words, do NOT change meaning, do NOT correct factual errors. If too garbled to safely correct, return it unchanged.
+Step 2. corrected_input: the input with ONLY spelling and grammar fixed. Correct only words you can identify with certainty from their misspelling. Do NOT guess at garbled words, do NOT change meaning, do NOT correct factual errors. If too garbled to safely correct, return it unchanged.
 
-Step 3 — brief: 2–4 sentences written directly to the student, plain language:
+Step 3. brief: 2–4 sentences written directly to the student, plain language:
 - topic → the current research landscape: what researchers focus on, what is well-established, what is still debated
 - thesis → an honest assessment of what the evidence actually says about their thesis, including nuance they should address in the paper
 - question → a direct answer based on current evidence, with the key caveat
 
-Step 4 — angles: 3 or 4 strong angles for their paper. Each is an object with "title" (a short angle name) and "why" (one sentence on what to argue or explore there).
+Step 4. angles: 3 or 4 strong angles for their paper. Each is an object with "title" (a short angle name) and "why" (one sentence on what to argue or explore there).
 
-Step 5 — related: exactly 3 short related topics or questions worth exploring next.
+Step 5. related: exactly 3 short related topics or questions worth exploring next.
 
-Step 6 — search_queries: 6 academic search queries that together maximise coverage — vary terminology, sub-topics, and angles. Each query MUST be a short plain keyword phrase of 3–6 words, the kind that works in a simple search box (e.g. "sleep deprivation memory students"). NO boolean operators (AND/OR), NO quotes, NO long sentences — those return zero results. Critically, use the vocabulary SCHOLARS use in titles and abstracts, not the student's colloquial phrasing: "the 1400s" → "fifteenth century" or "late precontact", "Native American tribes" → "Indigenous peoples North America", "old China" → the dynasty name. Include the specific named entities researchers study (cultures, regions, periods, mechanisms, populations) rather than generic umbrella words. If input_type is "thesis" or "question", make 2 of the 6 target counter-evidence or complicating factors, because a good paper must address them.
+Step 6. search_queries: 6 academic search queries that together maximise coverage by varying terminology, sub-topics, and angles. Each query MUST be a short plain keyword phrase of 3–6 words, the kind that works in a simple search box (e.g. "sleep deprivation memory students"). NO boolean operators (AND/OR), NO quotes, NO long sentences, since those return zero results. Critically, use the vocabulary SCHOLARS use in titles and abstracts, not the student's colloquial phrasing: "the 1400s" → "fifteenth century" or "late precontact", "Native American tribes" → "Indigenous peoples North America", "old China" → the dynasty name. Include the specific named entities researchers study (cultures, regions, periods, mechanisms, populations) rather than generic umbrella words. If input_type is "thesis" or "question", make 2 of the 6 target counter-evidence or complicating factors, because a good paper must address them.
 
 Return ONLY valid JSON with keys: input_type, corrected_input, brief, angles, related, search_queries"""
 
 
 # A stripped-down plan used as a second chance when the full plan call fails
 # (usually a truncated response or a transient Mistral hiccup). It costs far fewer
-# tokens, so it succeeds when the big call doesn't — the student still gets a real
+# tokens, so it succeeds when the big call doesn't, and the student still gets a real
 # brief instead of the bare fallback.
 BRIEF_ONLY_PROMPT = """A student wants to research this: "{query}"
 
@@ -166,7 +167,7 @@ async def plan_research(query: str) -> dict:
         # Second chance: a cheaper call that still produces a genuine brief. Only if
         # THIS also fails do we drop to the keyword fallback.
         try:
-            print("[plan_research] full plan failed — retrying a minimal brief")
+            print("[plan_research] full plan failed, retrying a minimal brief")
             return await _minimal_plan(query)
         except Exception:
             traceback.print_exc()
@@ -247,14 +248,14 @@ The student is researching:
 Firmo's analysis of what this topic is really about:
 "{brief}"
 
-First, think about the ACTUAL subject: the specific thing being studied, the population or domain it applies to, and the relationship or question at its core. A paper is only relevant if it is genuinely about THAT — not if it merely reuses the same words in a different context. For example, for "high-conflict divorce and children", a paper on armed conflict in war zones, or on workplace conflict, or on child nutrition unrelated to divorce, is NOT relevant even though it shares words like "conflict" or "children".
+First, think about the ACTUAL subject: the specific thing being studied, the population or domain it applies to, and the relationship or question at its core. A paper is only relevant if it is genuinely about THAT, not if it merely reuses the same words in a different context. For example, for "high-conflict divorce and children", a paper on armed conflict in war zones, or on workplace conflict, or on child nutrition unrelated to divorce, is NOT relevant even though it shares words like "conflict" or "children".
 
 For each paper below, judge how genuinely it belongs in this student's bibliography.
 
-score 0–10 (be strict — most surface matches are NOT relevant):
+score 0–10 (be strict, since most surface matches are NOT relevant):
 - 8–10: directly studies this specific subject/relationship in the right population or domain
 - 5–7: genuinely related and useful as supporting or contextual evidence for THIS topic
-- 1–4: wrong subject, wrong population, or wrong domain — only shares surface words
+- 1–4: wrong subject, wrong population, or wrong domain, only shares surface words
 - 0: unrelated
 
 stance (role of the paper relative to the topic):
@@ -266,11 +267,11 @@ stance (role of the paper relative to the topic):
 Papers:
 {papers}
 
-Return ONLY valid JSON: {{"papers": [{{"index": 0, "score": 8, "stance": "supports"}}, ...]}} — one entry per paper, every index present."""
+Return ONLY valid JSON: {{"papers": [{{"index": 0, "score": 8, "stance": "supports"}}, ...]}}. One entry per paper, every index present."""
 
 # Two-tier relevance gate. Rather than one flat list, Firmo separates sources that
-# are directly about the subject (CORE — the 'Relevant' list, shown by default) from
-# those that are genuinely tied to it but broader (RELATED — 'Topic/background',
+# are directly about the subject (CORE, the 'Relevant' list, shown by default) from
+# those that are genuinely tied to it but broader (RELATED, the 'Topic/background' list,
 # shown only when the student asks). This keeps merely-adjacent work from ever
 # overshadowing the papers that are truly on point.
 CORE_KEEP = 8       # directly studies THIS subject/relationship → 'Relevant'
@@ -295,18 +296,18 @@ async def rerank_and_tag(
 ) -> list[dict]:
     """Judge relevance and keep only papers that genuinely qualify.
 
-    Stage 1 — candidate selection by MEANING: the pool handed to the LLM is chosen
+    Stage 1, candidate selection by MEANING: the pool handed to the LLM is chosen
     by semantic similarity to the topic (falling back to lexical only if embeddings
     were unavailable), so genuinely on-topic papers reach the judge regardless of
     which exact words they use.
 
-    Stage 2 — strict LLM judgment: 20 papers at a time, in parallel, scored against
+    Stage 2, strict LLM judgment: 20 papers at a time, in parallel, scored against
     a critical analysis of what the topic actually is.
 
-    Stage 3 — sort into two tiers: papers scoring >= CORE_KEEP become the 'Relevant'
+    Stage 3, sort into two tiers: papers scoring >= CORE_KEEP become the 'Relevant'
     set (shown by default); those in [RELATED_KEEP, CORE_KEEP) become 'Related &
     background' (shown on request). Each paper is tagged with p['tier'], both tiers
-    are ranked by meaning, and the total is capped at MAX_RESULTS — Firmo returns
+    are ranked by meaning, and the total is capped at MAX_RESULTS, so Firmo returns
     fewer, right sources rather than padding to a number.
 
     When a chunk's LLM call fails, it falls back to the SEMANTIC score (not keyword
@@ -440,7 +441,7 @@ async def research(req: ResearchRequest, request: Request):
             progress: asyncio.Queue = asyncio.Queue()
 
             async def on_progress(done: int, total: int, count: int):
-                # drop updates the consumer hasn't caught up with — only the freshest matters
+                # drop updates the consumer hasn't caught up with, since only the freshest matters
                 if progress.empty():
                     await progress.put(_ev(
                         "status", stage="search",
@@ -448,7 +449,7 @@ async def research(req: ResearchRequest, request: Request):
                         done=done, total=total, papers=count,
                     ))
 
-            # the topic itself is often the single best search string — always include it
+            # the topic itself is often the single best search string, so always include it
             fanout_queries = [final_query[:120]] + [
                 q for q in plan["search_queries"][:6] if q.lower() != final_query.lower()
             ]
@@ -467,7 +468,7 @@ async def research(req: ResearchRequest, request: Request):
                     item = await asyncio.wait_for(progress.get(), timeout=0.3)
                 except asyncio.TimeoutError:
                     continue
-                # collapse bursts — only the freshest status matters
+                # collapse bursts, since only the freshest status matters
                 while not progress.empty():
                     item = progress.get_nowait()
                 yield item
@@ -481,7 +482,7 @@ async def research(req: ResearchRequest, request: Request):
             anchor = _topic_anchor(final_query, plan)
             have_semantic = await attach_semantic_scores(anchor, papers)
 
-            # provisional preview so the student sees papers immediately — ordered by
+            # provisional preview so the student sees papers immediately, ordered by
             # semantic closeness (or lexical overlap as a fallback), so even the first
             # glimpse is on-topic rather than just the most-cited keyword match.
             def _prov_key(p):
@@ -499,6 +500,13 @@ async def research(req: ResearchRequest, request: Request):
 
             yield _ev("status", stage="enrich", message="Checking for free PDF versions…")
             await enrich_unpaywall(ranked, top_n=25)
+
+            # Stance only means something when there's an argument to support or counter.
+            # A plain topic area has no sides, so every source is simply background.
+            is_argument = plan.get("input_type") in ("thesis", "question")
+            if not is_argument:
+                for p in ranked:
+                    p["stance"] = "background"
 
             stance_counts = {"supports": 0, "counters": 0, "mixed": 0, "background": 0}
             for p in ranked:
@@ -529,7 +537,7 @@ async def more_sources(req: MoreSourcesRequest):
         "- Alternative terminology used in the literature\n"
         "- Methodological angles (meta-analyses, longitudinal studies, systematic reviews)\n"
         "- Related disciplines that might study this\n\n"
-        "Each query MUST be a short plain keyword phrase of 3–6 words — no boolean operators, no quotes.\n"
+        "Each query MUST be a short plain keyword phrase of 3–6 words, with no boolean operators and no quotes.\n"
         'Return ONLY valid JSON: {"queries": ["...", "...", "...", "...", "..."]}'
     )
     try:
@@ -579,7 +587,7 @@ async def digdeep(req: DigDeepRequest):
         f"They found this paper:\nTitle: {req.title}\nAbstract: {req.abstract}\n\n"
         "In 3–4 sentences, explain specifically: what this paper studied, what its key finding means "
         "for their research, and any important caveats or limitations worth noting. "
-        "Be direct and concrete — no filler."
+        "Be direct and concrete, with no filler."
     )
     try:
         analysis = await chat(prompt, max_tokens=220)
@@ -606,10 +614,10 @@ async def synthesize_sources(req: SynthesizeSourcesRequest):
         + "\n\n".join(lines)
         + "\n\nReturn ONLY valid JSON with two fields:\n"
         '- "summary": exactly 1 sentence capturing the overall verdict of the evidence (e.g. "Most studies support X, though Y remains contested.")\n'
-        '- "synthesis": 3–5 sentences going deeper — how many studies support vs. complicate the claim, '
+        '- "synthesis": 3–5 sentences going deeper: how many studies support vs. complicate the claim, '
         "what the main findings are, where disagreement comes from, and notable caveats. "
         "Be specific about what studies actually found. Plain prose, no bullet points. "
-        "Do NOT reference papers by number (e.g. do not say 'Paper 1' or '[2]') — describe findings naturally, "
+        "Do NOT reference papers by number (e.g. do not say 'Paper 1' or '[2]'). Describe findings naturally, "
         "attributing them by author surname and year where helpful (e.g. 'Smith et al. (2019) found…')."
     )
     try:
@@ -645,7 +653,7 @@ async def ask_sources(req: AskSourcesRequest):
         + f'\n\nStudent question: "{req.question}"\n\n'
         "Answer directly and specifically based on what these papers say. "
         "Reference specific findings where relevant. If the papers don't address the question, say so clearly. "
-        "Keep the answer concise — 2–4 sentences."
+        "Keep the answer concise, 2–4 sentences."
     )
     try:
         answer = await chat(prompt, max_tokens=250)
@@ -656,49 +664,130 @@ async def ask_sources(req: AskSourcesRequest):
 
 # ── Essay checker ─────────────────────────────────────────────────────────────
 
-CHAIN_EXTRACT_PROMPT = """Extract every distinct factual claim from this text. Only include statements that can be verified or falsified with evidence — skip pure opinions, normative statements ("should", "ought"), and vague assertions.
+CHAIN_EXTRACT_PROMPT = """Extract every distinct factual claim from this text. Only include statements that can be verified or falsified with evidence. Skip pure opinions, normative statements ("should", "ought"), and vague assertions.
 
 Text: "{text}"
 
 Return ONLY valid JSON with two fields:
-- "corrected_text": the input text with ONLY spelling and grammar fixed — correct only words you can identify with certainty from their misspelling. Do NOT guess at garbled words — leave those as-is. Do NOT change any word that affects meaning, do NOT correct factual errors. If too garbled to safely correct, return the text unchanged.
-- "claims": array of up to 12 strings, one per DISTINCT factual idea. Split a sentence that makes separate assertions into one claim each, but keep a single coherent assertion together — do NOT over-fragment one idea (e.g. "the tongue has taste zones, sweet at the tip and bitter at the back" is ONE claim about the taste-zone myth, not three). Keep the author's wording where possible, rephrasing only enough that each claim stands on its own. Cover every distinct assertion in the text; do not drop any."""
+- "corrected_text": the input text with ONLY spelling and grammar fixed. Correct only words you can identify with certainty from their misspelling. Do NOT guess at garbled words; leave those as-is. Do NOT change any word that affects meaning, do NOT correct factual errors. If too garbled to safely correct, return the text unchanged.
+- "claims": array of up to 10 strings, one per DISTINCT factual idea. Split a sentence that makes separate assertions into one claim each, but keep a single coherent assertion together; do NOT over-fragment one idea (e.g. "the tongue has taste zones, sweet at the tip and bitter at the back" is ONE claim about the taste-zone myth, not three). Keep the author's wording where possible, rephrasing only enough that each claim stands on its own. Cover every distinct assertion in the text; do not drop any."""
 
-CHAIN_EVAL_PROMPT = """Evaluate this factual claim against the current state of evidence.
+CHAIN_EVAL_PROMPT = """You are a careful, neutral fact-checker with a few real academic sources in front of you. Judge this factual claim against that evidence.
 
 Claim: "{claim}"
 
-Decide the verdict FIRST, then explain it. The verdict must match your explanation:
-if you would explain that the claim is false or a myth, the verdict is "unsupported".
+Evidence (abstracts of real papers retrieved for this claim):
+{evidence}
+
+Weigh what this evidence shows for and against the claim, then decide. If the sources do not actually address the claim, say so plainly and judge from well-established knowledge instead, but lower your confidence accordingly. Your verdict MUST match your explanation: if the explanation says the claim is false or a myth, the verdict must be "unsupported". Do not soften a clearly false claim to "uncertain".
 
 Return ONLY valid JSON:
 - "verdict": exactly one of
-    "supported"   = evidence clearly confirms the claim is TRUE
-    "unsupported" = evidence clearly shows the claim is FALSE or a common misconception
-    "contested"   = genuinely debated among experts, no clear consensus either way
-    "uncertain"   = not enough clear evidence to judge
-- "response": 1-2 plain-language sentences explaining the verdict
+    "supported"   = the weight of evidence clearly confirms the claim is TRUE
+    "unsupported" = the weight of evidence clearly shows the claim is FALSE or a common misconception
+    "contested"   = experts genuinely disagree, with no clear consensus either way
+    "uncertain"   = there genuinely is not enough clear evidence to judge either way
+- "response": 1 or 2 plain sentences explaining the verdict and the key evidence. Do not use em-dashes; use commas or separate sentences.
 - "confidence": integer 0-100, how confident you are in this verdict"""
 
 VALID_VERDICTS = {"supported", "unsupported", "contested", "uncertain"}
 
+# Cap how many claim pipelines run at once. Each one fires a source search, an
+# embedding call, and a chat call, so a wide-open gather on a 10-claim draft would
+# burst the upstream APIs; four in flight keeps it quick without hammering them.
+_CLAIM_CONCURRENCY = asyncio.Semaphore(4)
 
-async def evaluate_claim_light(claim: str) -> dict:
-    try:
-        parsed = await chat_json(CHAIN_EVAL_PROMPT.format(claim=claim), max_tokens=200)
-        verdict = parsed.get("verdict")
-        if verdict not in VALID_VERDICTS:
-            verdict = "uncertain"
-        return {
-            "claim": claim,
-            "verdict": verdict,
-            "response": parsed.get("response", ""),
-            "confidence": int(parsed.get("confidence", 50)),
-            "is_debatable": verdict == "contested",
-        }
-    except Exception:
-        return {"claim": claim, "verdict": "uncertain",
-                "response": "Could not evaluate.", "confidence": 50, "is_debatable": False}
+
+def _slim_source(p: dict) -> dict:
+    """Only the fields the draft-checker cards need, so per-claim payloads stay small."""
+    return {
+        "title": p.get("title"),
+        "authors": p.get("authors") or [],
+        "year": p.get("year"),
+        "abstract": p.get("abstract") or "",
+        "url": p.get("url"),
+        "doi": p.get("doi"),
+        "journal": p.get("journal"),
+        "citationCount": p.get("citationCount", 0),
+        "source": p.get("source"),
+        "oa_pdf": p.get("oa_pdf"),
+    }
+
+
+def _evidence_block(sources: list[dict]) -> str:
+    if not sources:
+        return "No academic sources were found for this claim."
+    lines = []
+    for i, p in enumerate(sources):
+        authors = p.get("authors") or []
+        who = authors[0].rsplit(" ", 1)[-1] if authors else "Unknown"
+        snippet = (p.get("abstract") or "")[:320]
+        lines.append(f'[{i + 1}] {who} ({p.get("year", "n.d.")}), "{p.get("title", "")}": {snippet}')
+    return "\n\n".join(lines)
+
+
+async def _sources_for_claim(claim: str, top_k: int = 4) -> list[dict]:
+    """Retrieve a few real, on-topic sources for one claim, ranked by meaning.
+
+    Uses the fast connector subset with a tight budget: the draft checker needs a
+    handful of solid abstracts per claim, not the exhaustive fan-out the main search
+    runs. Ranking is by semantic closeness to the claim, falling back to lexical
+    overlap when embeddings are unavailable.
+    """
+    raw = await search_all([claim[:160]], budget=6.0, connectors=FAST_CONNECTORS)
+    papers = process_papers(raw)
+    if not papers:
+        return []
+    await attach_semantic_scores(claim, papers)
+    query_terms = build_query_terms([claim])
+
+    def key(p: dict):
+        sem = _semantic_of(p)
+        if sem is not None:
+            return (sem, quality_score(p))
+        return (relevance_score(p, query_terms) / 30.0, quality_score(p))
+
+    papers.sort(key=key, reverse=True)
+    top = papers[:top_k]
+    await enrich_unpaywall(top, top_n=top_k)
+    return top
+
+
+async def evaluate_claim_grounded(claim: str) -> dict:
+    """Fact-check one claim against sources retrieved for it, then return both.
+
+    Grounding the verdict in the same retrieved abstracts every run (with
+    temperature=0) is what stops the same claim flipping between verdicts, and the
+    sources ride along so the draft checker can show them inline without a mode switch.
+    """
+    async with _CLAIM_CONCURRENCY:
+        try:
+            sources = await _sources_for_claim(claim)
+        except Exception:
+            traceback.print_exc()
+            sources = []
+        prompt = CHAIN_EVAL_PROMPT.format(claim=claim, evidence=_evidence_block(sources))
+        try:
+            parsed = await chat_json(prompt, max_tokens=260, temperature=0)
+            verdict = parsed.get("verdict")
+            if verdict not in VALID_VERDICTS:
+                verdict = "uncertain"
+            response = parsed.get("response", "")
+            try:
+                confidence = int(parsed.get("confidence", 50))
+            except (TypeError, ValueError):
+                confidence = 50
+        except Exception:
+            verdict, response, confidence = "uncertain", "Could not evaluate this claim.", 50
+
+    return {
+        "claim": claim,
+        "verdict": verdict,
+        "response": response,
+        "confidence": confidence,
+        "is_debatable": verdict == "contested",
+        "sources": [_slim_source(p) for p in sources],
+    }
 
 
 @app.post("/api/claimchain")
@@ -709,7 +798,7 @@ async def claimchain(req: ClaimChainRequest, request: Request):
 
     corrected_text = req.text
     try:
-        parsed = await chat_json(CHAIN_EXTRACT_PROMPT.format(text=req.text[:4000]), max_tokens=1000)
+        parsed = await chat_json(CHAIN_EXTRACT_PROMPT.format(text=req.text[:4000]), max_tokens=1000, temperature=0)
         if isinstance(parsed, dict):
             corrected_text = parsed.get("corrected_text") or req.text
             claims = parsed.get("claims", [])
@@ -717,7 +806,7 @@ async def claimchain(req: ClaimChainRequest, request: Request):
             claims = parsed
         else:
             claims = []
-        claims = [c for c in claims if isinstance(c, str) and c.strip()][:12]
+        claims = [c for c in claims if isinstance(c, str) and c.strip()][:10]
     except Exception as e:
         print(f"[claimchain extract ERROR] {e}")
         raise HTTPException(status_code=500, detail="Failed to extract claims")
@@ -725,7 +814,7 @@ async def claimchain(req: ClaimChainRequest, request: Request):
     if not claims:
         return {"claims": [], "corrected_text": corrected_text}
 
-    results = await asyncio.gather(*[evaluate_claim_light(c) for c in claims])
+    results = await asyncio.gather(*[evaluate_claim_grounded(c) for c in claims])
     return {"claims": list(results), "corrected_text": corrected_text}
 
 

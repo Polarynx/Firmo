@@ -8,7 +8,7 @@ function copyToClipboard(text, onDone) {
   navigator.clipboard.writeText(text).then(onDone)
 }
 
-export default function PaperCard({ paper, citationStyle, index = 0, query = '', isSaved = false, onToggleSave }) {
+export default function PaperCard({ paper, citationStyle, index = 0, query = '', isSaved = false, onToggleSave, showStance = true }) {
   const [cite, setCite] = useState(null) // { citation, intext, exact }
   const [loading, setLoading] = useState(false)
   const [copiedCite, setCopiedCite] = useState(false)
@@ -99,7 +99,7 @@ export default function PaperCard({ paper, citationStyle, index = 0, query = '',
 
   return (
     <div className={`source-card ${stance?.rail || 'border-l-gray-200 dark:border-l-gray-700'} animate-fadeInUp ${delayClass}`}>
-      {/* Call-number line: rank · database · citations — year · save */}
+      {/* Call-number line: rank · database · citations, then year · save */}
       <div className="flex items-center justify-between gap-3 font-mono text-[10px] uppercase tracking-[0.12em] text-gray-400 dark:text-gray-500">
         <span className="flex items-center gap-2.5 min-w-0">
           <span className="text-brand-700 dark:text-brand-400 font-medium shrink-0">
@@ -148,9 +148,9 @@ export default function PaperCard({ paper, citationStyle, index = 0, query = '',
       )}
 
       {/* Stamps: stance · PDF */}
-      {(stance || paper.oa_pdf) && (
+      {((showStance && stance) || paper.oa_pdf) && (
         <div className="flex items-center flex-wrap gap-1.5">
-          {stance && (
+          {showStance && stance && (
             <span className={`inline-flex items-center gap-1.5 font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] px-2 py-0.5 rounded-[2px] border ${stance.chip}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${stance.dot}`} />
               {stance.label}
@@ -173,14 +173,18 @@ export default function PaperCard({ paper, citationStyle, index = 0, query = '',
         </div>
       )}
 
+      {/* One-line summary (on request). Labeled so it never blurs into the abstract. */}
+      {summary && (
+        <div className="text-sm leading-relaxed">
+          <span className="section-label">Summary</span>
+          <span className="text-brand-700 dark:text-brand-300 italic">{summary}</span>
+        </div>
+      )}
+
       {/* Abstract */}
       {abstract && (
         <div className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-          {summary && (
-            <p className="text-brand-600 dark:text-brand-400 italic text-xs mb-1.5">
-              {summary}
-            </p>
-          )}
+          <span className="section-label">Abstract</span>
           {expanded ? abstract : shortAbstract}
           {abstract.length > ABSTRACT_LIMIT && (
             <button onClick={() => setExpanded(e => !e)}
@@ -191,10 +195,10 @@ export default function PaperCard({ paper, citationStyle, index = 0, query = '',
         </div>
       )}
 
-      {/* Dig Deeper panel */}
+      {/* Why it matters (on request) */}
       {digDeep && (
         <div className="border-l-2 border-brand-500 bg-brand-50/50 dark:bg-brand-950/20 rounded-[2px] p-3 text-sm text-brand-900 dark:text-brand-200 leading-relaxed">
-          <span className="eyebrow !text-brand-700 dark:!text-brand-400 block mb-1">What this means for your paper</span>
+          <span className="section-label !text-brand-700 dark:!text-brand-400">What this means</span>
           {digDeep}
         </div>
       )}
@@ -211,7 +215,7 @@ export default function PaperCard({ paper, citationStyle, index = 0, query = '',
             <span className="text-[10px] text-gray-400 dark:text-gray-600 px-1">
               {cite.exact
                 ? 'Formatted from the publisher\'s full record'
-                : 'Built from available metadata — double-check volume and pages'}
+                : 'Built from available metadata, so double-check volume and pages'}
             </span>
           )}
         </div>

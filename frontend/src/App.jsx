@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import ResearchInput from './components/ResearchInput'
 import BriefCard from './components/BriefCard'
 import PaperCard from './components/PaperCard'
+import HeroEmblem from './components/HeroEmblem'
 import ProjectSidebar from './components/ProjectSidebar'
 import EssayChecker from './components/EssayChecker'
 import ThemeToggle from './components/ThemeToggle'
@@ -113,6 +114,7 @@ export default function App() {
   const [stanceCounts, setStanceCounts] = useState(null)
   const [error, setError] = useState('')
   const [stanceFilter, setStanceFilter] = useState(null)
+  const [showRelated, setShowRelated] = useState(false)
   const [hiddenSources, setHiddenSources] = useState(new Set())
   const [moreLoading, setMoreLoading] = useState(false)
   const [askQuestion, setAskQuestion] = useState('')
@@ -178,6 +180,7 @@ export default function App() {
     setProvisional(false)
     setStanceCounts(null)
     setStanceFilter(null)
+    setShowRelated(false)
     setHiddenSources(new Set())
     setAskAnswer(null)
     setAskQuestion('')
@@ -338,6 +341,14 @@ export default function App() {
     if (hiddenSources.size > 0 && hiddenSources.has(p.source)) return false
     return true
   })
+
+  // Two tiers: sources directly about the topic ("Relevant", shown by default) vs.
+  // sources tied to it but broader ("Related & background", revealed on request).
+  // Provisional preview papers carry no tier yet, so they all read as relevant.
+  const coreResults = filteredResults.filter(p => p.tier !== 'related')
+  const relatedResults = filteredResults.filter(p => p.tier === 'related')
+  // if nothing is squarely on-topic, don't hide everything behind a button
+  const relatedOpen = showRelated || coreResults.length === 0
 
   const sourceCounts = results.reduce((acc, p) => {
     if (p.source) acc[p.source] = (acc[p.source] || 0) + 1
@@ -584,11 +595,13 @@ export default function App() {
                 <div className="flex flex-col gap-3">
                   <div className="flex items-center justify-between flex-wrap gap-2">
                     <p className="eyebrow">
-                      {provisional ? 'First results — still ranking…' : `${results.length} sources · ranked by relevance`}
+                      {provisional
+                        ? 'First results — still ranking…'
+                        : `${coreResults.length} relevant ${coreResults.length === 1 ? 'source' : 'sources'} · ranked by relevance`}
                       {(stanceFilter || hiddenSources.size > 0) && <span className="ml-1 !text-brand-600 dark:!text-brand-400">· {filteredResults.length} shown</span>}
                     </p>
-                    {!provisional && results.length >= 3 && (
-                      <SynthesisPanel query={searchedQuery} papers={results} />
+                    {!provisional && coreResults.length >= 3 && (
+                      <SynthesisPanel query={searchedQuery} papers={coreResults} />
                     )}
                   </div>
 
@@ -653,7 +666,15 @@ export default function App() {
                     </div>
                   )}
 
-                  {filteredResults.map((paper, i) => (
+                  {/* Nothing squarely on-topic — be honest, then show the closest */}
+                  {!provisional && coreResults.length === 0 && relatedResults.length > 0 && (
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      Nothing landed squarely on your topic — here are the closest related sources.
+                    </p>
+                  )}
+
+                  {/* Relevant tier — directly about the topic, shown by default */}
+                  {coreResults.map((paper, i) => (
                     <PaperCard
                       key={paperId(paper) || i}
                       paper={paper}
@@ -664,6 +685,51 @@ export default function App() {
                       onToggleSave={handleToggleSave}
                     />
                   ))}
+
+                  {/* Related & background tier — revealed only when the student asks */}
+                  {!provisional && relatedResults.length > 0 && (
+                    <div className="flex flex-col gap-3 pt-1">
+                      {coreResults.length > 0 && !relatedOpen && (
+                        <button
+                          onClick={() => setShowRelated(true)}
+                          className="group w-full rounded-[3px] border border-dashed border-gray-300 dark:border-gray-700 hover:border-brand-500 dark:hover:border-brand-600 bg-paper-100/40 dark:bg-ink-900/40 px-4 py-3 flex flex-col items-center gap-0.5 transition-colors"
+                        >
+                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300 group-hover:text-brand-700 dark:group-hover:text-brand-400 transition-colors">
+                            Show {relatedResults.length} related &amp; background {relatedResults.length === 1 ? 'source' : 'sources'}
+                          </span>
+                          <span className="text-xs text-gray-400 dark:text-gray-600">
+                            Tied to your topic but not fully about it — context and adjacent findings
+                          </span>
+                        </button>
+                      )}
+                      {relatedOpen && (
+                        <>
+                          {coreResults.length > 0 && (
+                            <div className="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-gray-800">
+                              <span className="eyebrow">Related &amp; background · {relatedResults.length}</span>
+                              <button
+                                onClick={() => setShowRelated(false)}
+                                className="text-xs text-brand-500 hover:text-brand-600 dark:hover:text-brand-400 font-medium transition-colors"
+                              >
+                                Hide
+                              </button>
+                            </div>
+                          )}
+                          {relatedResults.map((paper, i) => (
+                            <PaperCard
+                              key={paperId(paper) || `rel-${i}`}
+                              paper={paper}
+                              citationStyle={style}
+                              index={coreResults.length + i}
+                              query={searchedQuery}
+                              isSaved={savedIds.has(paperId(paper))}
+                              onToggleSave={handleToggleSave}
+                            />
+                          ))}
+                        </>
+                      )}
+                    </div>
+                  )}
 
                   {!provisional && (
                     <button
@@ -719,6 +785,13 @@ export default function App() {
 
         {/* ── Right column: project + works cited ── */}
         <aside className="hidden lg:block sticky top-20">
+          {/* The emblem sits beside the project panel — a quiet, classy accent that
+              keeps the search service itself front and centre in the main column. */}
+          {phase === 'idle' && view === 'research' && (
+            <div className="flex justify-center pb-7 pt-2">
+              <HeroEmblem />
+            </div>
+          )}
           <ProjectSidebar
             projects={store.projects}
             activeId={store.activeId}

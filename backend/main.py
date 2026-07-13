@@ -47,6 +47,10 @@ def _get_client_ip(request: Request) -> str:
     return request.client.host
 
 
+if not os.getenv("MISTRAL_API_KEY"):
+    print("[startup WARN] MISTRAL_API_KEY is not set — briefs and ranking will use "
+          "fallbacks. Check backend/.env and restart the server.")
+
 limiter = Limiter(key_func=_get_client_ip)
 
 app = FastAPI(title="Firmo API", version="2.0")
@@ -103,6 +107,19 @@ Step 6 — search_queries: 6 academic search queries that together maximise cove
 Return ONLY valid JSON with keys: input_type, corrected_input, brief, angles, related, search_queries"""
 
 
+# A stripped-down plan used as a second chance when the full plan call fails
+# (usually a truncated response or a transient Mistral hiccup). It costs far fewer
+# tokens, so it succeeds when the big call doesn't — the student still gets a real
+# brief instead of the bare fallback.
+BRIEF_ONLY_PROMPT = """A student wants to research this: "{query}"
+
+Return ONLY valid JSON with these keys:
+- input_type: one of "topic", "thesis", "question", "invalid"
+- corrected_input: the text with only clear spelling/grammar fixed (else unchanged)
+- brief: 2-3 plain-language sentences telling the student what the research actually says about this
+- search_queries: 5 short academic keyword phrases, 3-6 words each, no boolean operators, no quotes"""
+
+
 def _fallback_plan(query: str) -> dict:
     stop = {"the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for", "of",
             "with", "by", "is", "are", "was", "were", "it", "this", "that", "does", "do"}
@@ -111,11 +128,26 @@ def _fallback_plan(query: str) -> dict:
     return {
         "input_type": "topic",
         "corrected_input": query,
-        "brief": "Here are academic sources on your topic. (Firmo's analysis is temporarily unavailable — the sources below are still real and ranked.)",
+        # No LLM analysis this time, but the sources are still real and ranked. Kept
+        # deliberately non-alarming; brief_ok=False flags it as not a real analysis.
+        "brief": "Firmo couldn't write its analysis for this one, but the sources below are real and ranked by relevance.",
+        "brief_ok": False,
         "angles": [],
         "related": [],
         "search_queries": [q, q + " research", q + " review", q + " study", q + " meta-analysis"],
     }
+
+
+async def _minimal_plan(query: str) -> dict:
+    data = await chat_json(BRIEF_ONLY_PROMPT.format(query=query[:400]), max_tokens=600)
+    if data.get("input_type") != "invalid" and not data.get("search_queries"):
+        raise ValueError("no search_queries")
+    data.setdefault("corrected_input", query)
+    data.setdefault("brief", "")
+    data.setdefault("angles", [])
+    data.setdefault("related", [])
+    data["brief_ok"] = bool((data.get("brief") or "").strip())
+    return data
 
 
 async def plan_research(query: str) -> dict:
@@ -127,10 +159,18 @@ async def plan_research(query: str) -> dict:
         plan.setdefault("brief", "")
         plan.setdefault("angles", [])
         plan.setdefault("related", [])
+        plan["brief_ok"] = bool((plan.get("brief") or "").strip())
         return plan
     except Exception:
         traceback.print_exc()
-        return _fallback_plan(query)
+        # Second chance: a cheaper call that still produces a genuine brief. Only if
+        # THIS also fails do we drop to the keyword fallback.
+        try:
+            print("[plan_research] full plan failed — retrying a minimal brief")
+            return await _minimal_plan(query)
+        except Exception:
+            traceback.print_exc()
+            return _fallback_plan(query)
 
 
 # ── Semantic relevance (embeddings) ───────────────────────────────────────────
@@ -156,7 +196,7 @@ def _topic_anchor(final_query: str, plan: dict) -> str:
     turned into the yardstick every source is measured by."""
     parts = [final_query]
     brief = (plan.get("brief") or "").strip()
-    if brief and "temporarily unavailable" not in brief:
+    if brief and plan.get("brief_ok", True):
         parts.append(brief)
     for q in (plan.get("search_queries") or [])[:2]:
         if isinstance(q, str) and q.strip():
@@ -228,13 +268,15 @@ Papers:
 
 Return ONLY valid JSON: {{"papers": [{{"index": 0, "score": 8, "stance": "supports"}}, ...]}} — one entry per paper, every index present."""
 
-# Relevance gate. A paper must clear STRONG_KEEP to count as genuinely relevant; we
-# only drop to MIN_KEEP when strong matches are too few to give the student a usable
-# set. MAX_RESULTS caps the output so Firmo never pads a bibliography with noise.
-STRONG_KEEP = 7
-MIN_KEEP = 5
-MIN_STRONG_SET = 8
-MAX_RESULTS = 50
+# Two-tier relevance gate. Rather than one flat list, Firmo separates sources that
+# are directly about the subject (CORE — the 'Relevant' list, shown by default) from
+# those that are genuinely tied to it but broader (RELATED — 'Topic/background',
+# shown only when the student asks). This keeps merely-adjacent work from ever
+# overshadowing the papers that are truly on point.
+CORE_KEEP = 8       # directly studies THIS subject/relationship → 'Relevant'
+RELATED_KEEP = 5    # genuinely related, useful as context → 'Related & background'
+MIN_CORE = 4        # never hand back a bare 'Relevant' list: promote the strongest 7s
+MAX_RESULTS = 60    # hard cap across both tiers; Firmo returns fewer, never padded
 
 VALID_STANCES = {"supports", "counters", "mixed", "background"}
 
@@ -261,9 +303,11 @@ async def rerank_and_tag(
     Stage 2 — strict LLM judgment: 20 papers at a time, in parallel, scored against
     a critical analysis of what the topic actually is.
 
-    Stage 3 — keep only what qualifies: papers scoring >= STRONG_KEEP form the set;
-    we relax to MIN_KEEP only when strong matches are too few, and cap at MAX_RESULTS.
-    Firmo returns fewer, right sources rather than padding to a number.
+    Stage 3 — sort into two tiers: papers scoring >= CORE_KEEP become the 'Relevant'
+    set (shown by default); those in [RELATED_KEEP, CORE_KEEP) become 'Related &
+    background' (shown on request). Each paper is tagged with p['tier'], both tiers
+    are ranked by meaning, and the total is capped at MAX_RESULTS — Firmo returns
+    fewer, right sources rather than padding to a number.
 
     When a chunk's LLM call fails, it falls back to the SEMANTIC score (not keyword
     overlap), so a flaky Mistral call degrades to 'the semantically closest papers'
@@ -326,21 +370,36 @@ async def rerank_and_tag(
     scored_chunks = await asyncio.gather(*(score_chunk(c) for c in chunks))
     scored = [p for chunk in scored_chunks for p in chunk]
 
-    # Keep only genuinely relevant papers. Prefer the strong set; only widen to
-    # moderate matches when strong ones are too sparse to be useful.
-    strong = [p for p in scored if p["relevanceScore"] >= STRONG_KEEP]
-    if len(strong) >= MIN_STRONG_SET:
-        kept = strong
-    else:
-        kept = [p for p in scored if p["relevanceScore"] >= MIN_KEEP]
-        if not kept:
-            kept = [p for p in scored if p["relevanceScore"] >= MIN_KEEP - 1]
-
+    # Rank within a tier by MEANING first, so the paper most on-topic sits at the
+    # top and a genuinely relevant source is never buried under one that merely drew
+    # a higher LLM number. (Semantic is 0.0 when embeddings were unavailable, in
+    # which case this cleanly degrades to score-first ordering.)
     def sort_key(p: dict):
-        return (p["relevanceScore"], _semantic_of(p) or 0.0, quality_score(p))
+        return (_semantic_of(p) or 0.0, p["relevanceScore"], quality_score(p))
 
-    kept.sort(key=sort_key, reverse=True)
-    return kept[:MAX_RESULTS]
+    # Split into the two tiers the student sees separately.
+    core = [p for p in scored if p["relevanceScore"] >= CORE_KEEP]
+    related = [p for p in scored if RELATED_KEEP <= p["relevanceScore"] < CORE_KEEP]
+
+    # Never show an empty 'Relevant' list when good matches exist: if too few papers
+    # clear the core bar, promote the strongest remaining ones (chosen by meaning).
+    if len(core) < MIN_CORE and related:
+        pool = sorted(related, key=sort_key, reverse=True)
+        threshold = 7 if core else 0  # hold the bar high if we already have some core
+        promote = [p for p in pool if p["relevanceScore"] >= threshold][:MIN_CORE - len(core)]
+        promoted = set(map(id, promote))
+        core += promote
+        related = [p for p in related if id(p) not in promoted]
+
+    core.sort(key=sort_key, reverse=True)
+    related.sort(key=sort_key, reverse=True)
+    for p in core:
+        p["tier"] = "core"
+    for p in related:
+        p["tier"] = "related"
+
+    # Cap the total, filling from core first so the cap never eats a relevant paper.
+    return (core + related)[:MAX_RESULTS]
 
 
 # ── The research endpoint (streaming) ─────────────────────────────────────────
@@ -445,7 +504,11 @@ async def research(req: ResearchRequest, request: Request):
             for p in ranked:
                 stance_counts[p.get("stance", "background")] += 1
 
+            core_count = sum(1 for p in ranked if p.get("tier") == "core")
+            related_count = sum(1 for p in ranked if p.get("tier") == "related")
+
             yield _ev("ranked", results=ranked, stance_counts=stance_counts,
+                      core_count=core_count, related_count=related_count,
                       total_considered=len(papers))
             yield _ev("done")
         except Exception:

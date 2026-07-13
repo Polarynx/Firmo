@@ -10,6 +10,7 @@ from openai import (
     APIConnectionError,
     APITimeoutError,
     AsyncOpenAI,
+    AuthenticationError,
     InternalServerError,
     RateLimitError,
 )
@@ -43,6 +44,12 @@ async def chat(prompt: str, max_tokens: int = 512, json_mode: bool = False) -> s
                 **kwargs,
             )
             return msg.choices[0].message.content.strip()
+        except AuthenticationError as e:
+            # A bad/expired key fails every call — surface it loudly instead of
+            # silently degrading to fallbacks on every request.
+            print(f"[llm AUTH ERROR] Mistral rejected the API key. Check MISTRAL_API_KEY "
+                  f"in backend/.env and RESTART the server. {e}")
+            raise
         except _RETRYABLE as e:
             last_exc = e
             print(f"[llm retry {attempt + 1}/3] {type(e).__name__}: {e}")

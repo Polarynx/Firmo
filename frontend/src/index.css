@@ -100,8 +100,120 @@
   .delay-300 { animation-delay: 300ms; }
 }
 
+/* ── Hero emblem: a slowly turning 3D dossier of source pages ─────────────── */
+.hero-emblem {
+  position: relative;
+  width: 190px;
+  height: 210px;
+  perspective: 1000px;
+}
+.emblem-float {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  animation: emblemFloat 6.5s ease-in-out infinite;
+}
+.emblem-spin {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  animation: emblemTurn 14s ease-in-out infinite;
+}
+.emblem-page {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 126px;
+  height: 164px;
+  margin: -82px 0 0 -63px;
+  border-radius: 5px;
+  background: #ffffff;
+  border: 1px solid rgba(20, 25, 23, 0.08);
+  box-shadow: 0 14px 34px rgba(20, 40, 33, 0.14);
+  backface-visibility: hidden;
+}
+.dark .emblem-page {
+  background: #171d1a;
+  border-color: rgba(255, 255, 255, 0.07);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+}
+.emblem-page--3 { transform: translateZ(-30px) translate(15px, 11px) rotate(5.5deg); opacity: 0.45; }
+.emblem-page--2 { transform: translateZ(-15px) translate(8px, 6px) rotate(2.75deg); opacity: 0.7; }
+.emblem-page--1 {
+  transform: translateZ(0);
+  border-top: 3px solid #235a47;                 /* brand spine */
+  padding: 20px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  overflow: hidden;
+}
+.dark .emblem-page--1 { border-top-color: #3c8c6e; }
+.emblem-mono {
+  font-family: 'Fraunces', Georgia, serif;
+  font-weight: 600;
+  font-size: 46px;
+  line-height: 0.9;
+  color: #235a47;
+  margin-bottom: 2px;
+}
+.dark .emblem-mono { color: #5fa88c; }
+.emblem-rule {
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, rgba(20, 25, 23, 0.13), rgba(20, 25, 23, 0.04));
+}
+.emblem-rule--short { width: 58%; }
+.dark .emblem-rule {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.03));
+}
+.emblem-ribbon {
+  position: absolute;
+  top: -3px;
+  right: 22px;
+  width: 12px;
+  height: 46px;
+  background: #f5c84c;                            /* highlight gold reading ribbon */
+  border-radius: 0 0 2px 2px;
+  box-shadow: 0 3px 6px rgba(20, 40, 33, 0.2);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 82%, 0 100%);
+}
+/* soft ground shadow that breathes with the float */
+.emblem-floor {
+  position: absolute;
+  left: 50%;
+  bottom: 6px;
+  width: 120px;
+  height: 20px;
+  margin-left: -60px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(20, 40, 33, 0.18), rgba(20, 40, 33, 0));
+  filter: blur(3px);
+  animation: emblemFloorPulse 6.5s ease-in-out infinite;
+}
+.dark .emblem-floor {
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0));
+}
+
+@keyframes emblemTurn {
+  0%, 100% { transform: rotateX(13deg) rotateY(-21deg); }
+  50%      { transform: rotateX(16deg) rotateY(19deg); }
+}
+@keyframes emblemFloat {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-9px); }
+}
+@keyframes emblemFloorPulse {
+  0%, 100% { transform: scaleX(1);    opacity: 0.9; }
+  50%      { transform: scaleX(0.82); opacity: 0.6; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-fadeInUp, .skeleton, .animate-pulseDot {
     animation: none !important;
   }
+  /* keep the 3D pose, just stop moving */
+  .emblem-float, .emblem-spin, .emblem-floor { animation: none !important; }
+  .emblem-spin { transform: rotateX(14deg) rotateY(-17deg); }
 }

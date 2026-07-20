@@ -27,8 +27,8 @@ const STEPS = [
   },
   {
     icon: '📄',
-    title: 'Free PDFs and quality signals',
-    body: 'A "Free PDF" badge means a legal open-access copy exists (via Unpaywall), one click to the actual paper. Journal names and citation counts help you judge how established a source is.',
+    title: 'Free PDFs, quotes, and safety flags',
+    body: 'A "Free PDF" badge means a legal open-access copy exists (via Unpaywall), and "Find quotes" reads that PDF and pulls quotable passages with page numbers. Firmo also warns you before a bad source hurts you: retracted papers get a red "do not cite" stamp, preprints an amber "not peer-reviewed" note.',
     tip: 'Older paper with thousands of citations? That\'s foundational work, great for your introduction.',
   },
   {
@@ -40,20 +40,26 @@ const STEPS = [
   {
     icon: '📚',
     title: 'The works-cited page writes itself',
-    body: 'As you save sources, the Works Cited panel builds a real, alphabetized bibliography in APA 7, MLA 9, Chicago, Harvard, or IEEE. Sources with a DOI are formatted from the publisher\'s full record: journal, volume, issue, pages.',
+    body: 'As you save sources, the Works Cited panel builds a real, alphabetized bibliography in APA 7, MLA 9, Chicago, Harvard, or IEEE. Sources with a DOI are formatted from the publisher\'s full record. Assigned an annotated bibliography? One click builds it. Ready to write? The Outline builder turns your saved sources into a point-by-point plan and flags the points that still need evidence.',
     tip: 'One click on "Copy all" and your reference list is done. Or download .bib / .ris for Zotero and Mendeley.',
   },
   {
     icon: '📝',
     title: 'Check my draft',
-    body: 'Switch to "Check my draft" and paste what you\'ve written. Firmo pulls out every factual claim, finds real sources for each, and marks it Well-supported, Uncertain, Contested, or Unsupported, all without leaving the page.',
-    tip: 'An "Unsupported" or "Contested" claim is your cue to add a citation or soften the wording before you submit. Its sources are right there to save.',
+    body: 'Paste what you\'ve written and Firmo highlights every factual claim right in your text: amber means it needs a citation, red means the evidence disagrees, green means a source you already saved covers it. The Argument tab reviews the structure like a writing tutor: thesis, paragraph flow, and whether you answer the other side.',
+    tip: '"Cite & save" is one click: the in-text citation drops into your draft and the source joins your works-cited page at the same time.',
+  },
+  {
+    icon: '🧾',
+    title: 'Check citations',
+    body: 'The last check before you submit: paste your finished reference list and Firmo verifies every entry against publisher records. It flags wrong years, mangled titles, retracted papers, and citations that don\'t exist at all.',
+    tip: 'Got sources from an AI chatbot? This is the mode that catches the invented ones before your professor does.',
   },
   {
     icon: '💬',
-    title: 'Dig deeper anywhere',
-    body: '"Summarize" turns any abstract into one plain sentence. "Why it matters" explains what a paper means for your argument. "Ask a question" answers from your actual sources. And in "Your paper," "Synthesize" weighs everything you\'ve saved against your thesis.',
-    tip: 'The synthesis makes a great starting point for a literature-review paragraph, in your own words, of course.',
+    title: 'Ask your sources',
+    body: 'In "Your paper", the chat is grounded in the sources you actually saved. Ask where they disagree, get your paper outlined point by point, or find the gap in your evidence. It explains and plans with you; it never writes your paper, so the words are always yours.',
+    tip: 'Ask "Where do my sources disagree?" before you write. Knowing the fight inside your evidence is what makes a paper sophisticated.',
   },
 ]
 

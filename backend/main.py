@@ -4,6 +4,8 @@ import math
 import os
 import re
 import traceback
+from difflib import SequenceMatcher
+from io import BytesIO
 from typing import Optional
 
 from dotenv import load_dotenv
@@ -15,23 +17,29 @@ from slowapi.errors import RateLimitExceeded
 
 load_dotenv()
 
-from llm import chat, chat_json, embed_texts
+from llm import chat, chat_json, chat_stream, embed_texts
 from schemas import (
+    AnnotatedBibRequest,
+    ArgumentReviewRequest,
     AskSourcesRequest,
+    CheckCitationsRequest,
     CitationRequest,
-    ClaimChainRequest,
     DigDeepRequest,
+    DraftCheckRequest,
     ExportRequest,
     MoreSourcesRequest,
+    OutlineRequest,
+    PaperChatRequest,
+    QuotesRequest,
     ResearchRequest,
     SummarizeRequest,
-    SynthesizeSourcesRequest,
 )
 from sources import (
     ALL_CONNECTORS,
     FAST_CONNECTORS,
     build_query_terms,
     enrich_unpaywall,
+    get_client,
     paper_id,
     process_papers,
     quality_score,
@@ -596,35 +604,62 @@ async def digdeep(req: DigDeepRequest):
         raise HTTPException(status_code=500, detail="Failed to analyze")
 
 
-@app.post("/api/synthesize-sources")
-async def synthesize_sources(req: SynthesizeSourcesRequest):
+# ── Ask your sources: the project chat ────────────────────────────────────────
+# A multi-turn adviser grounded in the sources the student saved. It explains,
+# compares, and outlines; it NEVER drafts prose for the paper. That hard line is
+# Firmo's academic-integrity story: professors can recommend it, not ban it.
+
+CHAT_SYSTEM = """You are Firmo's research adviser inside a student's paper project{project}. The student saved these academic sources:
+
+{sources}
+
+You help the student understand their sources and plan their paper. Strict rules:
+1. You NEVER write sentences, paragraphs, or any prose for the student's paper. Not an intro, not a conclusion, not a "sample sentence", even if asked directly or told it is allowed. When asked to write, decline in one warm line, then give what actually helps: an outline of the points to make, in order, with the sources that back each point.
+2. Ground every factual statement in the saved sources, referring to them as (Surname, Year). If the sources do not cover a question, say so plainly and suggest 2 or 3 short search phrases to try in Find sources.
+3. Be concrete and brief: short paragraphs or dash lists, no filler, no em-dashes.
+4. Plain text only. No markdown symbols like ** or ## or bullets other than a simple dash.
+5. Only discuss the student's research, sources, and paper planning. Politely decline anything else."""
+
+
+def _chat_sources_block(papers: list[dict]) -> str:
+    lines = []
+    for i, p in enumerate(papers):
+        authors = p.get("authors") or []
+        who = authors[0].rsplit(" ", 1)[-1] if authors else "Unknown"
+        snippet = (p.get("abstract") or "no abstract available")[:300]
+        lines.append(f'[{i + 1}] {who} ({p.get("year", "n.d.")}), "{p.get("title", "")}": {snippet}')
+    return "\n\n".join(lines)
+
+
+@app.post("/api/paper-chat")
+async def paper_chat(req: PaperChatRequest):
     if not req.papers:
         raise HTTPException(status_code=400, detail="no papers provided")
-    lines = []
-    for i, p in enumerate(req.papers[:12]):
-        snippet = (p.get("abstract") or "")[:400]
-        if not snippet:
-            continue
-        lines.append(f'[{i+1}] "{p.get("title", "Untitled")}" ({p.get("year", "n.d.")}): {snippet}')
-    if not lines:
-        raise HTTPException(status_code=400, detail="no abstracts to synthesize")
-    prompt = (
-        f'Research query: "{req.claim}"\n\n'
-        f"The following {len(lines)} academic papers are relevant:\n\n"
-        + "\n\n".join(lines)
-        + "\n\nReturn ONLY valid JSON with two fields:\n"
-        '- "summary": exactly 1 sentence capturing the overall verdict of the evidence (e.g. "Most studies support X, though Y remains contested.")\n'
-        '- "synthesis": 3–5 sentences going deeper: how many studies support vs. complicate the claim, '
-        "what the main findings are, where disagreement comes from, and notable caveats. "
-        "Be specific about what studies actually found. Plain prose, no bullet points. "
-        "Do NOT reference papers by number (e.g. do not say 'Paper 1' or '[2]'). Describe findings naturally, "
-        "attributing them by author surname and year where helpful (e.g. 'Smith et al. (2019) found…')."
-    )
-    try:
-        parsed = await chat_json(prompt, max_tokens=400)
-        return {"summary": parsed.get("summary", ""), "synthesis": parsed.get("synthesis", "")}
-    except Exception:
-        raise HTTPException(status_code=500, detail="Failed to synthesize")
+    history = [
+        {"role": m.get("role"), "content": str(m.get("content", ""))[:4000]}
+        for m in req.messages
+        if m.get("role") in ("user", "assistant") and str(m.get("content", "")).strip()
+    ][-12:]
+    if not history or history[-1]["role"] != "user":
+        raise HTTPException(status_code=400, detail="last message must be from the user")
+
+    project = f' "{req.project_name.strip()}"' if req.project_name.strip() else ""
+    system = CHAT_SYSTEM.format(project=project, sources=_chat_sources_block(req.papers[:20]))
+
+    async def generate():
+        try:
+            async for delta in chat_stream(
+                [{"role": "system", "content": system}, *history],
+                max_tokens=650, temperature=0.3,
+            ):
+                yield _ev("delta", text=delta)
+            yield _ev("done")
+        except Exception:
+            print("[paper-chat ERROR]")
+            traceback.print_exc()
+            yield _ev("error", message="Firmo couldn't read your sources just now. Try again in a moment.")
+
+    return StreamingResponse(generate(), media_type="application/x-ndjson")
 
 
 @app.post("/api/ask-sources")
@@ -662,44 +697,71 @@ async def ask_sources(req: AskSourcesRequest):
         raise HTTPException(status_code=500, detail="Failed to answer")
 
 
-# ── Essay checker ─────────────────────────────────────────────────────────────
+# ── Draft coach ("Check my draft") ────────────────────────────────────────────
+# The old checker returned a flat list of verdicts divorced from the student's
+# text. The coach ties every claim to the exact sentence it came from (the
+# frontend highlights it in place) and reframes the job from "is this true?" to
+# "can you back this up?": each claim lands as needs_citation (here are sources,
+# one click inserts the citation), backed (a source the student already saved
+# covers it), shaky (the evidence disagrees; here's a hedged rewrite), or fine
+# (no citation needed). Results stream one claim at a time, so a long draft
+# colorises progressively instead of blocking on the slowest claim.
 
-CHAIN_EXTRACT_PROMPT = """Extract every distinct factual claim from this text. Only include statements that can be verified or falsified with evidence. Skip pure opinions, normative statements ("should", "ought"), and vague assertions.
+MAX_DRAFT_CHARS = 24000   # ~4,000 words checked per run; anything beyond is reported, never silently eaten
+CHUNK_CHARS = 2800        # one extraction call per chunk keeps quotes verbatim and the JSON small
+MAX_CLAIMS_PER_CHUNK = 8
+MAX_CLAIMS_TOTAL = 20     # evaluation budget per run, spread across the whole draft
 
-Text: "{text}"
+COACH_EXTRACT_PROMPT = """You are helping a student get an essay draft ready to hand in. Below is one section of their draft.
 
-Return ONLY valid JSON with two fields:
-- "corrected_text": the input text with ONLY spelling and grammar fixed. Correct only words you can identify with certainty from their misspelling. Do NOT guess at garbled words; leave those as-is. Do NOT change any word that affects meaning, do NOT correct factual errors. If too garbled to safely correct, return the text unchanged.
-- "claims": array of up to 10 strings, one per DISTINCT factual idea. Split a sentence that makes separate assertions into one claim each, but keep a single coherent assertion together; do NOT over-fragment one idea (e.g. "the tongue has taste zones, sweet at the tip and bitter at the back" is ONE claim about the taste-zone myth, not three). Keep the author's wording where possible, rephrasing only enough that each claim stands on its own. Cover every distinct assertion in the text; do not drop any."""
+Section:
+\"\"\"{text}\"\"\"
 
-CHAIN_EVAL_PROMPT = """You are a careful, neutral fact-checker with a few real academic sources in front of you. Judge this factual claim against that evidence.
+Find every distinct factual claim: a statement that published evidence could back up or contradict. Skip pure opinions, personal anecdotes, transitions, and normative statements ("should", "ought"). Keep one coherent assertion together; do not fragment a single idea into pieces.
 
-Claim: "{claim}"
-
-Evidence (abstracts of real papers retrieved for this claim):
-{evidence}
-
-Weigh what this evidence shows for and against the claim, then decide. If the sources do not actually address the claim, say so plainly and judge from well-established knowledge instead, but lower your confidence accordingly. Your verdict MUST match your explanation: if the explanation says the claim is false or a myth, the verdict must be "unsupported". Do not soften a clearly false claim to "uncertain".
+Also note obvious spelling mistakes, only ones you are certain about.
 
 Return ONLY valid JSON:
-- "verdict": exactly one of
-    "supported"   = the weight of evidence clearly confirms the claim is TRUE
-    "unsupported" = the weight of evidence clearly shows the claim is FALSE or a common misconception
-    "contested"   = experts genuinely disagree, with no clear consensus either way
-    "uncertain"   = there genuinely is not enough clear evidence to judge either way
-- "response": 1 or 2 plain sentences explaining the verdict and the key evidence. Do not use em-dashes; use commas or separate sentences.
-- "confidence": integer 0-100, how confident you are in this verdict"""
+- "claims": array of up to {max_claims} objects, ordered as they appear, each with:
+    - "quote": the exact text from the section stating the claim, copied VERBATIM character for character (a phrase or a whole sentence; never paraphrase, never fix spelling inside the quote)
+    - "claim": the claim restated to stand alone, resolving pronouns like "it" or "this" from context
+- "typos": array of {{"from": "misspelled word exactly as written", "to": "correction"}}, empty if none"""
 
-VALID_VERDICTS = {"supported", "unsupported", "contested", "uncertain"}
+COACH_EVAL_PROMPT = """You are a citation coach helping a student back up one claim in their essay draft.
+
+The claim: "{claim}"
+As written in their draft: "{quote}"
+
+Sources the student ALREADY SAVED to this paper's bibliography that might relate:
+{saved}
+
+Fresh academic sources just retrieved for this claim:
+{fresh}
+
+Pick the single most helpful status:
+- "backed": a SAVED source above genuinely supports this claim; the student should cite it right here. Choose this only if a saved source truly covers the claim.
+- "needs_citation": the claim is factual and the evidence broadly supports it, but a reader would expect a citation. Recommend the best fresh sources.
+- "shaky": the evidence contradicts the claim, shows it is seriously overstated, or marks it as a known misconception. Propose a rewrite of their sentence that matches the evidence.
+- "fine": common knowledge no reader would demand a citation for, or actually an opinion or interpretation rather than a checkable fact.
+
+Return ONLY valid JSON:
+- "status": "backed" | "needs_citation" | "shaky" | "fine"
+- "explanation": 1 or 2 plain sentences to the student: why this status and what to do. No em-dashes.
+- "saved_index": number of the single best SAVED source backing the claim, else null
+- "fresh_indexes": up to 3 numbers of the fresh sources most worth citing, best first, [] if none are relevant
+- "rewrite": for "shaky" only, their sentence rewritten to match the evidence while keeping their voice; else null
+- "confidence": integer 0-100"""
+
+COACH_STATUSES = {"backed", "needs_citation", "shaky", "fine"}
 
 # Cap how many claim pipelines run at once. Each one fires a source search, an
-# embedding call, and a chat call, so a wide-open gather on a 10-claim draft would
+# embedding call, and a chat call, so a wide-open gather on a 20-claim draft would
 # burst the upstream APIs; four in flight keeps it quick without hammering them.
 _CLAIM_CONCURRENCY = asyncio.Semaphore(4)
 
 
 def _slim_source(p: dict) -> dict:
-    """Only the fields the draft-checker cards need, so per-claim payloads stay small."""
+    """Only the fields the draft-coach cards need, so per-claim payloads stay small."""
     return {
         "title": p.get("title"),
         "authors": p.get("authors") or [],
@@ -711,12 +773,14 @@ def _slim_source(p: dict) -> dict:
         "citationCount": p.get("citationCount", 0),
         "source": p.get("source"),
         "oa_pdf": p.get("oa_pdf"),
+        "retracted": p.get("retracted", False),
+        "preprint": p.get("preprint", False),
     }
 
 
-def _evidence_block(sources: list[dict]) -> str:
+def _numbered_block(sources: list[dict], empty: str) -> str:
     if not sources:
-        return "No academic sources were found for this claim."
+        return empty
     lines = []
     for i, p in enumerate(sources):
         authors = p.get("authors") or []
@@ -724,6 +788,73 @@ def _evidence_block(sources: list[dict]) -> str:
         snippet = (p.get("abstract") or "")[:320]
         lines.append(f'[{i + 1}] {who} ({p.get("year", "n.d.")}), "{p.get("title", "")}": {snippet}')
     return "\n\n".join(lines)
+
+
+def _chunk_draft(text: str) -> list[str]:
+    """Split a draft into extraction-sized chunks on paragraph boundaries."""
+    chunks, cur = [], ""
+    for para in re.split(r"\n+", text):
+        if not para.strip():
+            continue
+        if cur and len(cur) + len(para) + 1 > CHUNK_CHARS:
+            chunks.append(cur)
+            cur = para
+        else:
+            cur = f"{cur}\n{para}" if cur else para
+        while len(cur) > CHUNK_CHARS:  # a single enormous paragraph: hard split
+            chunks.append(cur[:CHUNK_CHARS])
+            cur = cur[CHUNK_CHARS:]
+    if cur.strip():
+        chunks.append(cur)
+    return chunks
+
+
+async def _extract_chunk(idx: int, chunk: str) -> tuple[list[dict], list[dict]]:
+    """One extraction call: (claims with verbatim quotes, spelling fixes)."""
+    try:
+        parsed = await chat_json(
+            COACH_EXTRACT_PROMPT.format(text=chunk, max_claims=MAX_CLAIMS_PER_CHUNK),
+            max_tokens=1100, temperature=0,
+        )
+    except Exception:
+        traceback.print_exc()
+        return [], []
+    claims = []
+    for i, c in enumerate((parsed.get("claims") or [])[:MAX_CLAIMS_PER_CHUNK]):
+        if not isinstance(c, dict):
+            continue
+        claim = str(c.get("claim") or "").strip()
+        quote = str(c.get("quote") or "").strip()
+        if not claim:
+            continue
+        claims.append({"id": f"c{idx}-{i}", "claim": claim[:400], "quote": quote[:600]})
+    typos = [
+        {"from": str(t.get("from", "")).strip(), "to": str(t.get("to", "")).strip()}
+        for t in (parsed.get("typos") or [])
+        if isinstance(t, dict) and str(t.get("from", "")).strip() and str(t.get("to", "")).strip()
+    ]
+    return claims, typos
+
+
+async def _saved_candidates(claims: list[dict], saved: list[dict]) -> dict[str, list[dict]]:
+    """Per claim, the student's saved sources closest in meaning (top 2, one embed call).
+
+    This is what lets the coach say "you already have a source for this" instead of
+    recommending a paper the student has saved. Empty lists when embeddings are
+    unavailable; the eval then simply never chooses "backed"."""
+    out: dict[str, list[dict]] = {c["id"]: [] for c in claims}
+    if not saved or not claims:
+        return out
+    texts = [c["claim"] for c in claims] + [_paper_embed_text(p) for p in saved]
+    vecs = await embed_texts(texts)
+    claim_vecs, paper_vecs = vecs[:len(claims)], vecs[len(claims):]
+    for c, cv in zip(claims, claim_vecs):
+        if cv is None:
+            continue
+        scored = [(_cosine(cv, pv), p) for p, pv in zip(saved, paper_vecs) if pv is not None]
+        scored.sort(key=lambda t: t[0], reverse=True)
+        out[c["id"]] = [p for sim, p in scored[:2] if sim >= 0.5]
+    return out
 
 
 async def _sources_for_claim(claim: str, top_k: int = 4) -> list[dict]:
@@ -753,69 +884,134 @@ async def _sources_for_claim(claim: str, top_k: int = 4) -> list[dict]:
     return top
 
 
-async def evaluate_claim_grounded(claim: str) -> dict:
-    """Fact-check one claim against sources retrieved for it, then return both.
+async def _coach_evaluate(claim: dict, saved_cands: list[dict]) -> dict:
+    """Judge one claim against saved + fresh sources; returns the verdict payload.
 
-    Grounding the verdict in the same retrieved abstracts every run (with
-    temperature=0) is what stops the same claim flipping between verdicts, and the
-    sources ride along so the draft checker can show them inline without a mode switch.
-    """
+    Grounding in the same retrieved abstracts every run (with temperature=0) keeps
+    a claim from flipping status between runs, and the recommended sources ride
+    along so the frontend can offer one-click cite-and-save inline."""
     async with _CLAIM_CONCURRENCY:
         try:
-            sources = await _sources_for_claim(claim)
+            fresh = await _sources_for_claim(claim["claim"])
         except Exception:
             traceback.print_exc()
-            sources = []
-        prompt = CHAIN_EVAL_PROMPT.format(claim=claim, evidence=_evidence_block(sources))
+            fresh = []
+        prompt = COACH_EVAL_PROMPT.format(
+            claim=claim["claim"],
+            quote=claim.get("quote") or claim["claim"],
+            saved=_numbered_block(saved_cands, "(none of their saved sources relate)"),
+            fresh=_numbered_block(fresh, "(no sources were retrieved for this claim)"),
+        )
         try:
-            parsed = await chat_json(prompt, max_tokens=260, temperature=0)
-            verdict = parsed.get("verdict")
-            if verdict not in VALID_VERDICTS:
-                verdict = "uncertain"
-            response = parsed.get("response", "")
-            try:
-                confidence = int(parsed.get("confidence", 50))
-            except (TypeError, ValueError):
-                confidence = 50
+            parsed = await chat_json(prompt, max_tokens=420, temperature=0)
         except Exception:
-            verdict, response, confidence = "uncertain", "Could not evaluate this claim.", 50
+            traceback.print_exc()
+            # Honest failure state: the frontend shows it grey, never a fake verdict.
+            return {"id": claim["id"], "status": "unchecked",
+                    "explanation": "Firmo couldn't check this claim. Run the check again to retry it.",
+                    "sources": [], "saved_match": None, "rewrite": None, "confidence": 0}
+
+    status = parsed.get("status")
+    if status not in COACH_STATUSES:
+        status = "needs_citation" if fresh else "fine"
+
+    saved_match = None
+    if status == "backed":
+        n = parsed.get("saved_index")
+        if isinstance(n, int) and 1 <= n <= len(saved_cands):
+            saved_match = saved_cands[n - 1]
+        elif saved_cands:
+            saved_match = saved_cands[0]
+        else:
+            status = "needs_citation"  # nothing saved actually matches; recommend fresh instead
+
+    sources: list[dict] = []
+    if status in ("needs_citation", "shaky"):
+        picked = []
+        for n in parsed.get("fresh_indexes") or []:
+            if isinstance(n, int) and 1 <= n <= len(fresh) and fresh[n - 1] not in picked:
+                picked.append(fresh[n - 1])
+        sources = picked[:3] or fresh[:3]
+
+    rewrite = parsed.get("rewrite") if status == "shaky" else None
+    rewrite = str(rewrite).strip() if rewrite and str(rewrite).strip() else None
+
+    try:
+        confidence = int(parsed.get("confidence", 50))
+    except (TypeError, ValueError):
+        confidence = 50
 
     return {
-        "claim": claim,
-        "verdict": verdict,
-        "response": response,
-        "confidence": confidence,
-        "is_debatable": verdict == "contested",
+        "id": claim["id"],
+        "status": status,
+        "explanation": str(parsed.get("explanation", "")),
         "sources": [_slim_source(p) for p in sources],
+        "saved_match": _slim_source(saved_match) if saved_match else None,
+        "rewrite": rewrite,
+        "confidence": confidence,
     }
 
 
-@app.post("/api/claimchain")
+@app.post("/api/draft-check")
 @limiter.limit("50/day")
-async def claimchain(req: ClaimChainRequest, request: Request):
-    if not req.text.strip():
+async def draft_check(req: DraftCheckRequest, request: Request):
+    text = req.text.rstrip()
+    if not text.strip():
         raise HTTPException(status_code=400, detail="text is empty")
 
-    corrected_text = req.text
-    try:
-        parsed = await chat_json(CHAIN_EXTRACT_PROMPT.format(text=req.text[:4000]), max_tokens=1000, temperature=0)
-        if isinstance(parsed, dict):
-            corrected_text = parsed.get("corrected_text") or req.text
-            claims = parsed.get("claims", [])
-        elif isinstance(parsed, list):
-            claims = parsed
-        else:
-            claims = []
-        claims = [c for c in claims if isinstance(c, str) and c.strip()][:10]
-    except Exception as e:
-        print(f"[claimchain extract ERROR] {e}")
-        raise HTTPException(status_code=500, detail="Failed to extract claims")
+    async def generate():
+        try:
+            truncated = len(text) > MAX_DRAFT_CHARS
+            body = text[:MAX_DRAFT_CHARS]
+            chunks = _chunk_draft(body)
+            yield _ev("status", message="Reading your draft…")
 
-    if not claims:
-        return {"claims": [], "corrected_text": corrected_text}
+            extracted = await asyncio.gather(*(_extract_chunk(i, c) for i, c in enumerate(chunks)))
+            claim_lists = [claims for claims, _ in extracted]
 
-    results = await asyncio.gather(*[evaluate_claim_grounded(c) for c in claims])
-    return {"claims": list(results), "corrected_text": corrected_text}
+            typos, seen_from = [], set()
+            for _, ts in extracted:
+                for t in ts:
+                    if t["from"].lower() not in seen_from:
+                        seen_from.add(t["from"].lower())
+                        typos.append(t)
+
+            # Spread the evaluation budget across the whole draft (round-robin over
+            # chunks), so a long paper gets coverage everywhere, not just page one.
+            kept: list[dict] = []
+            i = 0
+            while len(kept) < MAX_CLAIMS_TOTAL:
+                row = [lst[i] for lst in claim_lists if i < len(lst)]
+                if not row:
+                    break
+                kept.extend(row[:MAX_CLAIMS_TOTAL - len(kept)])
+                i += 1
+            total_found = sum(len(lst) for lst in claim_lists)
+
+            yield _ev("claims", items=[{**c, "status": "checking"} for c in kept],
+                      total_found=total_found, truncated=truncated, checked_chars=len(body))
+            if typos:
+                yield _ev("typos", items=typos[:20])
+            if not kept:
+                yield _ev("done", counts={})
+                return
+
+            yield _ev("status", message=f"Checking {len(kept)} claims against real sources…")
+            cands = await _saved_candidates(kept, req.saved_papers[:30])
+
+            counts: dict[str, int] = {}
+            tasks = [asyncio.create_task(_coach_evaluate(c, cands.get(c["id"], []))) for c in kept]
+            for task in asyncio.as_completed(tasks):
+                verdict = await task
+                counts[verdict["status"]] = counts.get(verdict["status"], 0) + 1
+                yield _ev("verdict", **verdict)
+            yield _ev("done", counts=counts)
+        except Exception:
+            print("[draft-check ERROR]")
+            traceback.print_exc()
+            yield _ev("error", message="Something went wrong while checking your draft. Please try again.")
+
+    return StreamingResponse(generate(), media_type="application/x-ndjson")
 
 
 # ── Citations & bibliography export ───────────────────────────────────────────
@@ -850,3 +1046,467 @@ async def export_bibliography(req: ExportRequest):
     content = "\n\n".join(e["citation"] for e in entries)
     return {"format": "text", "style": style, "filename": "works-cited.txt",
             "content": content, "entries": entries}
+
+
+# ── Annotated bibliography ────────────────────────────────────────────────────
+# A one-click version of an assignment many classes literally set: each saved
+# source as a formatted citation plus a short annotation tied to the student's
+# own thesis, which is the half teachers actually grade.
+
+ANNOTATE_PROMPT = """A student is writing an annotated bibliography{thesis_line}.
+
+For each source below, write a 2-3 sentence annotation in plain language: what the source studied and found, why it is credible or notable (method, venue, or influence), and how it could serve the student's paper{thesis_ref}. Be specific to each source. No filler, no em-dashes.
+
+Sources:
+{sources}
+
+Return ONLY valid JSON: {{"annotations": [{{"index": 1, "annotation": "..."}}, ...]}} with one entry per source, using each source's number."""
+
+
+@app.post("/api/annotated-bib")
+async def annotated_bib(req: AnnotatedBibRequest):
+    if not req.papers:
+        raise HTTPException(status_code=400, detail="no papers provided")
+    style = req.style.lower()
+    if style not in citations.CSL_STYLES:
+        raise HTTPException(status_code=400, detail=f"style must be one of: {', '.join(citations.CSL_STYLES)}")
+    papers = req.papers[:40]
+    thesis = req.thesis.strip()[:300]
+    thesis_line = f' for a paper arguing: "{thesis}"' if thesis else ""
+    thesis_ref = " and argument" if thesis else ""
+
+    async def annotate_batch(start: int, batch: list[dict]) -> dict[int, str]:
+        prompt = ANNOTATE_PROMPT.format(
+            thesis_line=thesis_line, thesis_ref=thesis_ref,
+            sources=_numbered_block(batch, ""),
+        )
+        try:
+            parsed = await chat_json(prompt, max_tokens=200 * len(batch) + 100, temperature=0.2)
+        except Exception:
+            traceback.print_exc()
+            return {}
+        out = {}
+        for e in parsed.get("annotations", []):
+            n = e.get("index") if isinstance(e, dict) else None
+            if isinstance(n, int) and 1 <= n <= len(batch) and str(e.get("annotation", "")).strip():
+                out[start + n - 1] = str(e["annotation"]).strip()
+        return out
+
+    batches = [(s, papers[s:s + 5]) for s in range(0, len(papers), 5)]
+    results = await asyncio.gather(*(annotate_batch(s, b) for s, b in batches))
+    annotations: dict[int, str] = {}
+    for r in results:
+        annotations.update(r)
+
+    # format_bibliography alphabetizes, so re-attach annotations by stable paper id.
+    entries = await citations.format_bibliography(papers, style)
+    ann_by_id = {paper_id(p): annotations.get(i, "") for i, p in enumerate(papers)}
+    for e in entries:
+        e["annotation"] = ann_by_id.get(e["id"], "")
+    return {"style": style, "entries": entries}
+
+
+# ── Outline builder ───────────────────────────────────────────────────────────
+# The bridge between "Firmo found 40 sources" and "I don't know how to start":
+# a point-by-point plan where every point names the saved sources that back it,
+# and points with no evidence get a ready-made search to go fill the gap.
+
+OUTLINE_PROMPT = """A student is planning a paper{thesis_line}. These are the sources they saved:
+
+{sources}
+
+Build a practical outline: 4 to 6 sections in a logical order, introduction first and conclusion last. For each section give:
+- "title": a short section heading
+- "points": 1-3 objects, each with:
+    - "point": one sentence of guidance on what to establish or argue there (advice to the student, NOT prose for their paper)
+    - "source_indexes": numbers of the sources above that support that point, [] if none
+    - "gap_query": when source_indexes is [] and the point needs evidence, a 3-6 word plain academic search phrase to find it; else null
+
+Use every saved source at least once when genuinely useful; never force an irrelevant one. Return ONLY valid JSON: {{"sections": [{{"title": "...", "points": [...]}}]}}"""
+
+
+@app.post("/api/outline")
+async def outline(req: OutlineRequest):
+    if not req.papers:
+        raise HTTPException(status_code=400, detail="no papers provided")
+    papers = req.papers[:25]
+    thesis = req.thesis.strip()[:300]
+    thesis_line = f' arguing: "{thesis}"' if thesis else ""
+    prompt = OUTLINE_PROMPT.format(thesis_line=thesis_line, sources=_numbered_block(papers, ""))
+    try:
+        parsed = await chat_json(prompt, max_tokens=1400, temperature=0.2)
+    except Exception:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail="Failed to build the outline")
+
+    def source_ref(n):
+        if isinstance(n, int) and 1 <= n <= len(papers):
+            p = papers[n - 1]
+            authors = p.get("authors") or []
+            who = authors[0].rsplit(" ", 1)[-1] if authors else "Unknown"
+            return {"label": f"{who} ({p.get('year', 'n.d.')})", "title": p.get("title", "")}
+        return None
+
+    sections = []
+    for s in parsed.get("sections", []):
+        if not isinstance(s, dict):
+            continue
+        points = []
+        for pt in s.get("points", []) or []:
+            if not isinstance(pt, dict) or not str(pt.get("point", "")).strip():
+                continue
+            refs = [r for r in (source_ref(n) for n in pt.get("source_indexes") or []) if r]
+            gap = pt.get("gap_query")
+            points.append({
+                "point": str(pt["point"]).strip(),
+                "sources": refs,
+                "gap_query": str(gap).strip() if (gap and not refs) else None,
+            })
+        if points:
+            sections.append({"title": str(s.get("title", "Section")).strip(), "points": points})
+    if not sections:
+        raise HTTPException(status_code=500, detail="Failed to build the outline")
+    return {"sections": sections}
+
+
+# ── Argument review (the draft coach's "Argument" tab) ────────────────────────
+# What a writing-center tutor checks and the claims pass can't see: is there a
+# thesis, does each paragraph serve it, and is an opposing view answered. When
+# no counterargument exists, Firmo hands the student the strongest opposition
+# directly, since addressing it is what turns a one-sided draft into an argument.
+
+ARGUMENT_PROMPT = """You are a writing-center tutor reviewing the STRUCTURE of a student's draft: thesis, paragraph flow, and counterargument. Ignore grammar and spelling, and do not fact-check.
+
+Draft (paragraphs numbered):
+{text}
+
+Return ONLY valid JSON:
+- "thesis": {{"found": bool, "quote": "the thesis sentence copied verbatim from the draft, or null", "assessment": "1-2 sentences: is it specific and arguable, and how to sharpen it. No em-dashes."}}
+- "paragraphs": one entry per numbered paragraph, in order: {{"summary": "what it does, in 5-10 words", "serves_thesis": "yes" | "weak" | "no", "note": "one concrete sentence when weak or no, else null"}}
+- "counterargument": {{"found": bool, "note": "1-2 sentences: where the draft answers an opposing view, or why adding one would strengthen this particular argument"}}
+- "counter_query": when counterargument.found is false and a thesis exists, a 3-6 word plain academic search phrase for the strongest OPPOSING evidence; else null
+- "top_fix": the single highest-impact structural improvement for this draft, 1-2 sentences"""
+
+
+@app.post("/api/argument-review")
+async def argument_review(req: ArgumentReviewRequest):
+    text = req.text.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="text is empty")
+    paras = [p.strip() for p in re.split(r"\n+", text[:MAX_DRAFT_CHARS]) if p.strip()]
+    numbered = "\n\n".join(f"[{i + 1}] {p}" for i, p in enumerate(paras))
+    try:
+        parsed = await chat_json(ARGUMENT_PROMPT.format(text=numbered), max_tokens=1200, temperature=0)
+    except Exception:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail="Failed to review the argument")
+
+    thesis = parsed.get("thesis") if isinstance(parsed.get("thesis"), dict) else {}
+    counter = parsed.get("counterargument") if isinstance(parsed.get("counterargument"), dict) else {}
+    paragraphs = []
+    for e in (parsed.get("paragraphs") or [])[:len(paras)]:
+        if not isinstance(e, dict):
+            continue
+        serves = e.get("serves_thesis") if e.get("serves_thesis") in ("yes", "weak", "no") else "yes"
+        paragraphs.append({"summary": str(e.get("summary", "")), "serves_thesis": serves,
+                           "note": str(e["note"]) if e.get("note") else None})
+
+    counter_sources = []
+    cq = parsed.get("counter_query")
+    if cq and not counter.get("found"):
+        try:
+            counter_sources = [_slim_source(p) for p in await _sources_for_claim(str(cq))][:3]
+        except Exception:
+            traceback.print_exc()
+
+    return {
+        "thesis": {"found": bool(thesis.get("found")), "quote": thesis.get("quote"),
+                   "assessment": str(thesis.get("assessment", ""))},
+        "paragraphs": paragraphs,
+        "counterargument": {"found": bool(counter.get("found")), "note": str(counter.get("note", ""))},
+        "counter_sources": counter_sources,
+        "top_fix": str(parsed.get("top_fix", "")),
+    }
+
+
+# ── Works-cited checker ───────────────────────────────────────────────────────
+# Paste a finished bibliography and Firmo verifies each entry actually exists,
+# matches the published record, and hasn't been retracted. Invented or mangled
+# citations are exactly what this catches before a professor does.
+
+PARSE_BIB_PROMPT = """Below is the works-cited / references section a student pasted. Split it into individual entries.
+
+Text:
+\"\"\"{text}\"\"\"
+
+Return ONLY valid JSON: {{"entries": [{{"raw": "the entry exactly as pasted", "title": "the work's title", "author": "first author's surname or null", "year": 1999 or null, "doi": "the DOI if present, else null"}}, ...]}}. Up to {max_entries} entries, in order. If the text is not a reference list, return {{"entries": []}}."""
+
+_CITE_CONCURRENCY = asyncio.Semaphore(5)
+
+
+def _title_similarity(a: str, b: str) -> float:
+    def norm(s: str) -> str:
+        return re.sub(r"[^a-z0-9 ]", "", (s or "").lower()).strip()
+    return SequenceMatcher(None, norm(a), norm(b)).ratio()
+
+
+async def _crossref_by_doi(doi: str) -> Optional[dict]:
+    try:
+        r = await get_client().get(f"https://api.crossref.org/works/{doi}", timeout=8.0)
+        return r.json().get("message") if r.status_code == 200 else None
+    except Exception:
+        return None
+
+
+async def _crossref_bibliographic(title: str, author: Optional[str]) -> Optional[list[dict]]:
+    """Items on success (possibly empty), None when the lookup itself failed.
+
+    The distinction matters: an empty result means 'this citation may not exist',
+    a failed request only means 'we couldn't check', and telling a student their
+    real source is fake because CrossRef hiccuped would be worse than useless."""
+    q = f"{title} {author}" if author else title
+    for attempt in range(2):
+        try:
+            r = await get_client().get(
+                "https://api.crossref.org/works",
+                params={"query.bibliographic": q, "rows": 3,
+                        "select": "DOI,title,author,issued,container-title,URL"},
+                timeout=8.0,
+            )
+            if r.status_code == 200:
+                return r.json().get("message", {}).get("items", [])
+        except Exception:
+            pass
+        await asyncio.sleep(0.8 * (attempt + 1))
+    return None
+
+
+async def _is_retracted_doi(doi: str) -> bool:
+    try:
+        r = await get_client().get(f"https://api.openalex.org/works/doi:{doi}",
+                                   params={"select": "is_retracted"}, timeout=6.0)
+        return r.status_code == 200 and bool(r.json().get("is_retracted"))
+    except Exception:
+        return False
+
+
+def _crossref_year(item: dict) -> Optional[int]:
+    parts = (item.get("issued") or {}).get("date-parts") or [[]]
+    return parts[0][0] if parts and parts[0] else None
+
+
+async def _verify_entry(entry: dict) -> dict:
+    async with _CITE_CONCURRENCY:
+        title = str(entry.get("title") or "")
+        doi = re.sub(r"^(https?://doi\.org/|doi:)\s*", "", str(entry.get("doi") or ""), flags=re.I).strip().lower() or None
+
+        matched, sim = None, 0.0
+        lookup_failed = False
+        if doi:
+            item = await _crossref_by_doi(doi)
+            if item:
+                matched = item
+                sim = _title_similarity(title, (item.get("title") or [""])[0]) if title else 1.0
+        if matched is None and title:
+            items = await _crossref_bibliographic(title, entry.get("author"))
+            if items is None:
+                lookup_failed = True
+            else:
+                for item in items:
+                    s = _title_similarity(title, (item.get("title") or [""])[0])
+                    if s > sim:
+                        matched, sim = item, s
+
+        if matched is None or sim < 0.55:
+            if lookup_failed:
+                return {"verdict": "unchecked",
+                        "note": "Couldn't reach the publisher index for this one. Run the check again in a moment.",
+                        "matched": None}
+            return {"verdict": "not_found",
+                    "note": "No matching record found on CrossRef. Double-check this one carefully: it may be misquoted, or it may not exist.",
+                    "matched": None}
+
+        m_doi = (matched.get("DOI") or "").lower() or None
+        m_year = _crossref_year(matched)
+        m_authors = [a.get("family", "") for a in matched.get("author", []) if a.get("family")]
+        matched_out = {
+            "title": (matched.get("title") or [""])[0],
+            "year": m_year,
+            "doi": m_doi,
+            "url": matched.get("URL") or (f"https://doi.org/{m_doi}" if m_doi else None),
+        }
+
+        if m_doi and await _is_retracted_doi(m_doi):
+            return {"verdict": "retracted",
+                    "note": "This paper has been retracted. Remove it or replace it before submitting.",
+                    "matched": matched_out}
+
+        problems = []
+        if sim < 0.85:
+            problems.append("the title differs from the published record")
+        try:
+            claimed_year = int(entry.get("year"))
+        except (TypeError, ValueError):
+            claimed_year = None
+        if claimed_year and m_year and abs(claimed_year - m_year) > 1:
+            problems.append(f"the year on record is {m_year}")
+        author = str(entry.get("author") or "").lower()
+        if author and m_authors and author not in [a.lower() for a in m_authors]:
+            problems.append(f"the first author on record is {m_authors[0]}")
+
+        if problems:
+            return {"verdict": "mismatch",
+                    "note": "Found the paper, but " + " and ".join(problems) + ".",
+                    "matched": matched_out}
+        return {"verdict": "verified", "note": "Matches the published record.", "matched": matched_out}
+
+
+@app.post("/api/check-citations")
+@limiter.limit("50/day")
+async def check_citations(req: CheckCitationsRequest, request: Request):
+    text = req.text.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="text is empty")
+
+    async def generate():
+        try:
+            yield _ev("status", message="Reading your reference list…")
+            try:
+                parsed = await chat_json(PARSE_BIB_PROMPT.format(text=text[:12000], max_entries=30),
+                                         max_tokens=2400, temperature=0)
+                entries = [e for e in parsed.get("entries", [])
+                           if isinstance(e, dict) and str(e.get("raw", "")).strip()][:30]
+            except Exception:
+                traceback.print_exc()
+                yield _ev("error", message="Couldn't read that as a reference list. Paste the works-cited entries themselves.")
+                return
+
+            yield _ev("entries", items=[{"raw": str(e["raw"])[:500]} for e in entries])
+            if not entries:
+                yield _ev("done", counts={})
+                return
+            yield _ev("status", message=f"Checking {len(entries)} entr{'ies' if len(entries) != 1 else 'y'} against publisher records…")
+
+            async def verify_one(i: int, e: dict) -> dict:
+                try:
+                    res = await _verify_entry(e)
+                except Exception:
+                    traceback.print_exc()
+                    res = {"verdict": "not_found", "note": "Could not check this entry.", "matched": None}
+                return {"index": i, **res}
+
+            counts: dict[str, int] = {}
+            tasks = [asyncio.create_task(verify_one(i, e)) for i, e in enumerate(entries)]
+            for task in asyncio.as_completed(tasks):
+                res = await task
+                counts[res["verdict"]] = counts.get(res["verdict"], 0) + 1
+                yield _ev("result", **res)
+            yield _ev("done", counts=counts)
+        except Exception:
+            print("[check-citations ERROR]")
+            traceback.print_exc()
+            yield _ev("error", message="Something went wrong while checking. Please try again.")
+
+    return StreamingResponse(generate(), media_type="application/x-ndjson")
+
+
+# ── Quote finder (open-access PDF → quotable passages with page numbers) ──────
+# Abstract-only grounding is Firmo's quality ceiling; this reads the actual
+# paper. Passages are ranked by meaning against the student's topic, then the
+# LLM extracts verbatim spans, so every quote really appears on the page cited.
+
+MAX_PDF_BYTES = 25_000_000
+MAX_PDF_PAGES = 40
+
+QUOTE_PICK_PROMPT = """A student is writing about: "{query}"
+
+Below are passages from the paper "{title}", each labeled with its PDF page number.
+
+{passages}
+
+Pick the 2 or 3 passages most worth quoting directly in the student's paper: specific findings, striking numbers, or crisp statements of the argument. For each, extract the single best QUOTABLE span of at most 40 words, copied VERBATIM from the passage (trim from the ends only; never stitch separate sentences together, never paraphrase).
+
+Return ONLY valid JSON: {{"quotes": [{{"quote": "...", "page": 7, "why": "one short clause on when to use it"}}, ...]}} using each passage's page number. If nothing is worth quoting, return {{"quotes": []}}."""
+
+
+def _pdf_passages(data: bytes) -> list[tuple[int, str]]:
+    """(pdf_page_number, passage) chunks, best-effort; runs in a worker thread."""
+    from pypdf import PdfReader
+    reader = PdfReader(BytesIO(data))
+    passages: list[tuple[int, str]] = []
+    for page_no, page in enumerate(reader.pages[:MAX_PDF_PAGES], start=1):
+        try:
+            text = re.sub(r"[ \t]+", " ", page.extract_text() or "")
+        except Exception:
+            continue
+        cur = ""
+        for s in re.split(r"(?<=[.!?])\s+", text):
+            s = s.strip()
+            if not s:
+                continue
+            if cur and len(cur) + len(s) > 450:
+                if len(cur) > 120:
+                    passages.append((page_no, cur))
+                cur = s
+            else:
+                cur = f"{cur} {s}" if cur else s
+        if len(cur) > 120:
+            passages.append((page_no, cur))
+    return passages
+
+
+@app.post("/api/quotes")
+async def find_quotes(req: QuotesRequest):
+    if not req.pdf_url.strip().lower().startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="pdf_url must be a URL")
+    if not req.query.strip():
+        raise HTTPException(status_code=400, detail="query is empty")
+    try:
+        resp = await get_client().get(req.pdf_url, timeout=15.0, follow_redirects=True)
+    except Exception:
+        raise HTTPException(status_code=502, detail="Couldn't download this PDF")
+    data = resp.content or b""
+    if resp.status_code != 200 or len(data) > MAX_PDF_BYTES or not data[:5].startswith(b"%PDF"):
+        raise HTTPException(status_code=422, detail="This link didn't return a readable PDF")
+
+    try:
+        passages = await asyncio.to_thread(_pdf_passages, data)
+    except Exception:
+        traceback.print_exc()
+        raise HTTPException(status_code=422, detail="Couldn't extract text from this PDF")
+    if not passages:
+        raise HTTPException(status_code=422, detail="This PDF has no extractable text (likely a scanned image)")
+
+    passages = passages[:180]
+    vecs = await embed_texts([req.query] + [p[1][:800] for p in passages])
+    qv = vecs[0]
+    if qv is not None:
+        ranked = sorted(
+            ((_cosine(qv, v), p) for p, v in zip(passages, vecs[1:]) if v is not None),
+            key=lambda t: t[0], reverse=True,
+        )
+        top = [p for _, p in ranked[:8]]
+    else:
+        top = passages[:8]
+
+    block = "\n\n".join(f"[page {pg}] {txt[:600]}" for pg, txt in top)
+    try:
+        parsed = await chat_json(
+            QUOTE_PICK_PROMPT.format(query=req.query[:300], title=req.title[:200], passages=block),
+            max_tokens=500, temperature=0,
+        )
+    except Exception:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail="Couldn't pick quotes from this PDF")
+
+    quotes = []
+    for q in parsed.get("quotes", [])[:3]:
+        if not isinstance(q, dict) or not str(q.get("quote", "")).strip():
+            continue
+        try:
+            page = int(q.get("page"))
+        except (TypeError, ValueError):
+            page = None
+        quotes.append({"quote": str(q["quote"]).strip().strip('"'), "page": page,
+                       "why": str(q.get("why", "")).strip()})
+    return {"quotes": quotes}

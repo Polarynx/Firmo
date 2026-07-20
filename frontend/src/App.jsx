@@ -6,11 +6,12 @@ import PaperCard from './components/PaperCard'
 import HeroEmblem from './components/HeroEmblem'
 import ProjectSidebar from './components/ProjectSidebar'
 import EssayChecker from './components/EssayChecker'
+import CitationChecker from './components/CitationChecker'
 import ThemeToggle from './components/ThemeToggle'
 import Walkthrough from './components/Walkthrough'
 import Changelog from './components/Changelog'
 
-import { postJSON, streamResearch } from './lib/api'
+import { postJSON, streamResearch, streamNDJSON } from './lib/api'
 import { loadStore, saveStore, newProject, paperId } from './lib/projects'
 import { SOURCE_LABELS, STANCE } from './lib/constants'
 
@@ -56,7 +57,7 @@ const IDLE_STEPS = [
 
 export default function App() {
   const [dark, setDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches)
-  const [view, setView] = useState('research') // 'research' | 'essay'
+  const [view, setView] = useState('research') // 'research' | 'essay' | 'cites'
 
   // research state
   const [query, setQuery] = useState('')
@@ -95,12 +96,23 @@ export default function App() {
   const [showWalkthrough, setShowWalkthrough] = useState(false)
   const [showChangelog, setShowChangelog] = useState(false)
 
-  // essay state
+  // draft coach state
   const [essayText, setEssayText] = useState('')
-  const [chainResults, setChainResults] = useState(null)
-  const [chainLoading, setChainLoading] = useState(false)
-  const [chainError, setChainError] = useState('')
-  const chainAbortRef = useRef(null)
+  const [draftClaims, setDraftClaims] = useState(null) // null until a check runs
+  const [draftTypos, setDraftTypos] = useState(null)
+  const [draftMeta, setDraftMeta] = useState(null) // { truncated, checkedChars, totalFound }
+  const [draftLoading, setDraftLoading] = useState(false)
+  const [draftStatus, setDraftStatus] = useState('')
+  const [draftError, setDraftError] = useState('')
+  const draftAbortRef = useRef(null)
+
+  // citation checker state
+  const [citeText, setCiteText] = useState('')
+  const [citeItems, setCiteItems] = useState(null) // null until a check runs
+  const [citeLoading, setCiteLoading] = useState(false)
+  const [citeStatus, setCiteStatus] = useState('')
+  const [citeError, setCiteError] = useState('')
+  const citeAbortRef = useRef(null)
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark)
@@ -265,23 +277,94 @@ export default function App() {
     } finally { setAsking(false) }
   }
 
-  async function handleEssayCheck(text) {
+  async function handleDraftCheck(text) {
     if (!text.trim()) return
-    setChainLoading(true)
-    setChainError('')
-    setChainResults(null)
-    chainAbortRef.current = new AbortController()
+    setDraftLoading(true)
+    setDraftError('')
+    setDraftClaims(null)
+    setDraftTypos(null)
+    setDraftMeta(null)
+    setDraftStatus('Reading your draft…')
+    draftAbortRef.current = new AbortController()
     try {
-      const data = await postJSON('/api/claimchain', { text }, chainAbortRef.current.signal)
-      if (data.corrected_text && data.corrected_text !== text) {
-        setEssayText(data.corrected_text)
-      }
-      setChainResults(data.claims)
+      await streamNDJSON('/api/draft-check', {
+        text,
+        saved_papers: activeProject?.sources || [],
+      }, {
+        signal: draftAbortRef.current.signal,
+        onEvent: ev => {
+          switch (ev.event) {
+            case 'status':
+              setDraftStatus(ev.message)
+              break
+            case 'claims':
+              setDraftClaims(ev.items || [])
+              setDraftMeta({ truncated: ev.truncated, checkedChars: ev.checked_chars, totalFound: ev.total_found })
+              break
+            case 'typos':
+              setDraftTypos(ev.items || [])
+              break
+            case 'verdict': {
+              const { event: _e, ...patch } = ev
+              setDraftClaims(prev => (prev || []).map(c => (c.id === patch.id ? { ...c, ...patch } : c)))
+              break
+            }
+            case 'error':
+              setDraftError(ev.message || 'Something went wrong.')
+              break
+            default:
+              break
+          }
+        },
+      })
     } catch (e) {
-      if (e.name !== 'AbortError') setChainError(e.message || 'Something went wrong.')
+      if (e.name !== 'AbortError') setDraftError(e.message || 'Something went wrong. Is the backend running?')
     } finally {
-      setChainLoading(false)
-      chainAbortRef.current = null
+      setDraftLoading(false)
+      draftAbortRef.current = null
+    }
+  }
+
+  function updateDraftClaim(id, patch) {
+    setDraftClaims(prev => (prev || []).map(c => (c.id === id ? { ...c, ...patch } : c)))
+  }
+
+  async function handleCheckCitations(text) {
+    if (!text.trim()) return
+    setCiteLoading(true)
+    setCiteError('')
+    setCiteItems(null)
+    setCiteStatus('Reading your reference list…')
+    citeAbortRef.current = new AbortController()
+    try {
+      await streamNDJSON('/api/check-citations', { text }, {
+        signal: citeAbortRef.current.signal,
+        onEvent: ev => {
+          switch (ev.event) {
+            case 'status':
+              setCiteStatus(ev.message)
+              break
+            case 'entries':
+              setCiteItems((ev.items || []).map(it => ({ ...it, verdict: 'checking' })))
+              break
+            case 'result': {
+              const { event: _e, index, ...patch } = ev
+              setCiteItems(prev => (prev || []).map((c, i) => (i === index ? { ...c, ...patch } : c)))
+              break
+            }
+            case 'error':
+              setCiteError(ev.message || 'Something went wrong.')
+              break
+            default:
+              break
+          }
+        },
+      })
+    } catch (e) {
+      if (e.name !== 'AbortError') setCiteError(e.message || 'Something went wrong. Is the backend running?')
+    } finally {
+      setCiteLoading(false)
+      citeAbortRef.current = null
     }
   }
 
@@ -409,23 +492,29 @@ export default function App() {
           {/* Hero: shown above whichever tool is open, until its results take over.
               `isolate` scopes the hero's internal z-index so it can never paint over
               the sticky masthead when the page scrolls underneath it. */}
-          {((view === 'research' && phase === 'idle') || (view === 'essay' && !chainResults)) && (
+          {((view === 'research' && phase === 'idle') || (view === 'essay' && !draftClaims) || (view === 'cites' && !citeItems)) && (
             <div className="relative pt-6 isolate">
               <div className="hero-atmos" aria-hidden="true" />
               <div className="hero-seq relative z-10 flex flex-col gap-3.5">
                 <span className="eyebrow hero-kicker !text-brand-700 dark:!text-brand-400">
-                  {view === 'essay' ? 'Before you hand it in' : "For every paper you'll ever write"}
+                  {view === 'research' ? "For every paper you'll ever write"
+                    : view === 'essay' ? 'Before you hand it in'
+                    : 'The last check before you submit'}
                 </span>
                 <h1 className="font-display font-semibold text-[2.75rem] sm:text-6xl tracking-[-0.02em] leading-[1.03]">
                   {view === 'essay' ? (
-                    <>Every claim,<br />double-<span className="hero-word italic text-brand-700 dark:text-brand-400">checked</span>.</>
+                    <>Every claim,<br /><span className="hero-word italic text-brand-700 dark:text-brand-400">backed</span>.</>
+                  ) : view === 'cites' ? (
+                    <>Every citation,<br /><span className="hero-word italic text-brand-700 dark:text-brand-400">real</span>.</>
                   ) : (
                     <>From blank page<br />to <span className="hero-word italic text-brand-700 dark:text-brand-400">bibliography</span>.</>
                   )}
                 </h1>
                 <p className="text-gray-500 dark:text-gray-400 text-[15px] max-w-lg mt-1 leading-relaxed">
                   {view === 'essay'
-                    ? 'Paste your draft and Firmo checks every factual claim against real evidence, then helps you back up the shaky ones.'
+                    ? 'Paste your draft and Firmo highlights every claim that needs backing, right in your text, with real sources ready to cite in one click.'
+                    : view === 'cites'
+                    ? 'Paste your finished reference list. Firmo checks every entry against publisher records and flags typos, wrong years, retracted papers, and citations that don\'t exist.'
                     : 'Tell Firmo what you\'re writing about. It finds real, citable academic sources, shows you what the evidence says, and builds your works-cited page as you go.'}
                 </p>
               </div>
@@ -447,6 +536,12 @@ export default function App() {
               >
                 Check my draft
               </button>
+              <button
+                onClick={() => setView('cites')}
+                className={`px-3.5 py-1.5 transition-colors ${view === 'cites' ? 'bg-brand-700 text-white' : 'bg-white dark:bg-ink-900 text-gray-500 dark:text-gray-400 hover:bg-paper-100 dark:hover:bg-ink-800'}`}
+              >
+                Check citations
+              </button>
             </div>
 
             {view === 'research' ? (
@@ -459,18 +554,36 @@ export default function App() {
                 onCancel={handleCancel}
                 loading={running}
               />
+            ) : view === 'cites' ? (
+              <CitationChecker
+                text={citeText}
+                onTextChange={setCiteText}
+                items={citeItems}
+                loading={citeLoading}
+                error={citeError}
+                statusMsg={citeStatus}
+                onCheck={handleCheckCitations}
+                onCancel={() => { citeAbortRef.current?.abort(); setCiteLoading(false) }}
+              />
             ) : (
               <EssayChecker
                 text={essayText}
                 onTextChange={setEssayText}
-                results={chainResults}
-                loading={chainLoading}
-                error={chainError}
-                onCheck={handleEssayCheck}
-                onCancel={() => { chainAbortRef.current?.abort(); setChainLoading(false) }}
+                claims={draftClaims}
+                typos={draftTypos}
+                meta={draftMeta}
+                loading={draftLoading}
+                error={draftError}
+                statusMsg={draftStatus}
+                onCheck={handleDraftCheck}
+                onCancel={() => { draftAbortRef.current?.abort(); setDraftLoading(false) }}
+                onUpdateClaim={updateDraftClaim}
+                onClearResults={() => { setDraftClaims(null); setDraftTypos(null); setDraftMeta(null); setDraftError('') }}
+                onDismissTypos={() => setDraftTypos(null)}
                 citationStyle={style}
                 savedIds={savedIds}
                 onToggleSave={handleToggleSave}
+                onFindSources={q => { setQuery(q); runResearch(q) }}
               />
             )}
           </div>
@@ -748,6 +861,7 @@ export default function App() {
             onRemoveSource={paper => handleToggleSave(paper)}
             citationStyle={style}
             onStyleChange={setStyle}
+            onFindSources={q => { setQuery(q); runResearch(q) }}
           />
           {/* Always present, below the project: a quiet 3D accent that keeps the
               search service itself front and centre in the main column. */}
@@ -788,6 +902,7 @@ export default function App() {
               onRemoveSource={paper => handleToggleSave(paper)}
               citationStyle={style}
               onStyleChange={setStyle}
+              onFindSources={q => { setShowSidebar(false); setQuery(q); runResearch(q) }}
               onClose={() => setShowSidebar(false)}
             />
           </div>

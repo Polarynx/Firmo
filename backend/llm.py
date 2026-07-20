@@ -60,6 +60,48 @@ async def chat(prompt: str, max_tokens: int = 512, json_mode: bool = False,
     raise last_exc
 
 
+async def chat_stream(messages: list[dict], max_tokens: int = 512,
+                      temperature: float | None = None):
+    """Stream a chat completion as text deltas (async generator).
+
+    Takes a full message list (system/user/assistant) rather than a bare prompt,
+    since streaming is used for the multi-turn source chat. Retries transient
+    errors only while nothing has been yielded yet; once text has streamed out,
+    a mid-stream failure raises so the caller can surface it, because silently
+    restarting would duplicate the partial answer.
+    """
+    last_exc = None
+    for attempt in range(3):
+        yielded = False
+        try:
+            stream = await _client.chat.completions.create(
+                model=MODEL,
+                max_tokens=max_tokens,
+                messages=messages,
+                stream=True,
+                **({"temperature": temperature} if temperature is not None else {}),
+            )
+            async for chunk in stream:
+                if not chunk.choices:
+                    continue
+                text = chunk.choices[0].delta.content
+                if text:
+                    yielded = True
+                    yield text
+            return
+        except AuthenticationError as e:
+            print(f"[llm AUTH ERROR] Mistral rejected the API key. Check MISTRAL_API_KEY "
+                  f"in backend/.env and RESTART the server. {e}")
+            raise
+        except _RETRYABLE as e:
+            if yielded:
+                raise
+            last_exc = e
+            print(f"[llm stream retry {attempt + 1}/3] {type(e).__name__}: {e}")
+            await asyncio.sleep(1.5 * (2 ** attempt) + random.random())
+    raise last_exc
+
+
 async def embed_texts(texts: list[str], batch_size: int = 32) -> list:
     """Batch-embed texts for semantic relevance ranking.
 

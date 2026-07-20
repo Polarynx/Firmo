@@ -362,7 +362,7 @@ async def search_openalex(query: str, limit: int = 8, year_from: Optional[int] =
         "search": query,
         "filter": filter_str,
         "per-page": limit,
-        "select": "id,title,authorships,publication_year,abstract_inverted_index,doi,cited_by_count,primary_location",
+        "select": "id,title,authorships,publication_year,abstract_inverted_index,doi,cited_by_count,primary_location,is_retracted",
         "sort": "relevance_score:desc",
         "mailto": "firmo@example.com",  # polite pool, faster responses
     }
@@ -406,6 +406,7 @@ async def search_openalex(query: str, limit: int = 8, year_from: Optional[int] =
             "journal": journal,
             "citationCount": work.get("cited_by_count", 0),
             "source": "openalex",
+            "retracted": bool(work.get("is_retracted")),
         })
     return results
 
@@ -970,6 +971,31 @@ def clean_paper(paper: dict) -> dict:
     }
 
 
+# ── Source-safety flags ───────────────────────────────────────────────────────
+# Students can't tell a retracted paper or an unreviewed preprint from a solid
+# journal article; professors grade on exactly that. OpenAlex reports retractions
+# directly (is_retracted above); everywhere else, publishers prepend the title
+# ("RETRACTED: ..."), so a title check catches what the APIs don't say outright.
+
+_RETRACTED_TITLE = re.compile(
+    r"^\s*\[?\s*(retracted|withdrawn)\b|^\s*(retraction|notice of retraction)\b[:\s]|\(retracted\b",
+    re.IGNORECASE,
+)
+_PREPRINT_VENUES = re.compile(
+    r"arxiv|biorxiv|medrxiv|psyarxiv|chemrxiv|socarxiv|edarxiv|ssrn|research square"
+    r"|preprints\.org|osf preprints",
+    re.IGNORECASE,
+)
+
+
+def attach_safety_flags(paper: dict) -> dict:
+    title = paper.get("title") or ""
+    journal = paper.get("journal") or ""
+    retracted = bool(paper.get("retracted")) or bool(_RETRACTED_TITLE.search(title))
+    preprint = paper.get("source") == "arxiv" or bool(_PREPRINT_VENUES.search(journal))
+    return {**paper, "retracted": retracted, "preprint": preprint}
+
+
 def quality_score(paper: dict) -> float:
     score = 0.0
     if paper.get("abstract"):
@@ -1068,8 +1094,8 @@ def paper_id(paper: dict) -> str:
 
 
 def process_papers(raw: list[dict], year_from: Optional[int] = None) -> list[dict]:
-    """dedupe → clean → drop untitled → apply year filter."""
-    papers = [clean_paper(p) for p in deduplicate(raw)]
+    """dedupe → clean → flag retractions/preprints → drop untitled → year filter."""
+    papers = [attach_safety_flags(clean_paper(p)) for p in deduplicate(raw)]
     papers = [p for p in papers if p.get("title")]
     if year_from:
         papers = [p for p in papers if not p.get("year") or p["year"] >= year_from]

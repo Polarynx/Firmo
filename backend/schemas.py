@@ -34,13 +34,42 @@ class DigDeepRequest(BaseModel):
     abstract: str
 
 
-class SynthesizeSourcesRequest(BaseModel):
-    claim: str
-    papers: list[dict]
-
-
-class ClaimChainRequest(BaseModel):
+class DraftCheckRequest(BaseModel):
     text: str
+    # Sources already saved to the active project, so the coach can spot claims the
+    # student's own bibliography covers ("backed") instead of re-recommending them.
+    saved_papers: list[dict] = []
+
+
+class PaperChatRequest(BaseModel):
+    messages: list[dict]  # [{"role": "user"|"assistant", "content": str}, ...]
+    papers: list[dict]
+    project_name: str = ""
+
+
+class AnnotatedBibRequest(BaseModel):
+    papers: list[dict]
+    thesis: str = ""
+    style: str = "apa"
+
+
+class OutlineRequest(BaseModel):
+    papers: list[dict]
+    thesis: str = ""
+
+
+class ArgumentReviewRequest(BaseModel):
+    text: str
+
+
+class CheckCitationsRequest(BaseModel):
+    text: str
+
+
+class QuotesRequest(BaseModel):
+    pdf_url: str
+    query: str
+    title: str = ""
 
 
 class MoreSourcesRequest(BaseModel):

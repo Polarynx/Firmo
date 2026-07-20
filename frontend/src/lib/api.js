@@ -18,11 +18,11 @@ export async function postJSON(path, body, signal) {
 }
 
 /**
- * POST /api/research and read the NDJSON stream.
+ * POST to any NDJSON-streaming endpoint.
  * Calls onEvent(eventObject) for every line as it arrives.
  */
-export async function streamResearch(body, { signal, onEvent }) {
-  const res = await fetch(`${API}/api/research`, {
+export async function streamNDJSON(path, body, { signal, onEvent }) {
+  const res = await fetch(`${API}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -55,4 +55,8 @@ export async function streamResearch(body, { signal, onEvent }) {
       }
     }
   }
+}
+
+export function streamResearch(body, opts) {
+  return streamNDJSON('/api/research', body, opts)
 }

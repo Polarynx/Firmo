@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { postJSON } from '../lib/api'
+import { inTextCitationWithPage } from '../lib/cite'
 import { SOURCE_LABELS, STANCE } from '../lib/constants'
 
 const ABSTRACT_LIMIT = 220
@@ -18,6 +19,10 @@ export default function PaperCard({ paper, citationStyle, index = 0, query = '',
   const [summarizing, setSummarizing] = useState(false)
   const [digDeep, setDigDeep] = useState(null)
   const [digging, setDigging] = useState(false)
+  const [quotes, setQuotes] = useState(null)
+  const [quoting, setQuoting] = useState(false)
+  const [quoteError, setQuoteError] = useState('')
+  const [copiedQuote, setCopiedQuote] = useState(null)
   const hasGenerated = useRef(false)
 
   const delays = ['delay-0', 'delay-75', 'delay-150', 'delay-225', 'delay-300']
@@ -74,6 +79,31 @@ export default function PaperCard({ paper, citationStyle, index = 0, query = '',
     } finally {
       setDigging(false)
     }
+  }
+
+  // Read the actual open-access PDF and pull quotable passages with page numbers.
+  async function handleQuotes() {
+    if (quotes || quoting || !paper.oa_pdf) return
+    setQuoting(true)
+    setQuoteError('')
+    try {
+      const data = await postJSON('/api/quotes', {
+        pdf_url: paper.oa_pdf, query: query || paper.title, title: paper.title,
+      })
+      setQuotes(data.quotes || [])
+    } catch {
+      setQuoteError("Couldn't read this PDF. Not every publisher allows it — open the PDF and quote by hand.")
+    } finally {
+      setQuoting(false)
+    }
+  }
+
+  function handleCopyQuote(q, i) {
+    const cite = inTextCitationWithPage(paper, citationStyle, q.page)
+    navigator.clipboard.writeText(`"${q.quote}" ${cite}`).then(() => {
+      setCopiedQuote(i)
+      setTimeout(() => setCopiedQuote(null), 2000)
+    })
   }
 
   function handleGenerate() {
@@ -147,9 +177,27 @@ export default function PaperCard({ paper, citationStyle, index = 0, query = '',
         </p>
       )}
 
-      {/* Stamps: stance · PDF */}
-      {((showStance && stance) || paper.oa_pdf) && (
+      {/* Stamps: safety · stance · PDF */}
+      {((showStance && stance) || paper.oa_pdf || paper.retracted || paper.preprint) && (
         <div className="flex items-center flex-wrap gap-1.5">
+          {paper.retracted && (
+            <span
+              className="inline-flex items-center gap-1.5 font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] px-2 py-0.5 rounded-[2px] border border-red-400/70 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400"
+              title="This paper has been retracted. Citing it will cost you credibility — find another source."
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+              Retracted — do not cite
+            </span>
+          )}
+          {!paper.retracted && paper.preprint && (
+            <span
+              className="inline-flex items-center gap-1.5 font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] px-2 py-0.5 rounded-[2px] border border-amber-400/60 text-amber-700 dark:text-amber-300 dark:border-amber-800"
+              title="A preprint has not been peer-reviewed yet. Fine as supporting evidence; ask your instructor before leaning on it."
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+              Preprint · not peer-reviewed
+            </span>
+          )}
           {showStance && stance && (
             <span className={`inline-flex items-center gap-1.5 font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] px-2 py-0.5 rounded-[2px] border ${stance.chip}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${stance.dot}`} />
@@ -203,6 +251,41 @@ export default function PaperCard({ paper, citationStyle, index = 0, query = '',
         </div>
       )}
 
+      {/* Quotable passages pulled from the actual PDF, with page numbers */}
+      {quoteError && (
+        <p className="text-xs text-gray-400 dark:text-gray-600">{quoteError}</p>
+      )}
+      {quotes && (
+        quotes.length === 0 ? (
+          <p className="text-xs text-gray-400 dark:text-gray-600">
+            Nothing in this PDF stood out as directly quotable for your topic.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            <span className="section-label">Quotable, from the PDF</span>
+            {quotes.map((q, i) => (
+              <div key={i} className="border-l-2 border-l-highlight/80 bg-highlight/5 rounded-[2px] px-3 py-2.5 flex flex-col gap-1.5">
+                <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                  “{q.quote}”
+                  {q.page != null && (
+                    <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-gray-400 dark:text-gray-500 ml-1.5">
+                      · PDF p. {q.page}
+                    </span>
+                  )}
+                </p>
+                {q.why && <p className="text-xs text-gray-400 dark:text-gray-500">{q.why}</p>}
+                <button onClick={() => handleCopyQuote(q, i)} className="self-start text-xs text-brand-600 dark:text-brand-400 hover:text-brand-500 font-medium transition-colors">
+                  {copiedQuote === i ? '✓ Copied with citation' : 'Copy with citation'}
+                </button>
+              </div>
+            ))}
+            <span className="text-[10px] text-gray-400 dark:text-gray-600 px-1">
+              Page numbers are PDF pages; check them against the journal's printed page numbers when citing.
+            </span>
+          </div>
+        )
+      )}
+
       {/* Citation */}
       {(cite || loading) && (
         <div className="flex flex-col gap-1">
@@ -234,6 +317,11 @@ export default function PaperCard({ paper, citationStyle, index = 0, query = '',
         {abstract && !digDeep && query && (
           <button onClick={handleDigDeep} disabled={digging} className="btn-secondary text-xs disabled:opacity-40">
             {digging ? 'Analyzing…' : 'Why it matters'}
+          </button>
+        )}
+        {paper.oa_pdf && !quotes && (
+          <button onClick={handleQuotes} disabled={quoting} className="btn-secondary text-xs disabled:opacity-40">
+            {quoting ? 'Reading the PDF…' : 'Find quotes'}
           </button>
         )}
         {cite && !loading && (

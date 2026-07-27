@@ -2,97 +2,122 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ══════════════════════════════════════════════════════════════════════════
+   Theme tokens. The workspace is charcoal-first; the light theme is the same
+   room with the lamp on. Every surface below is referenced semantically
+   (bg-app, bg-panel, text-t2 …) so no component hard-codes a palette.
+   ══════════════════════════════════════════════════════════════════════════ */
+:root {
+  --c-app:    250 249 246;   /* paper-50   */
+  --c-panel:  255 255 255;
+  --c-raised: 243 241 234;   /* paper-100  */
+  --c-sheet:  255 255 255;
+  --c-line:   224 220 208;
+  --c-edge:   201 196 182;
+  --c-t1:      23  32  28;
+  --c-t2:      92 102  98;
+  --c-t3:     143 152 147;
+
+  --accent:      45 106  79; /* #2D6A4F pine, light theme */
+  --accent-soft: 27  67  50; /* #1B4332 */
+  --glow: rgba(45, 106, 79, 0.10);
+}
+
+.dark {
+  --c-app:      8  11  14;   /* #080B0E — deepest charcoal, the canvas base   */
+  --c-panel:   15  20  25;   /* #0F1419 — elevation 1, glass panels           */
+  --c-raised:  22  28  34;   /* #161C22 — elevation 2, hover and active       */
+  --c-sheet:   15  20  25;   /* surfaces that still need to read as a surface */
+  --c-line:    30  38  46;
+  --c-edge:    42  52  61;
+  --c-t1:     241 245 249;   /* #F1F5F9 */
+  --c-t2:     148 163 184;   /* #94A3B8 */
+  --c-t3:     100 116 139;
+
+  --accent:      82 183 136; /* #52B788 */
+  --accent-soft: 45 106  79; /* #2D6A4F */
+  --glow: rgba(82, 183, 136, 0.09);
+}
+
 @layer base {
+  html, body, #root {
+    height: 100%;
+  }
   body {
-    @apply font-sans antialiased;
+    @apply font-sans antialiased bg-app text-t1;
+    /* The workspace owns its own scroll regions; the window never scrolls. */
+    overflow: hidden;
+  }
+  /* Fraunces carries a real optical-size axis. Letting the browser drive it
+     means the 3rem hero is cut like a masthead and a 13px card heading is cut
+     like body copy, instead of one shape scaled up and down. */
+  .font-display {
+    font-optical-sizing: auto;
+    letter-spacing: -0.02em;
+  }
+  /* Editorial italic: the academic voice, used for theses and pulled quotes. */
+  .display-italic {
+    font-family: 'Fraunces', Georgia, serif;
+    font-optical-sizing: auto;
+    font-style: italic;
+    font-variation-settings: 'SOFT' 20;
+    letter-spacing: -0.01em;
+  }
+  ::selection {
+    background: rgb(var(--accent) / 0.25);
   }
 }
 
 @layer components {
   .btn-primary {
-    @apply px-4 py-2 rounded-[3px] bg-brand-700 hover:bg-brand-600 active:scale-[.98]
-      text-white font-semibold text-sm
-      transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-brand-500/60 focus:ring-offset-2
-      dark:focus:ring-offset-ink-950;
+    @apply px-3.5 py-2 rounded-md bg-brand-600 hover:bg-brand-500 active:scale-[.98]
+      text-white font-medium text-sm
+      transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-brand-500/60
+      disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100;
   }
-  .btn-secondary {
-    @apply px-4 py-2 rounded-[3px] border border-gray-300 dark:border-gray-700
-      bg-white dark:bg-ink-900
-      text-gray-600 dark:text-gray-400 font-medium text-sm
-      hover:border-brand-500 dark:hover:border-brand-600 hover:text-brand-700 dark:hover:text-brand-300
-      transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-brand-500/60 focus:ring-offset-1
-      dark:focus:ring-offset-ink-950;
+  .dark .btn-primary {
+    @apply bg-brand-600 hover:bg-brand-500 text-white;
+  }
+  .btn-ghost {
+    @apply px-3 py-1.5 rounded-md border border-line
+      bg-raised/60 text-t2 font-medium text-xs
+      hover:border-brand-500/70 hover:text-t1
+      transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-brand-500/40
+      disabled:opacity-40 disabled:cursor-not-allowed;
   }
 
   .card {
-    @apply bg-white dark:bg-ink-900 border border-gray-200 dark:border-gray-800
-      rounded-[3px];
+    @apply bg-panel/80 border border-line rounded-lg;
+  }
+  .card-hover {
+    @apply transition-colors duration-200 hover:bg-raised/70 hover:border-edge;
   }
 
-  /* Catalog card: the signature element. Rank + metadata read like a call
-     number; the left rail carries the stance color (set inline per card). */
-  .source-card {
-    @apply card p-5 flex flex-col gap-3 border-l-2
-      transition-all duration-200;
-  }
-  .source-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 10px 30px -12px rgba(20, 40, 33, 0.22);
-  }
-  .dark .source-card:hover {
-    box-shadow: 0 12px 32px -14px rgba(0, 0, 0, 0.6);
-  }
-
-  /* Small-caps mono label: the "section heading" voice of the whole app */
+  /* Small-caps mono label: the section-heading voice of the whole workspace */
   .eyebrow {
-    @apply font-mono text-[10px] font-medium uppercase tracking-[0.18em]
-      text-gray-500 dark:text-gray-500;
+    @apply font-mono text-[9.5px] font-medium uppercase tracking-[0.18em] text-t3;
   }
 
-  /* Inline section heading inside a card body (Abstract / Summary / Verdict / What
-     this means). A quieter sibling of .eyebrow that sits directly above its text, so
-     three stacked blocks never blur into one wall of words. */
-  .section-label {
-    @apply block font-mono text-[9.5px] font-medium uppercase tracking-[0.16em]
-      text-gray-400 dark:text-gray-500 mb-1;
-  }
-
-  /* Journal-masthead divider: thick over thin */
-  .rule-double {
-    border-top: 2px solid currentColor;
-    position: relative;
-  }
-  .rule-double::after {
-    content: '';
-    position: absolute;
-    top: 2px;
-    left: 0;
-    right: 0;
-    border-top: 1px solid currentColor;
-    margin-top: 2px;
-  }
-
-  .terminal-box {
-    @apply bg-paper-50 dark:bg-ink-950 border border-gray-200 dark:border-gray-800
-      rounded-[3px] p-3 font-mono text-sm leading-relaxed
-      text-gray-700 dark:text-gray-300;
+  /* DOIs, citations, call numbers: anything that should read as a record */
+  .record {
+    @apply font-mono text-[10px] uppercase tracking-[0.12em] text-t3;
   }
 
   /* Works-cited entries: serif with a true hanging indent, like the real page */
   .bib-entry {
-    @apply font-display text-[13px] leading-relaxed text-gray-800 dark:text-gray-200;
+    @apply font-display text-[13px] leading-relaxed text-t1;
     padding-left: 1.4em;
     text-indent: -1.4em;
     overflow-wrap: break-word;
   }
 
   .skeleton {
-    @apply rounded-[2px] bg-gray-100 dark:bg-gray-800;
+    @apply rounded bg-line/60;
     animation: shimmer 1.4s infinite linear;
     background-image: linear-gradient(
       90deg,
       transparent 0%,
-      rgba(255,255,255,0.5) 50%,
+      rgba(255, 255, 255, 0.45) 50%,
       transparent 100%
     );
     background-size: 700px 100%;
@@ -101,221 +126,245 @@
     background-image: linear-gradient(
       90deg,
       transparent 0%,
-      rgba(255,255,255,0.04) 50%,
+      rgba(255, 255, 255, 0.05) 50%,
       transparent 100%
     );
+  }
+
+  /* The omni-bar HUD: heavier blur and a deeper shadow than a panel, because
+     it genuinely floats over the document rather than sitting beside it. */
+  .hud {
+    border-radius: 1rem;
+    border: 1px solid rgb(var(--c-line) / 0.85);
+    background: rgb(var(--c-app) / 0.85);
+    backdrop-filter: blur(40px) saturate(170%);
+    -webkit-backdrop-filter: blur(40px) saturate(170%);
+    box-shadow:
+      0 1px 0 0 rgb(var(--accent) / 0.12) inset,
+      0 25px 50px -12px rgba(0, 0, 0, 0.7);
+  }
+
+  /* Frosted panel: the command palette and floating popovers.
+     The blur alone does not carry enough contrast when a dense works-cited
+     page scrolls underneath, so the fill stays high and the blur does the
+     depth work rather than the legibility work. */
+  .glass {
+    @apply border border-line rounded-xl;
+    background: rgb(var(--c-panel) / 0.94);
+    backdrop-filter: blur(24px) saturate(160%);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+    box-shadow:
+      0 1px 0 0 rgb(var(--accent) / 0.12) inset,
+      0 24px 60px -20px rgba(0, 0, 0, 0.55);
   }
 }
 
 @layer utilities {
-  .delay-0   { animation-delay: 0ms; }
-  .delay-75  { animation-delay: 75ms; }
-  .delay-150 { animation-delay: 150ms; }
-  .delay-225 { animation-delay: 225ms; }
-  .delay-300 { animation-delay: 300ms; }
+  /* Zone B scrolls, but the browser's scrollbar never shows. A thin thumb
+     fades in while the pointer is over the region. */
+  .scroll-quiet {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scroll-quiet::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .scroll-quiet::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scroll-quiet::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 999px;
+    transition: background 0.2s;
+  }
+  .scroll-quiet:hover {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--c-edge)) transparent;
+  }
+  .scroll-quiet:hover::-webkit-scrollbar-thumb {
+    background: rgb(var(--c-edge) / 0.8);
+  }
+
+  .no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
 }
 
-/* ── Hero emblem: a slowly turning 3D dossier of source pages ─────────────── */
-.hero-emblem {
-  position: relative;
-  width: 190px;
-  height: 210px;
-  perspective: 1000px;
-}
-.emblem-float {
+/* ── Ambient light: a slow pine glow behind the workspace, so the charcoal
+   never reads as flat black. Inert, purely atmospheric. ─────────────────── */
+.ambient {
   position: absolute;
   inset: 0;
-  transform-style: preserve-3d;
-  animation: emblemFloat 6.5s ease-in-out infinite;
-}
-.emblem-spin {
-  position: absolute;
-  inset: 0;
-  transform-style: preserve-3d;
-  animation: emblemTurn 14s ease-in-out infinite;
-}
-.emblem-page {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 126px;
-  height: 164px;
-  margin: -82px 0 0 -63px;
-  border-radius: 5px;
-  background: #ffffff;
-  border: 1px solid rgba(20, 25, 23, 0.08);
-  box-shadow: 0 14px 34px rgba(20, 40, 33, 0.14);
-  backface-visibility: hidden;
-}
-.dark .emblem-page {
-  background: #171d1a;
-  border-color: rgba(255, 255, 255, 0.07);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
-}
-.emblem-page--3 { transform: translateZ(-30px) translate(15px, 11px) rotate(5.5deg); opacity: 0.45; }
-.emblem-page--2 { transform: translateZ(-15px) translate(8px, 6px) rotate(2.75deg); opacity: 0.7; }
-.emblem-page--1 {
-  transform: translateZ(0);
-  border-top: 3px solid #235a47;                 /* brand spine */
-  padding: 20px 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 11px;
-  overflow: hidden;
-}
-.dark .emblem-page--1 { border-top-color: #3c8c6e; }
-.emblem-mono {
-  font-family: 'Fraunces', Georgia, serif;
-  font-weight: 600;
-  font-size: 46px;
-  line-height: 0.9;
-  color: #235a47;
-  margin-bottom: 2px;
-}
-.dark .emblem-mono { color: #5fa88c; }
-.emblem-rule {
-  display: block;
-  height: 6px;
-  border-radius: 3px;
-  background: linear-gradient(90deg, rgba(20, 25, 23, 0.13), rgba(20, 25, 23, 0.04));
-}
-.emblem-rule--short { width: 58%; }
-.dark .emblem-rule {
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.03));
-}
-.emblem-ribbon {
-  position: absolute;
-  top: -3px;
-  right: 22px;
-  width: 12px;
-  height: 46px;
-  background: #f5c84c;                            /* highlight gold reading ribbon */
-  border-radius: 0 0 2px 2px;
-  box-shadow: 0 3px 6px rgba(20, 40, 33, 0.2);
-  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 82%, 0 100%);
-}
-/* soft ground shadow that breathes with the float */
-.emblem-floor {
-  position: absolute;
-  left: 50%;
-  bottom: 6px;
-  width: 120px;
-  height: 20px;
-  margin-left: -60px;
-  border-radius: 50%;
-  background: radial-gradient(ellipse at center, rgba(20, 40, 33, 0.18), rgba(20, 40, 33, 0));
-  filter: blur(3px);
-  animation: emblemFloorPulse 6.5s ease-in-out infinite;
-}
-.dark .emblem-floor {
-  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0));
-}
-
-@keyframes emblemTurn {
-  0%, 100% { transform: rotateX(13deg) rotateY(-21deg); }
-  50%      { transform: rotateX(16deg) rotateY(19deg); }
-}
-@keyframes emblemFloat {
-  0%, 100% { transform: translateY(0); }
-  50%      { transform: translateY(-9px); }
-}
-@keyframes emblemFloorPulse {
-  0%, 100% { transform: scaleX(1);    opacity: 0.9; }
-  50%      { transform: scaleX(0.82); opacity: 0.6; }
-}
-
-/* ── Hero atmosphere: a faint manuscript rule that drifts slowly upward, as if
-   the blank page were quietly filling with lines. Behind the hero, inert. ──── */
-.hero-atmos {
-  position: absolute;
-  inset: -32px -24px -8px;
-  z-index: 0;
   pointer-events: none;
   overflow: hidden;
-  border-radius: 4px;
-  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 50%, transparent 92%);
-          mask-image: linear-gradient(to bottom, #000 0%, #000 50%, transparent 92%);
+  z-index: 0;
 }
-.hero-atmos::before {
+.ambient::before,
+.ambient::after {
   content: '';
   position: absolute;
-  left: 0; right: 0; top: -40px; bottom: -40px;
-  background: repeating-linear-gradient(
-    to bottom,
-    transparent 0, transparent 33px,
-    rgba(35, 90, 71, 0.07) 33px, rgba(35, 90, 71, 0.07) 34px
-  );
-  animation: heroRule 24s linear infinite;
+  border-radius: 50%;
+  filter: blur(90px);
 }
-.dark .hero-atmos::before {
-  background: repeating-linear-gradient(
-    to bottom,
-    transparent 0, transparent 33px,
-    rgba(95, 168, 140, 0.06) 33px, rgba(95, 168, 140, 0.06) 34px
-  );
+.ambient::before {
+  width: 640px;
+  height: 640px;
+  top: -280px;
+  left: -160px;
+  background: var(--glow);
 }
-@keyframes heroRule {
-  from { transform: translateY(0); }
-  to   { transform: translateY(-34px); }
+.ambient::after {
+  width: 520px;
+  height: 520px;
+  bottom: -260px;
+  right: -120px;
+  background: var(--glow);
+  opacity: 0.7;
 }
 
-/* Masthead wordmark: a brand hairline sweeps in beneath it on hover/focus, the
-   masthead answering to the "underline your sources" idea. */
-.wordmark { position: relative; }
-.wordmark::after {
+/* ── Progress ───────────────────────────────────────────────────────────────
+   Never a spinner. A light travels the top edge of the working zone while the
+   zone itself breathes with a soft inner glow, so the whole panel reads as
+   live rather than one small element spinning in a corner. */
+.edge-progress {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 30;
+  animation: zoneBreathe 2.6s ease-in-out infinite;
+}
+.edge-progress::before {
   content: '';
   position: absolute;
-  left: 0; right: 0; bottom: 1px;
+  top: 0;
+  left: 0;
+  right: 0;
   height: 2px;
-  background: #235a47;
-  transform: scaleX(0);
-  transform-origin: left center;
-  transition: transform 0.28s cubic-bezier(0.2, 0.7, 0.2, 1);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgb(var(--accent) / 0.95),
+    transparent
+  );
+  animation: edgeSweep 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
-.dark .wordmark::after { background: #5fa88c; }
-.wordmark:hover::after,
-.wordmark:focus-visible::after { transform: scaleX(1); }
-
-/* Editorial kicker: a short rule leads the hero eyebrow, like a dateline. */
-.hero-kicker { display: inline-flex; align-items: center; gap: 0.65rem; }
-.hero-kicker::before {
-  content: '';
-  width: 1.75rem;
-  height: 2px;
-  background: currentColor;
-  opacity: 0.55;
+@keyframes zoneBreathe {
+  0%, 100% { box-shadow: inset 0 0 0 1px rgb(var(--accent) / 0.05); }
+  50%      { box-shadow: inset 0 0 42px -12px rgb(var(--accent) / 0.28),
+                         inset 0 0 0 1px rgb(var(--accent) / 0.16); }
 }
 
-/* The thesis word earns a drawn-in underline on load */
-.hero-word { position: relative; white-space: nowrap; }
-.hero-word::after {
-  content: '';
-  position: absolute;
-  left: 0; right: 0; bottom: -0.06em;
-  height: 0.1em;
+/* ── The writing surface ────────────────────────────────────────────────────
+   There is no card, no panel, and no box. The student's prose sits directly on
+   the canvas the way text sits on paper, because a document framed inside a
+   grey input is a form field, not a manuscript. The editor textarea and its
+   highlight overlay MUST share these metrics exactly or the marks drift off
+   the words they belong to. */
+.canvas-type {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 17px;
+  line-height: 1.75;
+  letter-spacing: -0.003em;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: normal;
+  tab-size: 4;
+  padding: 0 2px;
+}
+
+/* Inline claim annotations: a tinted wash under the words with a coloured
+   rule on the baseline, so the student's own text colour never changes. */
+.mark-claim {
+  /* <mark> ships with a yellow background and black text in every browser and
+     preflight does not reset it, so the base class clears both explicitly
+     rather than trusting stylesheet order to win. */
+  background-color: transparent;
+  color: inherit;
+  position: relative;
   border-radius: 2px;
-  background: currentColor;
-  opacity: 0.24;
-  transform-origin: left center;
-  animation: heroUnderline 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) 0.4s both;
+  padding: 2px 2px;
+  margin: 0 -2px;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
 }
-@keyframes heroUnderline {
-  from { transform: scaleX(0); }
-  to   { transform: scaleX(1); }
+.mark-amber   { background-color: rgba(245, 158, 11, 0.15); box-shadow: inset 0 -2px 0 #FBBF24; }
+.mark-red     { background-color: rgba(239, 68, 68, 0.15);  box-shadow: inset 0 -2px 0 #F87171; }
+.mark-green   { background-color: rgba(34, 197, 94, 0.15);  box-shadow: inset 0 -2px 0 #4ADE80; }
+.mark-dotted  { box-shadow: inset 0 -1px 0 rgba(148, 163, 184, 0.45); }
+.mark-pending { background-color: rgba(148, 163, 184, 0.10); }
+
+.mark-amber:hover  { background-color: rgba(245, 158, 11, 0.26); }
+.mark-red:hover    { background-color: rgba(239, 68, 68, 0.26); }
+.mark-green:hover  { background-color: rgba(34, 197, 94, 0.26); }
+.mark-dotted:hover { background-color: rgba(148, 163, 184, 0.10); }
+
+.mark-claim.is-selected {
+  box-shadow:
+    inset 0 -2px 0 rgb(var(--accent)),
+    0 0 0 1px rgb(var(--accent) / 0.5),
+    0 0 18px -2px rgb(var(--accent) / 0.35);
 }
 
-/* Orchestrated page-load entrance for the hero */
-.hero-seq > * { animation: fadeInUp 0.5s ease both; }
-.hero-seq > *:nth-child(1) { animation-delay: 0.04s; }
-.hero-seq > *:nth-child(2) { animation-delay: 0.12s; }
-.hero-seq > *:nth-child(3) { animation-delay: 0.22s; }
+/* Hovering a claim that still needs work offers the next move by name, so the
+   highlight reads as a control rather than decoration. Only amber and red get
+   one: green and dotted claims have nothing left to inspect.
+   Positioned from the mark's measured rect rather than nested inside it —
+   a <mark> spanning several lines is an inline box, and absolute children of
+   inline boxes resolve their offsets against a fragment union, which lands the
+   badge on top of the sentence instead of above it. */
+.inspect-badge {
+  position: fixed;
+  z-index: 50;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  pointer-events: none;
+
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 3px 7px;
+  border-radius: 5px;
+  color: rgb(var(--c-t1));
+  background: rgb(var(--c-panel) / 0.96);
+  border: 1px solid rgb(var(--c-edge));
+  box-shadow: 0 8px 20px -6px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(12px);
+}
+
+/* The caret trailing a text reveal. */
+.stream-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 1px;
+  vertical-align: -0.14em;
+  border-radius: 1px;
+  background: rgb(var(--accent));
+  animation: caretBlink 1s steps(2, start) infinite;
+}
+@keyframes caretBlink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0; }
+}
 
 @media (prefers-reduced-motion: reduce) {
-  .animate-fadeInUp, .skeleton, .animate-pulseDot,
-  .hero-atmos::before, .hero-word::after, .hero-seq > * {
+  .edge-progress,
+  .edge-progress::before,
+  .skeleton,
+  .stream-caret,
+  .animate-fadeInUp,
+  .animate-pulseDot {
     animation: none !important;
   }
-  /* keep the 3D pose, just stop moving */
-  .emblem-float, .emblem-spin, .emblem-floor { animation: none !important; }
-  .emblem-spin { transform: rotateX(14deg) rotateY(-17deg); }
 }

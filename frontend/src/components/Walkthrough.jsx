@@ -1,65 +1,55 @@
 import { useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { SPRING } from '../lib/constants'
 
 const STEPS = [
   {
-    icon: '🎓',
-    title: 'Welcome to Firmo',
-    body: 'Firmo takes you from a blank page to a finished bibliography. Describe what you\'re writing about and it searches 15 academic databases at once, ranks what it finds, and builds your works-cited page as you collect sources.',
-    tip: 'Keep Firmo open in a tab while you write, and your project and bibliography stay put between searches.',
+    icon: '⌘',
+    title: 'One page, not five tools',
+    body: 'Firmo is a single workspace. The document is in the middle, everything Firmo has to say about it is on the right, and the bar at the bottom is for asking. Nothing here navigates away.',
+    tip: 'Press ⌘K from anywhere to jump to the bar. ⌘↵ in the document runs whatever Firmo thinks you want.',
   },
   {
-    icon: '🔍',
-    title: 'One box, three kinds of input',
-    body: 'Type a topic ("microplastics in drinking water"), a thesis ("school uniforms improve focus"), or a research question ("does remote work reduce productivity?"). Firmo detects which one you gave it and adapts: a thesis gets an honest evidence assessment, a topic gets a map of the field.',
+    icon: '✍️',
+    title: 'The document reads your intent',
+    body: 'Type a topic and press ⌘↵ and Firmo searches fifteen academic databases. Paste a draft and it starts marking claims. Paste a reference list and it starts verifying entries. You never pick a mode.',
     tip: 'Being specific pays off. "Sleep deprivation and memory in college students" beats "sleep".',
   },
   {
-    icon: '🧭',
-    title: 'The research brief',
-    body: 'Every search opens with a brief: what the evidence says, strong angles for your paper, and related topics worth exploring next. Results stream in live underneath while Firmo ranks them.',
-    tip: 'The suggested angles are essay outlines in disguise, and each one can be a body paragraph.',
-  },
-  {
     icon: '🎯',
-    title: 'Relevant first, related on request',
-    body: 'Firmo reads your topic and ranks sources by meaning, not matching keywords. Sources squarely about your subject appear up front as "Relevant"; broader context sits behind a "Show related & background" button so it never buries the good stuff. Each source is also tagged Supports, Counterpoint, Mixed, or Background.',
-    tip: 'Grab at least one "Counterpoint" source and answer it. Addressing the counterargument is what makes an essay strong.',
+    title: 'Sources, ranked by meaning',
+    body: 'Firmo ranks by what your topic means, not which keywords match. Sources squarely on subject come first; broader context waits behind a button. Each one is tagged Supports, Counterpoint, Mixed, or Background, and retracted papers get a red do-not-cite stamp.',
+    tip: 'Grab a Counterpoint source and answer it. Addressing the other side is what makes an essay strong.',
   },
   {
-    icon: '📄',
-    title: 'Free PDFs, quotes, and safety flags',
-    body: 'A "Free PDF" badge means a legal open-access copy exists (via Unpaywall), and "Find quotes" reads that PDF and pulls quotable passages with page numbers. Firmo also warns you before a bad source hurts you: retracted papers get a red "do not cite" stamp, preprints an amber "not peer-reviewed" note.',
-    tip: 'Older paper with thousands of citations? That\'s foundational work, great for your introduction.',
+    icon: '🖍️',
+    title: 'Claims, marked where you wrote them',
+    body: 'After a draft check, every factual claim is highlighted in your own text. Amber needs a citation, red means the evidence disagrees, green means a saved source already covers it, and a dotted underline means no citation is needed.',
+    tip: 'Click any highlight. The panel on the right fills with the three best papers for that exact sentence.',
   },
   {
-    icon: '🔖',
-    title: 'Projects: one per paper',
-    body: 'The "Your paper" panel holds a project for each assignment. Bookmark any source and it lands in the active project. Switch projects from the dropdown when you\'re juggling classes.',
-    tip: 'Name projects after the assignment ("HIST200 Cold War essay") so future-you can find them.',
+    icon: '⚡',
+    title: 'Cite and save, in one click',
+    body: 'From a highlighted claim, "Cite & save" drops the in-text citation into your sentence, adds the source to your project, turns the highlight green, and updates the works-cited page at the foot of the document. One action, four results.',
+    tip: 'Switch between APA 7, MLA 9, Chicago, Harvard, and IEEE at the bibliography and everything re-sets itself.',
   },
   {
-    icon: '📚',
-    title: 'The works-cited page writes itself',
-    body: 'As you save sources, the Works Cited panel builds a real, alphabetized bibliography in APA 7, MLA 9, Chicago, Harvard, or IEEE. Sources with a DOI are formatted from the publisher\'s full record. Assigned an annotated bibliography? One click builds it. Ready to write? The Outline builder turns your saved sources into a point-by-point plan and flags the points that still need evidence.',
-    tip: 'One click on "Copy all" and your reference list is done. Or download .bib / .ris for Zotero and Mendeley.',
-  },
-  {
-    icon: '📝',
-    title: 'Check my draft',
-    body: 'Paste what you\'ve written and Firmo highlights every factual claim right in your text: amber means it needs a citation, red means the evidence disagrees, green means a source you already saved covers it. The Argument tab reviews the structure like a writing tutor: thesis, paragraph flow, and whether you answer the other side.',
-    tip: '"Cite & save" is one click: the in-text citation drops into your draft and the source joins your works-cited page at the same time.',
+    icon: '🧭',
+    title: 'The argument, read like a tutor would',
+    body: 'The Argument panel maps your thesis, marks whether each paragraph earns its place, and tells you if you left the counterargument unanswered, then hands you sources for the section you are missing.',
+    tip: 'The Outline panel turns your saved sources into a point-by-point plan, and flags every point with no evidence yet.',
   },
   {
     icon: '🧾',
-    title: 'Check citations',
-    body: 'The last check before you submit: paste your finished reference list and Firmo verifies every entry against publisher records. It flags wrong years, mangled titles, retracted papers, and citations that don\'t exist at all.',
-    tip: 'Got sources from an AI chatbot? This is the mode that catches the invented ones before your professor does.',
+    title: 'The last check before you submit',
+    body: 'Paste your finished reference list and Firmo checks every entry against publisher records: wrong years, mangled titles, retracted papers, and citations that do not exist at all.',
+    tip: 'Got sources from an AI chatbot? This is the pass that catches the invented ones before your professor does.',
   },
   {
     icon: '💬',
     title: 'Ask your sources',
-    body: 'In "Your paper", the chat is grounded in the sources you actually saved. Ask where they disagree, get your paper outlined point by point, or find the gap in your evidence. It explains and plans with you; it never writes your paper, so the words are always yours.',
-    tip: 'Ask "Where do my sources disagree?" before you write. Knowing the fight inside your evidence is what makes a paper sophisticated.',
+    body: 'The bottom bar is a chat grounded in the sources you actually saved. Ask where they disagree, get your paper outlined, find the gap in your evidence. Answers float out as cards you can drag onto the page or throw away.',
+    tip: 'It explains and plans, but it never writes your prose. That part stays yours, which is the point.',
   },
 ]
 
@@ -69,84 +59,80 @@ export default function Walkthrough({ onClose }) {
   const isLast = step === STEPS.length - 1
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeInUp"
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="bg-white dark:bg-ink-900 rounded-[3px] border border-gray-200 dark:border-gray-700 border-t-2 border-t-brand-700 dark:border-t-brand-500 shadow-2xl w-full max-w-lg flex flex-col">
-
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-5 pb-3">
+      <motion.div
+        initial={{ opacity: 0, y: 20, scale: 0.97 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={SPRING}
+        className="glass w-full max-w-lg flex flex-col"
+      >
+        <div className="flex items-center justify-between px-5 pt-4 pb-3">
           <div className="flex gap-1">
             {STEPS.map((_, i) => (
               <button
                 key={i}
                 onClick={() => setStep(i)}
-                className={`h-1.5 rounded-full transition-all duration-200 ${i === step ? 'w-6 bg-brand-500' : 'w-1.5 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600'}`}
+                aria-label={`Step ${i + 1}`}
+                className={`h-1.5 rounded-full transition-all duration-200 ${
+                  i === step ? 'w-6 bg-brand-500 dark:bg-signal' : 'w-1.5 bg-line hover:bg-edge'
+                }`}
               />
             ))}
           </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors p-1"
-            aria-label="Close walkthrough"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
+          <button onClick={onClose} className="text-t3 hover:text-t1 transition-colors p-1 text-sm" aria-label="Close">
+            ✕
           </button>
         </div>
 
-        {/* Content */}
-        <div className="px-6 pb-4 flex flex-col gap-4 flex-1">
-          <div className="flex flex-col gap-2.5">
-            <div className="flex items-center justify-between">
-              <span className="eyebrow !text-brand-700 dark:!text-brand-400">How Firmo works</span>
-              <span className="eyebrow">{step + 1} / {STEPS.length}</span>
-            </div>
-            <div className="flex items-center gap-2.5">
-              <span className="text-2xl leading-none">{current.icon}</span>
-              <h2 className="font-display font-semibold text-xl text-gray-900 dark:text-gray-100 leading-tight">{current.title}</h2>
-            </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">{current.body}</p>
-          </div>
+        <div className="px-6 pb-4 flex flex-col gap-4">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={step}
+              initial={{ opacity: 0, x: 14 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -14, transition: { duration: 0.12 } }}
+              transition={SPRING}
+              className="flex flex-col gap-2.5"
+            >
+              <div className="flex items-center justify-between">
+                <span className="eyebrow !text-brand-500 dark:!text-signal">How Firmo works</span>
+                <span className="eyebrow">{step + 1} / {STEPS.length}</span>
+              </div>
+              <div className="flex items-center gap-2.5">
+                <span className="text-xl leading-none">{current.icon}</span>
+                <h2 className="font-display font-semibold text-xl text-t1 leading-tight">{current.title}</h2>
+              </div>
+              <p className="text-[13.5px] text-t2 leading-relaxed">{current.body}</p>
 
-          <div className="border-l-2 border-l-brand-500 bg-brand-50/60 dark:bg-brand-950/20 rounded-[2px] px-4 py-3">
-            <span className="eyebrow !text-brand-700 dark:!text-brand-400 block mb-1">Pro tip</span>
-            <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{current.tip}</p>
-          </div>
+              <div className="border-l-2 border-l-brand-500 dark:border-l-signal bg-brand-500/[0.07] rounded-r px-3.5 py-2.5 mt-1">
+                <span className="eyebrow !text-brand-500 dark:!text-signal block mb-1">Pro tip</span>
+                <p className="text-[12.5px] text-t1 leading-relaxed">{current.tip}</p>
+              </div>
+            </motion.div>
+          </AnimatePresence>
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 dark:border-gray-800">
+        <div className="flex items-center justify-between px-6 py-3.5 border-t border-line">
           <button
             onClick={() => setStep(s => s - 1)}
             disabled={step === 0}
-            className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 disabled:opacity-30 transition-colors flex items-center gap-1"
+            className="text-[12.5px] text-t2 hover:text-t1 disabled:opacity-30 transition-colors"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-            Back
+            ← Back
           </button>
-
           {isLast ? (
-            <button onClick={onClose} className="btn-primary text-sm px-5">
-              Start researching
-            </button>
+            <button onClick={onClose} className="btn-primary text-xs">Start writing</button>
           ) : (
-            <button
-              onClick={() => setStep(s => s + 1)}
-              className="btn-primary text-sm px-5 flex items-center gap-1"
-            >
-              Next
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
+            <button onClick={() => setStep(s => s + 1)} className="btn-primary text-xs">Next →</button>
           )}
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   )
 }

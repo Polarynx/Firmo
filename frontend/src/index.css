@@ -3,40 +3,51 @@
 @tailwind utilities;
 
 /* ══════════════════════════════════════════════════════════════════════════
-   Theme tokens. The workspace is charcoal-first; the light theme is the same
-   room with the lamp on. Every surface below is referenced semantically
-   (bg-app, bg-panel, text-t2 …) so no component hard-codes a palette.
+   Theme tokens.
+
+   The workspace is obsidian-first, built as a depth hierarchy rather than a
+   flat black: the canvas sits furthest back, panels lift off it, and floating
+   cards lift off those. Every surface below is referenced semantically
+   (bg-app, bg-panel, text-t2 …) so no component hard-codes a palette, and the
+   light theme is the same room with the lamp on.
    ══════════════════════════════════════════════════════════════════════════ */
 :root {
-  --c-app:    250 249 246;   /* paper-50   */
-  --c-panel:  255 255 255;
-  --c-raised: 243 241 234;   /* paper-100  */
+  --c-app:    250 249 246;   /* paper-50    — base canvas   */
+  --c-panel:  255 255 255;   /* side panels                 */
+  --c-raised: 244 242 236;   /* cards, hover                */
   --c-sheet:  255 255 255;
-  --c-line:   224 220 208;
-  --c-edge:   201 196 182;
+  --c-line:   226 222 211;
+  --c-edge:   199 194 180;
   --c-t1:      23  32  28;
   --c-t2:      92 102  98;
-  --c-t3:     143 152 147;
+  --c-t3:     140 149 144;
 
-  --accent:      45 106  79; /* #2D6A4F pine, light theme */
-  --accent-soft: 27  67  50; /* #1B4332 */
-  --glow: rgba(45, 106, 79, 0.10);
+  /* Translucent stroke: ink on paper, white on obsidian. */
+  --hair: 0 0 0;
+
+  --accent:      4 120  87;  /* #047857 emerald-700, light theme */
+  --accent-soft: 6  95  70;  /* #065F46 */
+  --glow: rgba(4, 120, 87, 0.07);
+  --mesh: rgba(4, 120, 87, 0.09);
 }
 
 .dark {
-  --c-app:      8  11  14;   /* #080B0E — deepest charcoal, the canvas base   */
-  --c-panel:   15  20  25;   /* #0F1419 — elevation 1, glass panels           */
-  --c-raised:  22  28  34;   /* #161C22 — elevation 2, hover and active       */
-  --c-sheet:   15  20  25;   /* surfaces that still need to read as a surface */
-  --c-line:    30  38  46;
-  --c-edge:    42  52  61;
-  --c-t1:     241 245 249;   /* #F1F5F9 */
-  --c-t2:     148 163 184;   /* #94A3B8 */
-  --c-t3:     100 116 139;
+  --c-app:      8   9  12;   /* #08090C — base canvas, deepest layer          */
+  --c-panel:   13  14  20;   /* #0D0E14 — side panels, elevation 1            */
+  --c-raised:  20  23  34;   /* #141722 — floating cards, elevation 2         */
+  --c-sheet:   13  14  20;
+  --c-line:    30  32  41;   /* reads as white/8 composited on the panel      */
+  --c-edge:    51  55  66;   /* reads as white/16                             */
+  --c-t1:     237 240 245;
+  --c-t2:     148 156 173;
+  --c-t3:     104 112 130;
 
-  --accent:      82 183 136; /* #52B788 */
-  --accent-soft: 45 106  79; /* #2D6A4F */
-  --glow: rgba(82, 183, 136, 0.09);
+  --hair: 255 255 255;
+
+  --accent:      52 211 153; /* #34D399 mint, survives on obsidian */
+  --accent-soft: 16 185 129; /* #10B981 */
+  --glow: rgba(16, 185, 129, 0.07);
+  --mesh: rgba(16, 185, 129, 0.10);
 }
 
 @layer base {
@@ -66,36 +77,43 @@
   ::selection {
     background: rgb(var(--accent) / 0.25);
   }
+  /* One visible keyboard ring for the whole workspace. Components that style
+     their own focus state opt out with `focus-visible:outline-none`. */
+  :focus-visible {
+    outline: 2px solid rgb(var(--accent) / 0.65);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
 }
 
 @layer components {
   .btn-primary {
-    @apply px-3.5 py-2 rounded-md bg-brand-600 hover:bg-brand-500 active:scale-[.98]
+    @apply px-3.5 py-2 rounded-lg bg-brand-600 hover:bg-brand-500 active:scale-[.98]
       text-white font-medium text-sm
-      transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-brand-500/60
-      disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100;
+      transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed
+      disabled:active:scale-100;
   }
   .dark .btn-primary {
-    @apply bg-brand-600 hover:bg-brand-500 text-white;
+    @apply bg-brand-500 hover:bg-brand-400 text-obsidian-base;
+    box-shadow: 0 0 0 1px rgb(255 255 255 / 0.06) inset, 0 6px 18px -8px rgb(16 185 129 / 0.7);
   }
   .btn-ghost {
-    @apply px-3 py-1.5 rounded-md border border-line
+    @apply px-3 py-1.5 rounded-lg border border-hair/10
       bg-raised/60 text-t2 font-medium text-xs
-      hover:border-brand-500/70 hover:text-t1
-      transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-brand-500/40
-      disabled:opacity-40 disabled:cursor-not-allowed;
+      hover:border-hair/20 hover:text-t1 hover:bg-raised
+      transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed;
   }
 
   .card {
-    @apply bg-panel/80 border border-line rounded-lg;
+    @apply bg-panel/70 border border-hair/[0.08] rounded-xl;
   }
   .card-hover {
-    @apply transition-colors duration-200 hover:bg-raised/70 hover:border-edge;
+    @apply transition-all duration-200 hover:bg-raised/80 hover:border-hair/[0.14];
   }
 
   /* Small-caps mono label: the section-heading voice of the whole workspace */
   .eyebrow {
-    @apply font-mono text-[9.5px] font-medium uppercase tracking-[0.18em] text-t3;
+    @apply font-mono text-[9.5px] font-medium uppercase tracking-[0.2em] text-t3;
   }
 
   /* DOIs, citations, call numbers: anything that should read as a record */
@@ -112,7 +130,7 @@
   }
 
   .skeleton {
-    @apply rounded bg-line/60;
+    @apply rounded bg-hair/[0.06];
     animation: shimmer 1.4s infinite linear;
     background-image: linear-gradient(
       90deg,
@@ -126,22 +144,31 @@
     background-image: linear-gradient(
       90deg,
       transparent 0%,
-      rgba(255, 255, 255, 0.05) 50%,
+      rgba(255, 255, 255, 0.06) 50%,
       transparent 100%
     );
   }
 
-  /* The omni-bar HUD: heavier blur and a deeper shadow than a panel, because
-     it genuinely floats over the document rather than sitting beside it. */
-  .hud {
+  /* ── The command dock ────────────────────────────────────────────────────
+     Detached from the viewport edge and suspended over the document. Heavier
+     blur and a deeper shadow than any panel, because it genuinely floats. */
+  .dock {
     border-radius: 1rem;
-    border: 1px solid rgb(var(--c-line) / 0.85);
-    background: rgb(var(--c-app) / 0.85);
-    backdrop-filter: blur(40px) saturate(170%);
-    -webkit-backdrop-filter: blur(40px) saturate(170%);
+    border: 1px solid rgb(var(--hair) / 0.10);
+    background: rgb(var(--c-panel) / 0.82);
+    backdrop-filter: blur(40px) saturate(180%);
+    -webkit-backdrop-filter: blur(40px) saturate(180%);
     box-shadow:
-      0 1px 0 0 rgb(var(--accent) / 0.12) inset,
-      0 25px 50px -12px rgba(0, 0, 0, 0.7);
+      0 1px 0 0 rgb(var(--hair) / 0.07) inset,
+      0 24px 60px -18px rgba(0, 0, 0, 0.75);
+    transition: border-color 0.25s ease, box-shadow 0.25s ease;
+  }
+  .dock:focus-within {
+    border-color: rgb(var(--accent) / 0.40);
+    box-shadow:
+      0 1px 0 0 rgb(var(--hair) / 0.07) inset,
+      0 0 25px rgb(var(--accent) / 0.15),
+      0 24px 60px -18px rgba(0, 0, 0, 0.75);
   }
 
   /* Frosted panel: the command palette and floating popovers.
@@ -149,13 +176,97 @@
      page scrolls underneath, so the fill stays high and the blur does the
      depth work rather than the legibility work. */
   .glass {
-    @apply border border-line rounded-xl;
+    @apply border border-hair/10 rounded-xl;
     background: rgb(var(--c-panel) / 0.94);
     backdrop-filter: blur(24px) saturate(160%);
     -webkit-backdrop-filter: blur(24px) saturate(160%);
     box-shadow:
-      0 1px 0 0 rgb(var(--accent) / 0.12) inset,
-      0 24px 60px -20px rgba(0, 0, 0, 0.55);
+      0 1px 0 0 rgb(var(--hair) / 0.06) inset,
+      0 24px 60px -20px rgba(0, 0, 0, 0.6);
+  }
+
+  /* A near-transparent surface that still reads as a surface. Used for empty
+     states, where a dashed box would read as a broken upload field. */
+  .glass-quiet {
+    @apply border border-hair/10 rounded-2xl;
+    background: rgb(var(--hair) / 0.02);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  /* ── Tactile keycap ──────────────────────────────────────────────────────
+     Shortcut hints are physical keys, not text. The bottom border does the
+     work: it reads as the key's edge catching light from above. */
+  .keycap {
+    @apply inline-flex items-center justify-center rounded-md
+      font-mono text-[10px] font-medium leading-none text-t2
+      px-1.5 py-1 bg-raised border border-hair/10;
+    border-bottom-width: 2px;
+    border-bottom-color: rgb(var(--hair) / 0.16);
+    box-shadow: 0 1px 0 0 rgb(var(--hair) / 0.06) inset;
+    min-width: 1.55rem;
+  }
+
+  /* ── Status pill ─────────────────────────────────────────────────────────
+     Every top-bar control is a pill: it reads as a setting you can change,
+     not a label printed on the chrome. */
+  .pill {
+    @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1
+      bg-panel/70 border border-hair/10 text-[11px] font-medium text-t2
+      transition-colors duration-150;
+  }
+  button.pill:hover {
+    @apply text-t1 border-hair/20 bg-raised/80;
+  }
+
+  /* Live LED. The ping ring is a sibling so the solid core stays legible. */
+  .led {
+    @apply relative flex h-2 w-2 shrink-0;
+  }
+  .led-core {
+    @apply relative inline-flex h-2 w-2 rounded-full;
+    background: rgb(var(--accent));
+  }
+  .led-ping {
+    @apply absolute inline-flex h-full w-full rounded-full;
+    background: rgb(var(--accent));
+    animation: ledPing 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
+
+  /* ── Match confidence ────────────────────────────────────────────────────
+     How well a source matched the topic, as a measurable quantity rather
+     than an adjective. The bar carries the value; the number confirms it. */
+  .confidence-track {
+    @apply relative h-1 w-full rounded-full overflow-hidden bg-hair/[0.08];
+  }
+  .confidence-fill {
+    @apply absolute inset-y-0 left-0 rounded-full;
+    transform-origin: left center;
+    background: linear-gradient(90deg, rgb(var(--accent-soft)), rgb(var(--accent)));
+    box-shadow: 0 0 8px rgb(var(--accent) / 0.5);
+  }
+
+  /* ── The mark ────────────────────────────────────────────────────────────
+     A serif F set into an emerald plate. Written as real CSS rather than
+     Tailwind gradient utilities: `from-*`/`to-*` do not resolve in this
+     build, and every other gradient in the workspace is hand-written anyway. */
+  .emblem {
+    @apply grid place-items-center h-[26px] w-[26px] rounded-lg
+      font-display font-bold text-[15px] leading-none;
+    background: linear-gradient(135deg, rgb(var(--accent)), rgb(var(--accent-soft)));
+    color: rgb(var(--c-app));
+    box-shadow: 0 0 20px rgb(var(--accent) / 0.28);
+  }
+  :root:not(.dark) .emblem {
+    /* On paper the plate is the dark object, so the letter reverses out. */
+    color: #ffffff;
+  }
+
+  /* Publisher badge: the database a record came from, as a stamped mark. */
+  .stamp {
+    @apply inline-flex items-center justify-center h-[18px] min-w-[18px] px-1
+      rounded font-mono text-[9px] font-semibold uppercase tracking-[0.06em]
+      bg-hair/[0.06] text-t2 border border-hair/[0.08];
   }
 }
 
@@ -193,10 +304,31 @@
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }
+
+  /* Light moving across clipped text. Reserved for a single accent word —
+     it is the one animated piece of typography in the product. */
+  .shimmer-text {
+    background-image: linear-gradient(
+      100deg,
+      rgb(var(--accent-soft)) 0%,
+      rgb(var(--accent)) 25%,
+      rgb(var(--c-t1)) 45%,
+      rgb(var(--accent)) 65%,
+      rgb(var(--accent-soft)) 100%
+    );
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    animation: shimmerText 6s linear infinite;
+  }
 }
 
-/* ── Ambient light: a slow pine glow behind the workspace, so the charcoal
-   never reads as flat black. Inert, purely atmospheric. ─────────────────── */
+/* ── Ambient mesh ───────────────────────────────────────────────────────────
+   A low-opacity emerald gradient behind the workspace, breathing slowly. It
+   keeps the obsidian from reading as flat black and signals that the
+   workspace is live and listening. Inert, purely atmospheric. */
 .ambient {
   position: absolute;
   inset: 0;
@@ -209,22 +341,22 @@
   content: '';
   position: absolute;
   border-radius: 50%;
-  filter: blur(90px);
+  filter: blur(100px);
+  background: var(--mesh);
+  animation: meshDrift 11s ease-in-out infinite;
 }
 .ambient::before {
-  width: 640px;
-  height: 640px;
-  top: -280px;
-  left: -160px;
-  background: var(--glow);
+  width: 680px;
+  height: 680px;
+  top: -300px;
+  left: -180px;
 }
 .ambient::after {
-  width: 520px;
-  height: 520px;
-  bottom: -260px;
-  right: -120px;
-  background: var(--glow);
-  opacity: 0.7;
+  width: 560px;
+  height: 560px;
+  bottom: -280px;
+  right: -140px;
+  animation-delay: -5.5s;
 }
 
 /* ── Progress ───────────────────────────────────────────────────────────────
@@ -296,13 +428,13 @@
 }
 .mark-amber   { background-color: rgba(245, 158, 11, 0.15); box-shadow: inset 0 -2px 0 #FBBF24; }
 .mark-red     { background-color: rgba(239, 68, 68, 0.15);  box-shadow: inset 0 -2px 0 #F87171; }
-.mark-green   { background-color: rgba(34, 197, 94, 0.15);  box-shadow: inset 0 -2px 0 #4ADE80; }
+.mark-green   { background-color: rgba(16, 185, 129, 0.16); box-shadow: inset 0 -2px 0 #34D399; }
 .mark-dotted  { box-shadow: inset 0 -1px 0 rgba(148, 163, 184, 0.45); }
 .mark-pending { background-color: rgba(148, 163, 184, 0.10); }
 
 .mark-amber:hover  { background-color: rgba(245, 158, 11, 0.26); }
 .mark-red:hover    { background-color: rgba(239, 68, 68, 0.26); }
-.mark-green:hover  { background-color: rgba(34, 197, 94, 0.26); }
+.mark-green:hover  { background-color: rgba(16, 185, 129, 0.28); }
 .mark-dotted:hover { background-color: rgba(148, 163, 184, 0.10); }
 
 .mark-claim.is-selected {
@@ -337,9 +469,18 @@
   border-radius: 5px;
   color: rgb(var(--c-t1));
   background: rgb(var(--c-panel) / 0.96);
-  border: 1px solid rgb(var(--c-edge));
+  border: 1px solid rgb(var(--hair) / 0.14);
   box-shadow: 0 8px 20px -6px rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(12px);
+}
+
+/* The live LED's expanding ring. Declared here rather than leaning on
+   Tailwind's `ping`, whose keyframes are only emitted when the utility class
+   itself appears in the markup. */
+@keyframes ledPing {
+  0%   { transform: scale(1);    opacity: 0.65; }
+  75%  { transform: scale(2.4);  opacity: 0; }
+  100% { transform: scale(2.4);  opacity: 0; }
 }
 
 /* The caret trailing a text reveal. */
@@ -358,13 +499,31 @@
   50%      { opacity: 0; }
 }
 
+/* Citation-graph nodes in the sources empty state: a small network drawing
+   itself, which is what the panel is about to fill with. */
+.node-pulse { animation: nodePulse 3.4s ease-in-out infinite; }
+.edge-draw {
+  stroke-dasharray: 120;
+  animation: edgeDraw 3.6s ease-out forwards;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .edge-progress,
   .edge-progress::before,
+  .ambient::before,
+  .ambient::after,
   .skeleton,
   .stream-caret,
+  .shimmer-text,
+  .led-ping,
+  .node-pulse,
+  .edge-draw,
   .animate-fadeInUp,
   .animate-pulseDot {
     animation: none !important;
+  }
+  .shimmer-text {
+    /* The gradient still reads; only the sweep stops. */
+    background-position: 25% 50%;
   }
 }

@@ -5,8 +5,9 @@ import { useWorkspaceStore } from '../../stores/useWorkspaceStore'
 import { useResearchStore } from '../../stores/useResearchStore'
 import { useAnnotationStore } from '../../stores/useAnnotationStore'
 import { useUIStore } from '../../stores/useUIStore'
+import { useAuthStore } from '../../stores/useAuthStore'
 import { CITATION_STYLES, SPRING } from '../../lib/constants'
-import { IconButton } from '../ui/primitives'
+import { IconButton, IconCluster, LED } from '../ui/primitives'
 
 // The masthead: which paper you are working on, what style it is being
 // formatted in, and what Firmo is doing right now.
@@ -44,6 +45,10 @@ export default function TopBar() {
   const sidebarOpen = useUIStore(s => s.sidebarOpen)
   const setMobileSidebar = useUIStore(s => s.setMobileSidebar)
 
+  const setShowAuth = useUIStore(s => s.setShowAuth)
+  const user = useAuthStore(s => s.user)
+  const signOut = useAuthStore(s => s.signOut)
+
   const citationStyle = useWorkspaceStore(s => s.citationStyle)
   const setCitationStyle = useWorkspaceStore(s => s.setCitationStyle)
   const activeMode = useWorkspaceStore(s => s.activeMode)
@@ -52,6 +57,19 @@ export default function TopBar() {
   const [name, setName] = useState('')
   const [styleMenu, setStyleMenu] = useState(false)
   const styleRef = useRef(null)
+  const [accountMenu, setAccountMenu] = useState(false)
+  const accountRef = useRef(null)
+
+  // Same self-dismissal as the style menu: the workspace-wide handler only
+  // closes the store-backed menus.
+  useEffect(() => {
+    if (!accountMenu) return
+    function onDown(e) {
+      if (!accountRef.current?.contains(e.target)) setAccountMenu(false)
+    }
+    window.addEventListener('mousedown', onDown)
+    return () => window.removeEventListener('mousedown', onDown)
+  }, [accountMenu])
 
   // The workspace-wide outside-click handler only closes the store-backed
   // menus, so this one dismisses itself.
@@ -74,32 +92,38 @@ export default function TopBar() {
   }
 
   return (
-    <header className="relative z-30 shrink-0 h-12 flex items-center justify-between gap-3
-      px-3 sm:px-4 border-b border-line bg-panel/80 backdrop-blur-xl">
+    <header className="relative z-30 shrink-0 h-[52px] flex items-center justify-between gap-3
+      px-3 sm:px-4 border-b border-hair/[0.07] bg-panel/70 backdrop-blur-2xl">
 
-      <div className="flex items-center gap-3 min-w-0">
+      <div className="flex items-center gap-2.5 min-w-0">
         <button
           onClick={() => { setDoc(''); clearDraft() }}
           title="New document"
-          className="font-display font-bold text-lg tracking-tight text-t1 hover:opacity-70 transition-opacity shrink-0"
+          className="group flex items-center gap-2 shrink-0 hover:opacity-80 transition-opacity"
         >
-          Firmo
+          {/* The mark: a serif F set into an emerald plate. Small enough to
+              read as a favicon, which is where it also lives. */}
+          <span className="emblem">F</span>
+          <span className="font-display font-bold text-[17px] tracking-tight text-t1 hidden sm:block">
+            Firmo
+          </span>
         </button>
 
-        <span className="text-line select-none">/</span>
+        <span className="text-t3/40 select-none text-sm">/</span>
 
         {/* Project switcher */}
         <div className="relative min-w-0">
           <button
             onClick={() => setShowProjects(!showProjects)}
-            className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[12.5px] font-medium
-              text-t2 hover:text-t1 hover:bg-raised transition-colors min-w-0"
+            className="pill max-w-full"
           >
-            <span className="truncate max-w-[36vw] sm:max-w-[240px]">
+            <span className="truncate max-w-[34vw] sm:max-w-[220px]">
               {active ? active.name : 'No paper yet'}
             </span>
             {active && (
-              <span className="font-mono text-[10px] text-t3 shrink-0">{active.sources.length}</span>
+              <span className="font-mono text-[10px] text-t3 tabular-nums shrink-0">
+                {active.sources.length}
+              </span>
             )}
             <span className="text-t3 text-[9px] shrink-0">▾</span>
           </button>
@@ -111,7 +135,7 @@ export default function TopBar() {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -6, scale: 0.98 }}
                 transition={SPRING}
-                className="absolute left-0 top-10 z-40 glass p-1.5 flex flex-col gap-0.5 w-[280px]"
+                className="absolute left-0 top-9 z-40 glass p-1.5 flex flex-col gap-0.5 w-[280px]"
               >
                 {projects.length === 0 && (
                   <p className="px-2.5 py-2 text-[11px] text-t3 leading-relaxed">
@@ -181,17 +205,16 @@ export default function TopBar() {
         </div>
       </div>
 
-      <div className="flex items-center gap-1.5 shrink-0">
+      <div className="flex items-center gap-2 shrink-0">
 
         {/* Active citation style: everything Firmo formats answers to this. */}
         <div ref={styleRef} className="relative hidden sm:block">
           <button
             onClick={() => setStyleMenu(m => !m)}
             title="Citation style"
-            className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-medium
-              text-t2 hover:text-t1 hover:bg-raised transition-colors"
+            className="pill"
           >
-            <span className="font-mono text-[10px] text-brand-500">
+            <span className="font-mono text-[10px] text-brand-600 dark:text-signal">
               {CITATION_STYLES.find(s => s.key === citationStyle)?.label || 'APA 7'}
             </span>
             <span className="text-t3 text-[9px]">▾</span>
@@ -209,7 +232,7 @@ export default function TopBar() {
                   <button
                     key={s.key}
                     onClick={() => { setCitationStyle(s.key); setStyleMenu(false) }}
-                    className={`text-left text-[11.5px] px-2.5 py-1.5 rounded transition-colors ${
+                    className={`text-left text-[11.5px] px-2.5 py-1.5 rounded-lg transition-colors ${
                       s.key === citationStyle
                         ? 'bg-raised text-t1'
                         : 'text-t2 hover:bg-raised/70 hover:text-t1'
@@ -223,21 +246,70 @@ export default function TopBar() {
           </AnimatePresence>
         </div>
 
-        {/* System status: what Firmo is doing right now, always visible. */}
-        <div
+        {/* System status: what Firmo is doing right now, always visible. The
+            LED only pings while work is actually running, so a live indicator
+            never becomes background noise. */}
+        <span
           title={STATUS_COPY[activeMode] || 'Ready'}
-          className="hidden md:flex items-center gap-1.5 px-2 py-1 rounded-md"
+          className="pill hidden md:inline-flex"
         >
-          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-            activeMode === 'idle' ? 'bg-t3' : 'bg-brand-500 animate-pulseDot'
-          }`} />
-          <span className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-t3">
+          <LED live={activeMode !== 'idle'} />
+          <span className="font-mono text-[9.5px] uppercase tracking-[0.16em] text-t3">
             {STATUS_COPY[activeMode] || 'Ready'}
           </span>
-        </div>
+        </span>
 
-        <span className="w-px h-4 bg-line mx-0.5" aria-hidden="true" />
+        {/* Account. Signed out, this is the only place Firmo asks for anything,
+            and it says what the account is actually for. */}
+        {user ? (
+          <div className="relative" ref={accountRef}>
+            <button
+              onClick={() => setAccountMenu(m => !m)}
+              title={user.email}
+              className="pill"
+            >
+              <span className="grid place-items-center h-4 w-4 rounded-full bg-brand-500/20
+                text-brand-600 dark:text-signal font-mono text-[9px] font-semibold">
+                {(user.name || user.email)[0].toUpperCase()}
+              </span>
+              <span className="hidden sm:inline max-w-[110px] truncate">
+                {user.name || user.email.split('@')[0]}
+              </span>
+            </button>
+            <AnimatePresence>
+              {accountMenu && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                  transition={SPRING}
+                  className="absolute right-0 top-9 z-40 glass p-1.5 flex flex-col gap-0.5 w-[236px]"
+                >
+                  <div className="px-2.5 py-2 flex flex-col gap-0.5">
+                    <span className="eyebrow">Signed in</span>
+                    <span className="text-[12px] text-t1 truncate">{user.email}</span>
+                    <span className="text-[10.5px] text-t3">
+                      Your papers sync to every device you sign in on.
+                    </span>
+                  </div>
+                  <span className="h-px bg-hair/10 my-0.5" aria-hidden="true" />
+                  <button
+                    onClick={() => { setAccountMenu(false); signOut() }}
+                    className="text-left text-[12px] px-2.5 py-1.5 rounded-lg text-t2 hover:bg-raised hover:text-t1 transition-colors"
+                  >
+                    Sign out
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        ) : (
+          <button onClick={() => setShowAuth(true)} className="pill">
+            Sign in
+          </button>
+        )}
 
+        <IconCluster>
         {/* Search history */}
         <div className="relative">
           <IconButton label="Recent searches" active={showHistory} onClick={() => setShowHistory(!showHistory)}>
@@ -315,6 +387,7 @@ export default function TopBar() {
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
           </svg>
         </IconButton>
+        </IconCluster>
       </div>
     </header>
   )

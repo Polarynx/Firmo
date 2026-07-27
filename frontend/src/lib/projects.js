@@ -2,8 +2,27 @@
 
 const KEY = 'firmo_projects_v1'
 
+/**
+ * One canonical spelling of a DOI. Mirrors normalize_doi in sources.py — the
+ * two have to agree, because the backend decides what is a duplicate during a
+ * search and this decides what is already saved to the project.
+ *
+ * The same paper arrives from different databases as a resolver URL, with a
+ * `doi:` prefix, in mixed case, or — for older APA records — with a doubled
+ * slash. Compared raw, those read as different papers and the same study lands
+ * on the works-cited page twice.
+ */
+export function normalizeDoi(doi) {
+  if (!doi) return null
+  let d = String(doi).trim()
+  d = d.replace(/^(https?:\/\/(dx\.)?doi\.org\/|doi:)\s*/i, '')
+  d = d.trim().replace(/[.,;:)\]}>'"]+$/, '')
+  d = d.replace(/(?<=\/)\/+/g, '').toLowerCase()
+  return d.startsWith('10.') ? d : null
+}
+
 export function paperId(paper) {
-  return paper.doi || paper.url || (paper.title || '').slice(0, 60)
+  return normalizeDoi(paper.doi) || paper.url || (paper.title || '').slice(0, 60)
 }
 
 function makeId() {

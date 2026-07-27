@@ -1,0 +1,110 @@
+{
+  "_about": [
+    "A relevance benchmark for Firmo's search.",
+    "",
+    "Each case is a topic a student might actually type, paired with papers a",
+    "human judged squarely on-topic for it. Those papers are the ground truth: a",
+    "run scores by how many of them Firmo surfaces, and how high.",
+    "",
+    "Every DOI here was resolved against CrossRef before being added. That check",
+    "matters more than it sounds: a first draft of this file was written from",
+    "memory and a third of the DOIs were wrong, one of them pointing at an",
+    "entirely different paper. A benchmark with bad ground truth is worse than no",
+    "benchmark, because it reports confident nonsense. Verify before adding.",
+    "",
+    "Fields:",
+    "  must_find         DOIs of papers a good search has to return.",
+    "  must_find_titles  Titles, for papers with no CrossRef DOI. arXiv registers",
+    "                    with DataCite, so an arXiv-only paper can never be matched",
+    "                    by DOI and would otherwise be scored as a permanent miss.",
+    "  off_topic_terms   Words that signal the wrong sense of an ambiguous query.",
+    "                    Counted separately because that failure ('armed conflict'",
+    "                    for 'high-conflict divorce') is the one semantic ranking",
+    "                    was introduced to fix.",
+    "",
+    "This set is small and honest about it: a regression net that catches a",
+    "ranking change quietly breaking humanities coverage, not a published",
+    "benchmark. Grow it whenever a real query returns something wrong."
+  ],
+  "cases": [
+    {
+      "id": "divorce-children",
+      "query": "how high conflict divorce affects children",
+      "discipline": "psychology",
+      "must_find": [
+        "10.1037/0893-3200.15.3.355",
+        "10.1111/j.1741-3729.2003.00352.x"
+      ],
+      "off_topic_terms": ["armed conflict", "civil war", "combatant", "insurgency"]
+    },
+    {
+      "id": "remote-work",
+      "query": "does remote work reduce productivity",
+      "discipline": "economics",
+      "must_find": [
+        "10.1093/qje/qju032",
+        "10.3386/w28731"
+      ],
+      "off_topic_terms": ["remote sensing", "teleoperation", "remote surgery"]
+    },
+    {
+      "id": "printing-press",
+      "query": "how did the printing press change literacy in europe",
+      "discipline": "history",
+      "must_find": [
+        "10.1093/qje/qjr035"
+      ],
+      "off_topic_terms": ["3d printing", "inkjet", "printed circuit"]
+    },
+    {
+      "id": "microplastics-water",
+      "query": "microplastics in drinking water",
+      "discipline": "environmental science",
+      "must_find": [
+        "10.1016/j.watres.2019.02.054",
+        "10.1021/acs.est.8b05297"
+      ],
+      "off_topic_terms": ["microfluidic", "plastic surgery"]
+    },
+    {
+      "id": "social-media-teens",
+      "query": "social media use and adolescent mental health",
+      "discipline": "psychology",
+      "must_find": [
+        "10.1177/2167702617723376",
+        "10.1038/s41562-018-0506-1"
+      ],
+      "off_topic_terms": ["social insects", "media studies theory"]
+    },
+    {
+      "id": "minimum-wage",
+      "query": "does raising the minimum wage cause unemployment",
+      "discipline": "economics",
+      "must_find": [
+        "10.1257/aer.90.5.1362",
+        "10.1093/qje/qjz014"
+      ],
+      "off_topic_terms": ["minimum spanning", "minimum variance", "wage of sin"]
+    },
+    {
+      "id": "school-uniforms",
+      "query": "school uniforms improve student behaviour",
+      "discipline": "education",
+      "must_find": [
+        "10.1080/00220679809597575",
+        "10.3386/w17337"
+      ],
+      "off_topic_terms": ["uniform distribution", "uniform convergence", "military uniform"]
+    },
+    {
+      "id": "attention-transformers",
+      "query": "transformer architecture for language models",
+      "discipline": "computer science",
+      "must_find": [],
+      "must_find_titles": [
+        "Attention Is All You Need"
+      ],
+      "off_topic_terms": ["electrical transformer", "power grid", "voltage", "transformer oil"]
+    }
+  ]
+}

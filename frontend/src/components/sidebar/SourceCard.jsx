@@ -4,11 +4,11 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { postJSON } from '../../lib/api'
 import { inTextCitationWithPage } from '../../lib/cite'
 import { paperId } from '../../lib/projects'
-import { SOURCE_LABELS, STANCE, SPRING } from '../../lib/constants'
+import { SOURCE_LABELS, SOURCE_STAMPS, STANCE, SPRING } from '../../lib/constants'
 import { renderMarkup, stripMarkup } from '../../lib/richText'
 import { useWorkspaceStore } from '../../stores/useWorkspaceStore'
 import { useSavedIds } from '../../stores/selectors'
-import { Chip } from '../ui/primitives'
+import { Chip, Confidence, Stamp } from '../ui/primitives'
 
 const ABSTRACT_LIMIT = 190
 
@@ -34,6 +34,14 @@ export default function SourceCard({ paper, index = 0, query = '', showStance = 
   const authors = Array.isArray(paper.authors) ? paper.authors : []
   const abstract = paper.abstract || ''
   const stance = STANCE[paper.stance]
+
+  // The ranker grades relevance out of 10 and that grade is what decides the
+  // tier, so it is the honest number to show. Raw embedding cosine is not:
+  // it sits near 0.8 for almost anything on the same subject and would read
+  // as "everything is an 80% match".
+  const match = typeof paper.relevanceScore === 'number'
+    ? Math.max(0, Math.min(1, paper.relevanceScore / 10))
+    : null
 
   function flash(key) {
     setCopied(key)
@@ -100,16 +108,22 @@ export default function SourceCard({ paper, index = 0, query = '', showStance = 
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ ...SPRING, delay: Math.min(index, 6) * 0.03 }}
-      className={`card p-3.5 flex flex-col gap-2.5 border-l-2 ${stance?.rail || 'border-l-line'}
-        hover:border-brand-500/40 transition-colors`}
+      whileHover={{ y: -2 }}
+      className={`card card-hover p-3.5 flex flex-col gap-2.5 border-l-2 ${stance?.rail || 'border-l-line'}
+        hover:shadow-card`}
     >
       {/* Call-number line */}
       <div className="flex items-center justify-between gap-2 record">
         <span className="flex items-center gap-2 min-w-0">
-          <span className="text-brand-500 dark:text-signal font-medium shrink-0">
+          <span className="text-brand-600 dark:text-signal font-medium shrink-0">
             Nº {String(index + 1).padStart(2, '0')}
           </span>
-          {paper.source && <span className="truncate">{SOURCE_LABELS[paper.source] || paper.source}</span>}
+          {paper.source && (
+            <Stamp
+              code={SOURCE_STAMPS[paper.source] || paper.source.slice(0, 4)}
+              title={SOURCE_LABELS[paper.source] || paper.source}
+            />
+          )}
           {paper.citationCount > 0 && (
             <span className="shrink-0">{paper.citationCount.toLocaleString()} cited</span>
           )}
@@ -148,9 +162,14 @@ export default function SourceCard({ paper, index = 0, query = '', showStance = 
         </p>
       )}
 
+      {/* How well this landed on the topic, on the ranker's own 10-point scale. */}
+      {match != null && !compact && (
+        <Confidence value={match} title={`Relevance ${paper.relevanceScore}/10`} />
+      )}
+
       {paper.doi && (
         <a href={`https://doi.org/${paper.doi}`} target="_blank" rel="noopener noreferrer"
-          className="record hover:text-brand-500 dark:hover:text-signal transition-colors truncate">
+          className="record hover:text-brand-600 dark:hover:text-signal transition-colors truncate">
           doi:{paper.doi}
         </a>
       )}

@@ -7,7 +7,7 @@ import { useResearchStore } from '../../stores/useResearchStore'
 import { useUIStore } from '../../stores/useUIStore'
 import { detectIntent, escapeRe, placeClaims, INTENT_COPY, MARK_CLASS } from '../../lib/claims'
 import { runIntent, cancelActive } from '../../lib/runIntent'
-import { SPRING, CLAIM_STATUS, CLAIM_ORDER } from '../../lib/constants'
+import { SPRING, CLAIM_STATUS, CLAIM_ORDER, EXAMPLE_TOPICS } from '../../lib/constants'
 import { Chip, EdgeProgress, StatusLine } from '../ui/primitives'
 
 import BriefBlock from './BriefBlock'
@@ -128,6 +128,11 @@ export default function DocumentCanvas() {
     acc[c.status] = (acc[c.status] || 0) + 1
     return acc
   }, {})
+
+  // Settled = asks nothing further of the student. Everything except the two
+  // colours that mean "go and do something about this", and the pass in flight.
+  const SETTLED = ['backed', 'cited', 'rewritten', 'fine', 'unchecked']
+  const settled = placed.filter(c => SETTLED.includes(c.status)).length
 
   const segments = useMemo(() => {
     if (!annotated) return null
@@ -261,17 +266,38 @@ export default function DocumentCanvas() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={SPRING}
-              className="flex flex-col gap-3 pt-6"
+              className="flex flex-col gap-4 pt-6"
             >
               <h1 className="font-display font-semibold text-[2.6rem] sm:text-[3.4rem] leading-[1.02] text-t1">
                 What are we<br />
-                <span className="display-italic text-brand-500">researching</span> today?
+                <span className="display-italic shimmer-text">researching</span> today?
               </h1>
               <p className="text-[15px] text-t2 leading-relaxed max-w-[46ch]">
-                Type a topic and Firmo searches fifteen databases. Paste a draft and it
+                Type a topic and Firmo searches sixteen databases. Paste a draft and it
                 marks every claim that needs backing. Paste a reference list and it checks
                 each entry against the publisher's record.
               </p>
+
+              {/* Three ways in, each a real query. Reading about the tool is
+                  slower than watching it run once. */}
+              <div className="flex flex-col gap-2 pt-1">
+                <span className="eyebrow">Try one</span>
+                <div className="flex flex-wrap gap-2">
+                  {EXAMPLE_TOPICS.map(topic => (
+                    <motion.button
+                      key={topic}
+                      whileHover={{ y: -1 }}
+                      whileTap={{ scale: 0.98 }}
+                      transition={SPRING}
+                      onClick={() => { setDoc(topic); runIntent(topic, 'search') }}
+                      className="glass-quiet px-3 py-1.5 text-[12px] text-t2 hover:text-t1
+                        hover:border-hair/20 transition-colors text-left"
+                    >
+                      {topic}
+                    </motion.button>
+                  ))}
+                </div>
+              </div>
             </motion.div>
           )}
 
@@ -347,19 +373,38 @@ export default function DocumentCanvas() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
                 transition={SPRING}
-                className="flex items-center justify-between gap-3 flex-wrap"
+                className="flex flex-col gap-3"
               >
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {CLAIM_ORDER.filter(k => counts[k]).map(k => (
-                    <Chip key={k} tone={CLAIM_STATUS[k]} count={counts[k]} />
-                  ))}
+                {/* How far through the draft is. A claim is settled once it no
+                    longer asks anything of the student, so a paragraph of pure
+                    opinion counts as done rather than as unfinished work. */}
+                <div className="flex items-center gap-3">
+                  <div className="confidence-track flex-1">
+                    <motion.div
+                      className="confidence-fill w-full"
+                      initial={{ scaleX: 0 }}
+                      animate={{ scaleX: settled / placed.length }}
+                      transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+                    />
+                  </div>
+                  <span className="font-mono text-[10px] text-t2 tabular-nums shrink-0">
+                    {settled} of {placed.length} settled
+                  </span>
                 </div>
-                <button
-                  onClick={() => setSidebarView('argument_map')}
-                  className="text-[11px] font-medium text-brand-500 dark:text-signal hover:opacity-75 transition-opacity"
-                >
-                  Review the argument →
-                </button>
+
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {CLAIM_ORDER.filter(k => counts[k]).map(k => (
+                      <Chip key={k} tone={CLAIM_STATUS[k]} count={counts[k]} />
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => setSidebarView('argument_map')}
+                    className="text-[11px] font-medium text-brand-600 dark:text-signal hover:opacity-75 transition-opacity"
+                  >
+                    Review the argument →
+                  </button>
+                </div>
               </motion.div>
             )}
           </AnimatePresence>

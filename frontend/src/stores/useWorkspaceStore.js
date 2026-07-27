@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { postJSON } from '../lib/api'
 import { loadStore, saveStore, newProject, paperId } from '../lib/projects'
+import { scheduleSync, syncNow } from '../lib/sync'
 
 // The document and the project it belongs to. Everything the student is
 // building — the prose, the saved sources, the bibliography that assembles
@@ -9,10 +10,13 @@ import { loadStore, saveStore, newProject, paperId } from '../lib/projects'
 const initial = loadStore()
 
 let bibTimer = null
+let docTimer = null
 
 export const useWorkspaceStore = create((set, get) => ({
   // ── the document ──
-  doc: '',
+  // Opens on whatever was last being written, rather than a blank page that
+  // makes it look like the work is gone.
+  doc: initial.projects.find(p => p.id === initial.activeId)?.doc || '',
   activeMode: 'idle', // 'idle' | 'searching' | 'draft_checking' | 'citation_auditing'
 
   // ── projects ──
@@ -24,7 +28,13 @@ export const useWorkspaceStore = create((set, get) => ({
   bibEntries: [],
   bibLoading: false,
 
-  setDoc: doc => set({ doc }),
+  setDoc: doc => {
+    set({ doc })
+    // Save the writing itself, not just the sources around it. Debounced hard,
+    // because this fires on every keystroke.
+    clearTimeout(docTimer)
+    docTimer = setTimeout(() => get().persist(), 900)
+  },
   setMode: activeMode => set({ activeMode }),
 
   /** Replace a character span in the document, e.g. inserting a citation. */
@@ -46,9 +56,51 @@ export const useWorkspaceStore = create((set, get) => ({
 
   savedIds: () => new Set((get().activeProject()?.sources || []).map(paperId)),
 
-  persist: () => {
+  /**
+   * Write to disk and, if signed in, to the server.
+   *
+   * The active project absorbs the current draft first: `doc` used to live
+   * only in memory, so reloading the page or switching papers threw the
+   * writing away. Touching `updatedAt` here is what lets the server decide
+   * which device's copy is newer.
+   */
+  persist: ({ touch = true } = {}) => {
     const { projects, activeProjectId } = get()
-    saveStore({ projects, activeId: activeProjectId })
+    const next = projects.map(p =>
+      p.id === activeProjectId
+        ? { ...p, doc: get().doc, ...(touch ? { updatedAt: Date.now() } : {}) }
+        : p
+    )
+    set({ projects: next })
+    saveStore({ projects: next, activeId: activeProjectId })
+    scheduleSync(() => get().projects, merged => get().applyMerged(merged))
+  },
+
+  /**
+   * Adopt the server's merged view. Projects deleted on another device arrive
+   * as tombstones and are dropped here, so a delete does not come back.
+   */
+  applyMerged: merged => {
+    const live = merged.filter(p => !p.deleted)
+    const { activeProjectId } = get()
+    const stillThere = live.some(p => p.id === activeProjectId)
+    const activeId = stillThere ? activeProjectId : (live[0]?.id || null)
+
+    set({ projects: live, activeProjectId: activeId })
+    saveStore({ projects: live, activeId })
+
+    // If the active paper's draft changed on another device, show that copy —
+    // but never overwrite unsaved words the student is looking at right now.
+    const active = live.find(p => p.id === activeId)
+    if (active && !get().doc.trim() && active.doc) set({ doc: active.doc })
+
+    get().refreshBibliography()
+  },
+
+  /** Pull everything down after signing in, then re-render from the merge. */
+  pullFromServer: async () => {
+    const merged = await syncNow(get().projects)
+    if (merged) get().applyMerged(merged)
   },
 
   /** Save or unsave a source. Creates a starter project on the first save. */
@@ -76,6 +128,42 @@ export const useWorkspaceStore = create((set, get) => ({
     get().refreshBibliography()
   },
 
+  /**
+   * Add many sources at once, from an import. Anything already in the project
+   * is skipped rather than duplicated, and the count of each is returned so
+   * the student is told what actually happened to their file.
+   */
+  addSources: (papers, savedQuery = 'Imported') => {
+    let { projects, activeProjectId } = get()
+    if (projects.length === 0) {
+      const p = newProject('My paper')
+      projects = [p]
+      activeProjectId = p.id
+    }
+    if (!activeProjectId || !projects.some(p => p.id === activeProjectId)) {
+      activeProjectId = projects[0].id
+    }
+    const existing = new Set(
+      (projects.find(p => p.id === activeProjectId)?.sources || []).map(paperId)
+    )
+    const fresh = []
+    for (const paper of papers) {
+      const id = paperId(paper)
+      if (existing.has(id)) continue
+      existing.add(id)
+      fresh.push({ ...paper, savedAt: Date.now(), savedQuery })
+    }
+    if (fresh.length > 0) {
+      projects = projects.map(p =>
+        p.id === activeProjectId ? { ...p, sources: [...fresh, ...p.sources] } : p
+      )
+      set({ projects, activeProjectId })
+      get().persist()
+      get().refreshBibliography()
+    }
+    return { added: fresh.length, skipped: papers.length - fresh.length }
+  },
+
   createProject: name => {
     const p = newProject(name)
     set(s => ({ projects: [p, ...s.projects], activeProjectId: p.id }))
@@ -84,17 +172,31 @@ export const useWorkspaceStore = create((set, get) => ({
   },
 
   deleteProject: id => {
-    set(s => {
-      const projects = s.projects.filter(p => p.id !== id)
-      return { projects, activeProjectId: projects[0]?.id || null }
-    })
-    get().persist()
+    const removed = get().projects.find(p => p.id === id)
+    const projects = get().projects.filter(p => p.id !== id)
+    const activeId = projects[0]?.id || null
+    set({ projects, activeProjectId: activeId, doc: projects.find(p => p.id === activeId)?.doc || '' })
+    saveStore({ projects, activeId })
+
+    // The server has to be told this was deleted, not merely absent: a plain
+    // push of "everything I have" would look like this device never knew about
+    // the project, and the next sync from another device would resurrect it.
+    if (removed) {
+      const tombstone = { ...removed, deleted: true, updatedAt: Date.now() }
+      syncNow([...projects, tombstone]).then(merged => {
+        if (merged) get().applyMerged(merged)
+      })
+    }
     get().refreshBibliography()
   },
 
   selectProject: id => {
-    set({ activeProjectId: id })
+    // Park the current draft with the project it belongs to before swapping,
+    // or switching papers to check a source would lose what was on screen.
     get().persist()
+    const next = get().projects.find(p => p.id === id)
+    set({ activeProjectId: id, doc: next?.doc || '' })
+    saveStore({ projects: get().projects, activeId: id })
     get().refreshBibliography()
   },
 

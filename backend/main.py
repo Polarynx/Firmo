@@ -4,20 +4,27 @@ import math
 import os
 import re
 import traceback
+from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from io import BytesIO
 from typing import Optional
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 load_dotenv()
 
-from llm import chat, chat_json, chat_stream, embed_texts
+import auth
+import db
+
+from llm import REASONING_MODEL, chat, chat_json, chat_stream, embed_texts
 from schemas import (
     AnnotatedBibRequest,
     ArgumentReviewRequest,
@@ -25,8 +32,13 @@ from schemas import (
     CheckCitationsRequest,
     CitationRequest,
     DigDeepRequest,
+    DocxExportRequest,
     DraftCheckRequest,
     ExportRequest,
+    ImportRequest,
+    LoginRequest,
+    RegisterRequest,
+    SyncRequest,
     MoreSourcesRequest,
     OutlineRequest,
     PaperChatRequest,
@@ -37,7 +49,9 @@ from schemas import (
 from sources import (
     ALL_CONNECTORS,
     FAST_CONNECTORS,
+    attach_safety_flags,
     build_query_terms,
+    clean_paper,
     enrich_unpaywall,
     get_client,
     paper_id,
@@ -47,6 +61,8 @@ from sources import (
     search_all,
 )
 import citations
+import docx_export
+import importers
 
 
 def _get_client_ip(request: Request) -> str:
@@ -56,22 +72,69 @@ def _get_client_ip(request: Request) -> str:
     return request.client.host
 
 
+def _rate_key(request: Request) -> str:
+    """Who a daily allowance belongs to.
+
+    Keying on the raw IP meant one campus library, behind one NAT, shared a
+    single student's allowance and locked out the whole building. So the
+    allowance follows the person: their account if they are signed in, then the
+    workspace id their browser generated, and only then the IP.
+
+    The workspace id is client-supplied and therefore trivially resettable.
+    That is deliberate — this is a fair-use allowance, not an access control,
+    and the per-IP ceiling below is what actually bounds abuse.
+    """
+    # Read the token here rather than relying on the auth dependency having
+    # run: the limiter wraps the endpoint, and tying the allowance to
+    # dependency-resolution order would be a silent way to key on the wrong
+    # thing the moment that order changes.
+    header = request.headers.get("Authorization") or ""
+    if header.lower().startswith("bearer "):
+        user_id = auth.read_token(header[7:].strip())
+        if user_id:
+            return f"user:{user_id}"
+
+    client = (request.headers.get("X-Firmo-Client") or "").strip()
+    if 8 <= len(client) <= 64:
+        return f"client:{client}"
+    return f"ip:{_get_client_ip(request)}"
+
+
 if not os.getenv("MISTRAL_API_KEY"):
     print("[startup WARN] MISTRAL_API_KEY is not set, so briefs and ranking will use "
           "fallbacks. Check backend/.env and restart the server.")
 
-limiter = Limiter(key_func=_get_client_ip)
+limiter = Limiter(key_func=_rate_key)
 
-app = FastAPI(title="Firmo API", version="2.0")
+# A whole building shares one address, so the network-wide ceiling has to be
+# far above one person's allowance while still bounding a runaway script.
+IP_CEILING = os.getenv("FIRMO_IP_CEILING", "600/day")
+PER_USER_LIMIT = os.getenv("FIRMO_DAILY_LIMIT", "50/day")
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    # Creating the tables at boot keeps a fresh clone or a new Render instance
+    # working with no migration step to remember.
+    await db.init_db()
+    print(f"[startup] database: {'sqlite (local file)' if db.IS_SQLITE else 'postgres'}")
+    yield
+
+
+app = FastAPI(title="Firmo API", version="3.0", lifespan=lifespan)
 app.state.limiter = limiter
 
 
 @app.exception_handler(RateLimitExceeded)
 async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
-    return JSONResponse(
-        status_code=429,
-        content={"detail": "You've reached the daily limit of 50 searches. Come back tomorrow!"},
+    # Two ceilings can trip here, and they need different advice: one is the
+    # student's own allowance, the other is everyone sharing their network.
+    shared = _rate_key(request).startswith("ip:")
+    detail = (
+        "This network has run through its shared daily allowance. Sign in to get your own."
+        if shared
+        else f"You've used your {PER_USER_LIMIT.split('/')[0]} runs for today. They reset tomorrow."
     )
+    return JSONResponse(status_code=429, content={"detail": detail})
 
 
 _allowed_origins = [
@@ -418,7 +481,8 @@ def _ev(event: str, **payload) -> str:
 
 
 @app.post("/api/research")
-@limiter.limit("50/day")
+@limiter.limit(PER_USER_LIMIT)
+@limiter.limit(IP_CEILING, key_func=_get_client_ip)
 async def research(req: ResearchRequest, request: Request):
     query = req.query.strip()
     if not query:
@@ -903,7 +967,10 @@ async def _coach_evaluate(claim: dict, saved_cands: list[dict]) -> dict:
             fresh=_numbered_block(fresh, "(no sources were retrieved for this claim)"),
         )
         try:
-            parsed = await chat_json(prompt, max_tokens=420, temperature=0)
+            # Whether a source actually backs a claim is the judgement the
+            # whole draft coach rests on, so it goes to the reasoning model.
+            parsed = await chat_json(prompt, max_tokens=420, temperature=0,
+                                     model=REASONING_MODEL)
         except Exception:
             traceback.print_exc()
             # Honest failure state: the frontend shows it grey, never a fake verdict.
@@ -953,7 +1020,8 @@ async def _coach_evaluate(claim: dict, saved_cands: list[dict]) -> dict:
 
 
 @app.post("/api/draft-check")
-@limiter.limit("50/day")
+@limiter.limit(PER_USER_LIMIT)
+@limiter.limit(IP_CEILING, key_func=_get_client_ip)
 async def draft_check(req: DraftCheckRequest, request: Request):
     text = req.text.rstrip()
     if not text.strip():
@@ -1046,6 +1114,219 @@ async def export_bibliography(req: ExportRequest):
     content = "\n\n".join(e["citation"] for e in entries)
     return {"format": "text", "style": style, "filename": "works-cited.txt",
             "content": content, "entries": entries}
+
+
+# ── Accounts ──────────────────────────────────────────────────────────────────
+# Everything below is what turns Firmo from a browser tab into a place a
+# student's work lives: an account, and their projects following them to
+# whatever machine they open next.
+
+def _auth_payload(user: db.User) -> dict:
+    return {
+        "token": auth.create_token(user.id),
+        "user": {"id": user.id, "email": user.email, "name": user.name},
+    }
+
+
+@app.post("/api/auth/register")
+@limiter.limit("20/hour", key_func=_get_client_ip)
+async def register(req: RegisterRequest, request: Request,
+                   session: AsyncSession = Depends(auth.get_session)):
+    email = (req.email or "").strip().lower()
+    if not auth.valid_email(email):
+        raise HTTPException(status_code=400, detail="That doesn't look like an email address.")
+    if not (auth.MIN_PASSWORD <= len(req.password or "") <= auth.MAX_PASSWORD):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Passwords need at least {auth.MIN_PASSWORD} characters.",
+        )
+    if await db.get_user_by_email(session, email):
+        # No enumeration guard here on purpose: sign-up has to tell you the
+        # address is taken or you cannot proceed, and "an account exists" is
+        # already discoverable from the sign-in form.
+        raise HTTPException(status_code=409, detail="There's already an account with that email.")
+
+    user = db.User(
+        id=db.new_id(),
+        email=email,
+        password_hash=auth.hash_password(req.password),
+        name=(req.name or "").strip()[:120],
+    )
+    session.add(user)
+    await session.commit()
+    return _auth_payload(user)
+
+
+@app.post("/api/auth/login")
+@limiter.limit("30/hour", key_func=_get_client_ip)
+async def login(req: LoginRequest, request: Request,
+                session: AsyncSession = Depends(auth.get_session)):
+    user = await db.get_user_by_email(session, (req.email or "").strip().lower())
+    # One message for both "no such account" and "wrong password", so the form
+    # cannot be used to find out which addresses are registered.
+    if not user or not auth.verify_password(req.password or "", user.password_hash):
+        raise HTTPException(status_code=401, detail="That email and password don't match.")
+    return _auth_payload(user)
+
+
+@app.get("/api/auth/me")
+async def me(user: db.User = Depends(auth.require_user)):
+    return {"user": {"id": user.id, "email": user.email, "name": user.name}}
+
+
+def _ms(dt) -> int:
+    if not dt:
+        return 0
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return int(dt.timestamp() * 1000)
+
+
+def _from_ms(value: int):
+    return datetime.fromtimestamp(max(0, value) / 1000, tz=timezone.utc)
+
+
+def _project_out(p: db.Project) -> dict:
+    return {
+        "id": p.id,
+        "name": p.name,
+        "data": p.data or {},
+        "updated_at": _ms(p.updated_at),
+        "deleted": p.deleted_at is not None,
+    }
+
+
+@app.post("/api/sync")
+async def sync(req: SyncRequest, user: db.User = Depends(auth.require_user),
+               session: AsyncSession = Depends(auth.get_session)):
+    """Two-way sync of a student's projects, last write wins per project.
+
+    The client sends everything it has with the timestamp of its last local
+    edit; the server keeps whichever side is newer and hands back the merged
+    set. Per-project rather than per-field, which means two devices editing the
+    *same* paper at the same moment will lose the older set of edits — an
+    honest limit, and the reason a project carries its whole contents in one
+    blob. Editing different papers on different devices merges cleanly, which
+    is the case students actually hit.
+    """
+    rows = (await session.execute(
+        select(db.Project).where(db.Project.user_id == user.id)
+    )).scalars().all()
+    by_id = {p.id: p for p in rows}
+
+    for incoming in req.projects:
+        if not incoming.id:
+            continue
+        stamp = _from_ms(incoming.updated_at) if incoming.updated_at else db.now()
+        existing = by_id.get(incoming.id)
+
+        if existing is None:
+            project = db.Project(
+                id=incoming.id[:64],
+                user_id=user.id,
+                name=(incoming.name or "Untitled paper")[:200],
+                data=incoming.data or {},
+                updated_at=stamp,
+                deleted_at=stamp if incoming.deleted else None,
+            )
+            session.add(project)
+            by_id[project.id] = project
+            continue
+
+        # Older than what the server already has: the other device wins, and
+        # this one will be corrected by the response.
+        existing_stamp = existing.updated_at
+        if existing_stamp and existing_stamp.tzinfo is None:
+            existing_stamp = existing_stamp.replace(tzinfo=timezone.utc)
+        if existing_stamp and stamp <= existing_stamp:
+            continue
+
+        existing.name = (incoming.name or "Untitled paper")[:200]
+        existing.data = incoming.data or {}
+        existing.updated_at = stamp
+        existing.deleted_at = stamp if incoming.deleted else None
+
+    await session.commit()
+
+    merged = (await session.execute(
+        select(db.Project)
+        .where(db.Project.user_id == user.id)
+        .order_by(db.Project.updated_at.desc())
+    )).scalars().all()
+    return {"projects": [_project_out(p) for p in merged], "server_time": _ms(db.now())}
+
+
+@app.post("/api/export-docx")
+async def export_docx(req: DocxExportRequest):
+    """The draft and its works-cited page, as a Word document.
+
+    Sent as a file rather than JSON because this is the artefact that gets
+    handed in; the browser should offer to save it, not render it.
+    """
+    text = req.text or ""
+    if not text.strip() and not req.papers:
+        raise HTTPException(status_code=400, detail="nothing to export")
+
+    style = (req.style or "apa").lower()
+    if style not in citations.CSL_STYLES:
+        raise HTTPException(status_code=400, detail=f"style must be one of: {', '.join(citations.CSL_STYLES)}")
+
+    entries = await citations.format_bibliography(req.papers[:100], style) if req.papers else []
+    data = await asyncio.to_thread(
+        docx_export.build_docx, text, entries, style, req.title.strip(), req.author.strip()
+    )
+
+    filename = f"{docx_export.safe_filename(req.title or 'paper')}.docx"
+    return Response(
+        content=data,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            # The browser cannot read the filename off a cross-origin response
+            # without this, and Firmo's API is on a different host in production.
+            "Access-Control-Expose-Headers": "Content-Disposition",
+        },
+    )
+
+
+@app.post("/api/import")
+async def import_sources(req: ImportRequest):
+    """Turn a Zotero export, a .bib file, or a list of DOIs into saved sources.
+
+    Deduplicated against itself so a library exported twice does not double up.
+    Papers come back in the same shape a search returns, so the works-cited
+    page, the draft coach, and the chat treat imported sources as first-class.
+    """
+    text = (req.text or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="nothing to import")
+    if len(text) > 2_000_000:
+        raise HTTPException(status_code=400, detail="that file is too large to import at once")
+
+    result = await importers.import_text(text, req.format)
+    if result["format"] == "unknown":
+        raise HTTPException(
+            status_code=400,
+            detail="That doesn't look like a RIS, BibTeX, or DOI list. Export from your "
+                   "reference manager as RIS or BibTeX, or paste DOIs one per line.",
+        )
+
+    seen: set[str] = set()
+    unique = []
+    for p in result["papers"]:
+        pid = paper_id(p)
+        if pid in seen:
+            continue
+        seen.add(pid)
+        unique.append(attach_safety_flags(clean_paper(p)))
+
+    return {
+        "format": result["format"],
+        "papers": unique,
+        "count": len(unique),
+        "duplicates": len(result["papers"]) - len(unique),
+        "unresolved": result.get("unresolved", []),
+    }
 
 
 # ── Annotated bibliography ────────────────────────────────────────────────────
@@ -1196,7 +1477,10 @@ async def argument_review(req: ArgumentReviewRequest):
     paras = [p.strip() for p in re.split(r"\n+", text[:MAX_DRAFT_CHARS]) if p.strip()]
     numbered = "\n\n".join(f"[{i + 1}] {p}" for i, p in enumerate(paras))
     try:
-        parsed = await chat_json(ARGUMENT_PROMPT.format(text=numbered), max_tokens=1200, temperature=0)
+        # Reading a draft's structure is the other judgement job, not a
+        # transformation, so it shares the reasoning model with claim verdicts.
+        parsed = await chat_json(ARGUMENT_PROMPT.format(text=numbered), max_tokens=1200,
+                                 temperature=0, model=REASONING_MODEL)
     except Exception:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail="Failed to review the argument")
@@ -1362,7 +1646,8 @@ async def _verify_entry(entry: dict) -> dict:
 
 
 @app.post("/api/check-citations")
-@limiter.limit("50/day")
+@limiter.limit(PER_USER_LIMIT)
+@limiter.limit(IP_CEILING, key_func=_get_client_ip)
 async def check_citations(req: CheckCitationsRequest, request: Request):
     text = req.text.strip()
     if not text:

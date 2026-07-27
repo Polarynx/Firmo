@@ -101,7 +101,7 @@ export function detectIntent(text) {
 export const INTENT_COPY = {
   search: {
     verb: 'Find sources',
-    hint: 'Reads like a topic. Firmo will search 15 databases and brief you.',
+    hint: 'Reads like a topic. Firmo will search 16 databases and brief you.',
   },
   draft: {
     verb: 'Check draft',

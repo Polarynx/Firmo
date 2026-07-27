@@ -17,7 +17,16 @@ from openai import (
 
 load_dotenv()
 
-MODEL = "mistral-small-latest"
+# Two models, routed by how hard the job actually is.
+#
+# MODEL does the volume work: planning search queries, formatting, summarising
+# an abstract, splitting a bibliography. REASONING_MODEL is reserved for the
+# judgements a student would otherwise take to a tutor — whether a claim is
+# genuinely backed by a source, and whether a paragraph serves the thesis.
+# Those two jobs set the quality ceiling of the whole product, so they do not
+# share a budget with query planning.
+MODEL = os.getenv("FIRMO_MODEL", "mistral-small-latest")
+REASONING_MODEL = os.getenv("FIRMO_REASONING_MODEL", "mistral-large-latest")
 EMBED_MODEL = "mistral-embed"
 
 _client = AsyncOpenAI(
@@ -29,9 +38,36 @@ _client = AsyncOpenAI(
 # retryable and must never surface to the student as a degraded experience.
 _RETRYABLE = (RateLimitError, InternalServerError, APIConnectionError, APITimeoutError)
 
+# Set once, the first time the account turns out not to serve the reasoning
+# model, so every later call skips straight to the model that does work instead
+# of paying for a failed request first.
+_reasoning_unavailable = False
+
+
+def _resolve(model: str | None) -> str:
+    """Pick the model to send, honouring a known-bad reasoning model."""
+    if model in (None, MODEL):
+        return MODEL
+    if model == REASONING_MODEL and _reasoning_unavailable:
+        return MODEL
+    return model
+
+
+def _is_missing_model(exc: Exception) -> bool:
+    """True when the account cannot serve this model, as opposed to a blip.
+
+    Plans differ in which models they expose, so a deployment whose key has no
+    access to the large model must degrade to the small one rather than fail
+    the student's draft check.
+    """
+    status = getattr(exc, "status_code", None)
+    if status in (403, 404):
+        return True
+    return "model" in str(exc).lower() and status == 400
+
 
 async def chat(prompt: str, max_tokens: int = 512, json_mode: bool = False,
-               temperature: float | None = None) -> str:
+               temperature: float | None = None, model: str | None = None) -> str:
     kwargs = {}
     if json_mode:
         kwargs["response_format"] = {"type": "json_object"}
@@ -39,9 +75,10 @@ async def chat(prompt: str, max_tokens: int = 512, json_mode: bool = False,
         kwargs["temperature"] = temperature
     last_exc = None
     for attempt in range(3):
+        use = _resolve(model)
         try:
             msg = await _client.chat.completions.create(
-                model=MODEL,
+                model=use,
                 max_tokens=max_tokens,
                 messages=[{"role": "user", "content": prompt}],
                 **kwargs,
@@ -57,6 +94,16 @@ async def chat(prompt: str, max_tokens: int = 512, json_mode: bool = False,
             last_exc = e
             print(f"[llm retry {attempt + 1}/3] {type(e).__name__}: {e}")
             await asyncio.sleep(1.5 * (2 ** attempt) + random.random())
+        except Exception as e:
+            # The account may not carry the reasoning model. Fall back to the
+            # small one for this call and every call after it, rather than
+            # failing work the student is waiting on.
+            global _reasoning_unavailable
+            if use == REASONING_MODEL and not _reasoning_unavailable and _is_missing_model(e):
+                _reasoning_unavailable = True
+                print(f"[llm] {REASONING_MODEL} unavailable on this key; using {MODEL}. {e}")
+                continue
+            raise
     raise last_exc
 
 
@@ -141,15 +188,18 @@ def parse_json(raw: str):
 
 
 async def chat_json(prompt: str, max_tokens: int = 512,
-                    temperature: float | None = None) -> dict:
+                    temperature: float | None = None, model: str | None = None) -> dict:
     """One LLM call, JSON mode, parsed. Raises on failure so callers own their fallback.
 
     A parse failure usually means the response was truncated at max_tokens, so
     the single retry runs with double the budget. Pass temperature=0 for tasks that
-    must be deterministic (e.g. claim verdicts that should not flip between runs).
+    must be deterministic (e.g. claim verdicts that should not flip between runs),
+    and model=REASONING_MODEL for judgements rather than transformations.
     """
     try:
-        return parse_json(await chat(prompt, max_tokens=max_tokens, json_mode=True, temperature=temperature))
+        return parse_json(await chat(prompt, max_tokens=max_tokens, json_mode=True,
+                                     temperature=temperature, model=model))
     except json.JSONDecodeError as e:
         print(f"[chat_json parse retry] {e}")
-        return parse_json(await chat(prompt, max_tokens=max_tokens * 2, json_mode=True, temperature=temperature))
+        return parse_json(await chat(prompt, max_tokens=max_tokens * 2, json_mode=True,
+                                     temperature=temperature, model=model))

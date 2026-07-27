@@ -17,6 +17,37 @@ export const SOURCE_LABELS = {
   doab: 'DOAB (Open Access Books)',
 }
 
+// Short catalogue codes for the badge on a source card. A student scanning a
+// column of results reads the stamp before the title, so it has to be the
+// database's own shorthand rather than an invented abbreviation.
+export const SOURCE_STAMPS = {
+  semantic_scholar: 'S2',
+  crossref: 'CR',
+  pubmed: 'PM',
+  openalex: 'OA',
+  europe_pmc: 'EPM',
+  base: 'BASE',
+  arxiv: 'ARX',
+  doaj: 'DOAJ',
+  eric: 'ERIC',
+  zenodo: 'ZEN',
+  plos: 'PLOS',
+  hal: 'HAL',
+  inspire_hep: 'HEP',
+  fatcat: 'IAS',
+  openaire: 'OAIR',
+  doab: 'DOAB',
+}
+
+// Offered on the empty canvas. Each one exercises a different corner of the
+// index — health, humanities, policy — so the first search a student runs
+// shows the breadth rather than one discipline.
+export const EXAMPLE_TOPICS = [
+  'does remote work reduce productivity',
+  'microplastics in drinking water',
+  'how did the printing press change literacy',
+]
+
 export const CITATION_STYLES = [
   { key: 'apa', label: 'APA 7' },
   { key: 'mla', label: 'MLA 9' },

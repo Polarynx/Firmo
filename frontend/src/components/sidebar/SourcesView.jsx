@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
 
 import { useResearchStore, selectFiltered } from '../../stores/useResearchStore'
+import { useUIStore } from '../../stores/useUIStore'
 import { useSavedSources } from '../../stores/selectors'
 import { paperId } from '../../lib/projects'
 import { SOURCE_LABELS, STANCE, SPRING } from '../../lib/constants'
@@ -18,6 +19,7 @@ export default function SourcesView() {
   } = store
 
   const savedSources = useSavedSources()
+  const setShowImport = useUIStore(s => s.setShowImport)
 
   // A plain topic has no sides to take, so stance chips would carry no meaning.
   const isArgument = inputType === 'thesis' || inputType === 'question'
@@ -39,7 +41,15 @@ export default function SourcesView() {
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <span className="eyebrow">Saved to this paper</span>
-            <span className="record">{savedSources.length}</span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowImport(true)}
+                className="text-[11px] font-medium text-brand-600 dark:text-signal hover:opacity-75 transition-opacity"
+              >
+                Import
+              </button>
+              <span className="record">{savedSources.length}</span>
+            </div>
           </div>
           {savedSources.map((p, i) => (
             <SourceCard key={paperId(p) || i} paper={p} index={i} showStance={false} compact />
@@ -48,9 +58,17 @@ export default function SourcesView() {
       )
     }
     return (
-      <EmptyNote title="No sources yet">
-        Type a topic into the document and press ⌘↵. Everything Firmo finds lands here, and
-        every source you bookmark joins your works-cited page.
+      <EmptyNote
+        title="Nothing found yet"
+        graphic
+        action={
+          <button onClick={() => setShowImport(true)} className="btn-ghost mt-1">
+            Import what you already have
+          </button>
+        }
+      >
+        Type a topic into the document and press ⌘↵. Firmo searches sixteen databases at
+        once; every source you bookmark joins your works-cited page.
       </EmptyNote>
     )
   }
@@ -169,10 +187,10 @@ export default function SourcesView() {
           {core.length > 0 && !relatedOpen && (
             <button
               onClick={() => store.setShowRelated(true)}
-              className="w-full rounded-lg border border-dashed border-line hover:border-brand-500/50
+              className="w-full glass-quiet hover:border-hair/20 hover:bg-hair/[0.04]
                 px-4 py-3 flex flex-col items-center gap-0.5 transition-colors group"
             >
-              <span className="text-xs font-medium text-t1 group-hover:text-brand-500 dark:group-hover:text-signal transition-colors">
+              <span className="text-xs font-medium text-t1 group-hover:text-brand-600 dark:group-hover:text-signal transition-colors">
                 Show {related.length} related & background
               </span>
               <span className="text-[10.5px] text-t3">Tied to your topic but not fully about it</span>

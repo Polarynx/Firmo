@@ -29,6 +29,8 @@ export const useUIStore = create((set, get) => ({
   showWalkthrough: false,
   showHistory: false,
   showProjects: false,
+  showImport: false,
+  showAuth: false,
 
   setSidebarView: sidebarView => set({ sidebarView }),
   toggleSidebar: () => set(s => ({ sidebarOpen: !s.sidebarOpen })),
@@ -64,6 +66,8 @@ export const useUIStore = create((set, get) => ({
   setShowWalkthrough: showWalkthrough => set({ showWalkthrough }),
   setShowHistory: showHistory => set({ showHistory }),
   setShowProjects: showProjects => set({ showProjects }),
+  setShowImport: showImport => set({ showImport }),
+  setShowAuth: showAuth => set({ showAuth }),
 }))
 
 // Paint the theme before first render so there is no flash of the wrong one.

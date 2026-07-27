@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { useWorkspaceStore } from '../../stores/useWorkspaceStore'
 import { useSavedSources } from '../../stores/selectors'
 import { useAnnotationStore } from '../../stores/useAnnotationStore'
-import { postJSON } from '../../lib/api'
+import { downloadFile, postJSON } from '../../lib/api'
 import { paperId } from '../../lib/projects'
 import { CITATION_STYLES, SPRING } from '../../lib/constants'
 import { renderMarkup, stripMarkup } from '../../lib/richText'
@@ -30,6 +30,10 @@ export default function BibliographyBlock() {
   const styleLabel = CITATION_STYLES.find(s => s.key === style)?.label || style.toUpperCase()
   const entries = useWorkspaceStore(s => s.bibEntries)
   const loading = useWorkspaceStore(s => s.bibLoading)
+  const doc = useWorkspaceStore(s => s.doc)
+  const projectName = useWorkspaceStore(
+    s => s.projects.find(p => p.id === s.activeProjectId)?.name || ''
+  )
   const buildOutline = useAnnotationStore(s => s.buildOutline)
 
   const [copied, setCopied] = useState(false)
@@ -37,6 +41,8 @@ export default function BibliographyBlock() {
   const [annotations, setAnnotations] = useState(null)
   const [annotating, setAnnotating] = useState(false)
   const [annError, setAnnError] = useState('')
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState('')
 
   if (sources.length === 0) return null
 
@@ -51,15 +57,36 @@ export default function BibliographyBlock() {
 
   async function handleDownload(format) {
     setMenu(false)
+    setExportError('')
     if (format === 'text') {
       if (entries.length === 0) return
       download('works-cited.txt', entries.map(e => stripMarkup(e.citation)).join('\n\n'))
       return
     }
+    if (format === 'docx') {
+      setExporting(true)
+      try {
+        // The draft goes with it: this is the file that gets handed in, not a
+        // bibliography the student then has to paste into a second document.
+        await downloadFile('/api/export-docx', {
+          text: doc,
+          papers: sources,
+          style,
+          title: projectName,
+        }, 'paper.docx')
+      } catch (e) {
+        setExportError(e.message || "Couldn't build the document.")
+      } finally {
+        setExporting(false)
+      }
+      return
+    }
     try {
       const data = await postJSON('/api/export', { papers: sources, style, format })
       download(data.filename, data.content)
-    } catch {}
+    } catch (e) {
+      setExportError(e.message || "Couldn't build that file.")
+    }
   }
 
   async function annotate() {
@@ -99,7 +126,9 @@ export default function BibliographyBlock() {
           <span className="record">{styleLabel}</span>
 
           <div className="relative">
-            <button onClick={() => setMenu(m => !m)} className="btn-ghost">Export ▾</button>
+            <button onClick={() => setMenu(m => !m)} disabled={exporting} className="btn-ghost">
+              {exporting ? 'Building…' : 'Export ▾'}
+            </button>
             <AnimatePresence>
               {menu && (
                 <motion.div
@@ -107,11 +136,18 @@ export default function BibliographyBlock() {
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: -4, scale: 0.97 }}
                   transition={SPRING}
-                  className="absolute right-0 top-9 z-30 glass p-1 flex flex-col min-w-[168px]"
+                  className="absolute right-0 top-9 z-30 glass p-1 flex flex-col min-w-[210px]"
                 >
-                  <button onClick={() => handleDownload('text')} className="text-left text-xs px-2.5 py-1.5 rounded text-t2 hover:bg-raised hover:text-t1">Text (.txt)</button>
-                  <button onClick={() => handleDownload('bibtex')} className="text-left text-xs px-2.5 py-1.5 rounded text-t2 hover:bg-raised hover:text-t1">BibTeX (.bib)</button>
-                  <button onClick={() => handleDownload('ris')} className="text-left text-xs px-2.5 py-1.5 rounded text-t2 hover:bg-raised hover:text-t1">RIS for Zotero (.ris)</button>
+                  {/* The document that gets handed in comes first; the other
+                      three are for moving data somewhere else. */}
+                  <button onClick={() => handleDownload('docx')} className="text-left text-xs px-2.5 py-2 rounded-lg text-t1 hover:bg-raised flex flex-col gap-0.5">
+                    <span className="font-medium">Word document (.docx)</span>
+                    <span className="text-[10.5px] text-t3">Your draft plus the works-cited page</span>
+                  </button>
+                  <span className="my-1 h-px bg-hair/10" aria-hidden="true" />
+                  <button onClick={() => handleDownload('text')} className="text-left text-xs px-2.5 py-1.5 rounded-lg text-t2 hover:bg-raised hover:text-t1">Citations only (.txt)</button>
+                  <button onClick={() => handleDownload('bibtex')} className="text-left text-xs px-2.5 py-1.5 rounded-lg text-t2 hover:bg-raised hover:text-t1">BibTeX (.bib)</button>
+                  <button onClick={() => handleDownload('ris')} className="text-left text-xs px-2.5 py-1.5 rounded-lg text-t2 hover:bg-raised hover:text-t1">RIS for Zotero (.ris)</button>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -160,6 +196,7 @@ export default function BibliographyBlock() {
       </div>
 
       {annError && <p className="text-[11px] text-red-500">{annError}</p>}
+      {exportError && <p className="text-[11px] text-red-500">{exportError}</p>}
 
       {annotations && (
         <p className="text-[10px] text-t3">

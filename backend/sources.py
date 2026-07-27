@@ -963,11 +963,38 @@ def clean_text(text) -> str:
     return text
 
 
+def normalize_doi(doi) -> Optional[str]:
+    """One canonical spelling of a DOI, for comparing and for looking up.
+
+    The same paper arrives from different databases spelled differently: as a
+    resolver URL, with a `doi:` prefix, in mixed case, and — for a stretch of
+    older APA records — with a doubled slash, so CrossRef returns
+    `10.1037/0893-3200.15.3.355` while another index returns
+    `10.1037//0893-3200.15.3.355`.
+
+    Compared raw, those are two papers. That put the same study on a student's
+    works-cited page twice, and it hid genuine duplicates from the deduper
+    whenever the two records' titles also differed by a subtitle. DOIs are
+    case-insensitive by specification, so folding case is safe for resolution
+    as well as for comparison.
+    """
+    if not doi:
+        return None
+    d = str(doi).strip()
+    d = re.sub(r"^(?:https?://(?:dx\.)?doi\.org/|doi:)\s*", "", d, flags=re.I)
+    d = d.strip().rstrip(".,;:)]}>'\"")
+    # Collapse the doubled slash inside the suffix, never the one after the prefix.
+    d = re.sub(r"(?<=/)/+", "", d)
+    d = d.lower()
+    return d if d.startswith("10.") else None
+
+
 def clean_paper(paper: dict) -> dict:
     return {
         **paper,
         "title": clean_text(paper.get("title", "")),
         "abstract": clean_text(paper.get("abstract", "")),
+        "doi": normalize_doi(paper.get("doi")),
     }
 
 
@@ -1075,7 +1102,9 @@ def deduplicate(papers: list[dict]) -> list[dict]:
     seen_titles: set[str] = set()
     unique = []
     for p in papers:
-        doi = p.get("doi")
+        # Normalised, because the same DOI reaches us in several spellings and
+        # a raw compare lets the same paper through twice.
+        doi = normalize_doi(p.get("doi"))
         title_key = re.sub(r'\W+', '', (p.get("title") or "").lower())[:60]
         if doi and doi in seen_dois:
             continue
@@ -1090,7 +1119,7 @@ def deduplicate(papers: list[dict]) -> list[dict]:
 
 
 def paper_id(paper: dict) -> str:
-    return paper.get("doi") or paper.get("url") or (paper.get("title") or "")[:60]
+    return normalize_doi(paper.get("doi")) or paper.get("url") or (paper.get("title") or "")[:60]
 
 
 def process_papers(raw: list[dict], year_from: Optional[int] = None) -> list[dict]:

@@ -11,6 +11,8 @@ import DocumentCanvas from '../canvas/DocumentCanvas'
 import ContextSidebar from '../sidebar/ContextSidebar'
 import OmniBar from '../omnibar/OmniBar'
 import Walkthrough from '../Walkthrough'
+import ImportSheet from '../sidebar/ImportSheet'
+import AuthSheet from './AuthSheet'
 
 // ── The workspace ──────────────────────────────────────────────────────────
 // Three zones, one screen, no page ever reloads. The window itself never
@@ -24,6 +26,10 @@ export default function WorkspaceLayout() {
   const setShowWalkthrough = useUIStore(s => s.setShowWalkthrough)
   const setShowHistory = useUIStore(s => s.setShowHistory)
   const setShowProjects = useUIStore(s => s.setShowProjects)
+  const showImport = useUIStore(s => s.showImport)
+  const setShowImport = useUIStore(s => s.setShowImport)
+  const showAuth = useUIStore(s => s.showAuth)
+  const setShowAuth = useUIStore(s => s.setShowAuth)
 
   const setDoc = useWorkspaceStore(s => s.setDoc)
   const executeSearch = useResearchStore(s => s.executeSearch)
@@ -116,6 +122,11 @@ export default function WorkspaceLayout() {
             </motion.div>
           </motion.div>
         )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showImport && <ImportSheet key="import" open onClose={() => setShowImport(false)} />}
+        {showAuth && <AuthSheet key="auth" onClose={() => setShowAuth(false)} />}
       </AnimatePresence>
 
       {showWalkthrough && <Walkthrough onClose={() => setShowWalkthrough(false)} />}

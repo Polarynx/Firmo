@@ -1,7 +1,7 @@
 /** @type {import('tailwindcss').Config} */
 
 // Semantic surfaces resolve through CSS variables (see index.css) so one set of
-// markup renders both the charcoal workspace and the paper-light variant.
+// markup renders both the obsidian workspace and the paper-light variant.
 const themed = name => `rgb(var(--c-${name}) / <alpha-value>)`
 
 export default {
@@ -16,9 +16,9 @@ export default {
       },
       colors: {
         // ── Semantic workspace surfaces ──
-        app: themed('app'),        // window background
-        panel: themed('panel'),    // sidebar / omni-bar body
-        raised: themed('raised'),  // cards sitting on a panel
+        app: themed('app'),        // base canvas
+        panel: themed('panel'),    // side panels
+        raised: themed('raised'),  // floating cards, hover states
         sheet: themed('sheet'),    // the document page itself
         line: themed('line'),      // hairline borders
         edge: themed('edge'),      // stronger dividers
@@ -26,47 +26,59 @@ export default {
         t2: themed('t2'),          // secondary text
         t3: themed('t3'),          // faint / metadata text
 
-        // banker's-lamp pine green
+        // Translucent stroke colour. White on obsidian, ink on paper, so
+        // `border-hair/10` is a real 1px translucent border in both themes
+        // rather than a solid grey line that has to be tuned twice.
+        hair: 'rgb(var(--hair) / <alpha-value>)',
+
+        // Emerald: the signal colour. Pine at the dark end for the light
+        // theme, mint at the bright end so it survives on obsidian.
         brand: {
-          50:  '#f0f7f3',
-          100: '#dcede4',
-          200: '#b7dcc8',
-          300: '#95d5b2',
-          400: '#74c69d',  // vibrant badge text
-          500: '#52b788',  // vibrant accent
-          600: '#40916c',
-          700: '#2d6a4f',  // primary green
-          800: '#245741',
-          900: '#1b4332',  // subtle dark green
-          950: '#0d2818',
+          50:  '#ecfdf5',
+          100: '#d1fae5',
+          200: '#a7f3d0',
+          300: '#6ee7b7',
+          400: '#34d399',  // dark-theme accent
+          500: '#10b981',  // primary signal
+          600: '#059669',
+          700: '#047857',  // light-theme accent
+          800: '#065f46',
+          900: '#064e3b',
+          950: '#022c22',
         },
-        // positive / "verified" signal, brighter than pine so it reads on charcoal
-        signal: '#4ade80',
+        // brighter than brand-500 so "verified" still reads at 10px on #08090C
+        signal: '#34d399',
         // annotation rules, matched to the washes painted in index.css
         annot: {
           amber: '#fbbf24',
-          green: '#4ade80',
+          green: '#34d399',
           red:   '#f87171',
         },
 
         // warm paper neutrals (light theme surfaces)
         paper: {
           50:  '#faf9f6',
-          100: '#f3f1ea',
+          100: '#f4f2ec',
           200: '#e7e3d8',
         },
-        // deep charcoal (dark theme surfaces)
-        ink: {
-          700: '#26333f',
-          800: '#1c2833',
-          850: '#16202a',
-          900: '#121a21',
-          950: '#0b0f12',
+        // layered obsidian (dark theme surfaces)
+        obsidian: {
+          base:   '#08090c',
+          panel:  '#0d0e14',
+          raised: '#141722',
+          lift:   '#1b1f2c',
         },
         highlight: '#f5c84c',
       },
       letterSpacing: {
         tightest: '-0.03em',
+      },
+      boxShadow: {
+        // The command dock genuinely floats; it needs more than a panel shadow.
+        dock: '0 1px 0 0 rgb(255 255 255 / 0.06) inset, 0 24px 60px -18px rgb(0 0 0 / 0.75)',
+        keycap: '0 1px 0 0 rgb(255 255 255 / 0.06) inset, 0 1px 2px 0 rgb(0 0 0 / 0.4)',
+        glowEmerald: '0 0 25px rgb(16 185 129 / 0.15)',
+        card: '0 12px 32px -16px rgb(0 0 0 / 0.5)',
       },
       keyframes: {
         fadeInUp: {
@@ -77,6 +89,12 @@ export default {
           '0%':   { backgroundPosition: '-700px 0' },
           '100%': { backgroundPosition: '700px 0' },
         },
+        // Gradient sweep across clipped text. Slow: it should read as a
+        // material the light moves over, not as a marquee.
+        shimmerText: {
+          '0%':   { backgroundPosition: '0% 50%' },
+          '100%': { backgroundPosition: '200% 50%' },
+        },
         pulseDot: {
           '0%, 100%': { opacity: '0.35' },
           '50%':      { opacity: '1' },
@@ -86,16 +104,37 @@ export default {
           '0%':   { transform: 'translateX(-100%)' },
           '100%': { transform: 'translateX(100%)' },
         },
-        markIn: {
-          '0%':   { backgroundSize: '0% 100%' },
-          '100%': { backgroundSize: '100% 100%' },
+        // The ambient mesh behind the canvas breathes to signal AI readiness.
+        meshDrift: {
+          '0%, 100%': { opacity: '0.55', transform: 'translate3d(0,0,0) scale(1)' },
+          '50%':      { opacity: '0.9',  transform: 'translate3d(0,-2%,0) scale(1.06)' },
+        },
+        // Confidence bars fill from empty rather than appearing filled.
+        barGrow: {
+          '0%': { transform: 'scaleX(0)' },
+          '100%': { transform: 'scaleX(1)' },
+        },
+        // Citation-graph nodes in the empty state. Opacity only: `r` is an SVG
+        // presentation attribute with uneven CSS-animation support, and a
+        // transform on a <circle> would need its own transform-box.
+        nodePulse: {
+          '0%, 100%': { opacity: '0.25' },
+          '50%':      { opacity: '0.9' },
+        },
+        edgeDraw: {
+          '0%':   { strokeDashoffset: '120', opacity: '0' },
+          '35%':  { opacity: '0.7' },
+          '100%': { strokeDashoffset: '0', opacity: '0.18' },
         },
       },
       animation: {
         fadeInUp: 'fadeInUp 0.4s ease both',
         shimmer:  'shimmer 1.4s infinite linear',
+        shimmerText: 'shimmerText 6s linear infinite',
         pulseDot: 'pulseDot 1.2s ease-in-out infinite',
         edgeSweep: 'edgeSweep 1.5s ease-in-out infinite',
+        meshDrift: 'meshDrift 11s ease-in-out infinite',
+        barGrow: 'barGrow 0.7s cubic-bezier(0.16, 1, 0.3, 1) both',
       },
     },
   },

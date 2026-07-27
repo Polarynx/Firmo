@@ -12,5 +12,12 @@ backend/.env
 node_modules/
 frontend/dist/
 
+# Local database (the dev SQLite file; production uses DATABASE_URL)
+backend/firmo.db
+*.db-journal
+
+# Eval runs are machine-specific baselines, not shared state
+backend/eval/runs/
+
 # Misc
 .DS_Store

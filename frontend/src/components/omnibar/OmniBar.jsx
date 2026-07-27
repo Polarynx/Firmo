@@ -9,6 +9,7 @@ import { useResearchStore } from '../../stores/useResearchStore'
 import { streamNDJSON } from '../../lib/api'
 import { runIntent } from '../../lib/runIntent'
 import { CITATION_STYLES, SPRING } from '../../lib/constants'
+import { Keycap, LED } from '../ui/primitives'
 import PopoverCard from './PopoverCard'
 
 // ── Zone C ─────────────────────────────────────────────────────────────────
@@ -23,14 +24,40 @@ const STARTERS = [
   { label: "What's missing?", prompt: 'What is the weakest part of my evidence, and what should I search for next to fix it?' },
 ]
 
+// Each command carries its own glyph. Line icons rather than emoji: the
+// palette sits over a manuscript, and emoji would be the only thing on screen
+// with a colour Firmo did not choose.
+const ICON = {
+  find: 'M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z',
+  check: 'M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+  verify: 'M9 12.75L11.25 15 15 9.75M21 12c0 4.97-3.6 8.63-8.4 9.9a1.5 1.5 0 01-.75 0C7.05 20.63 3.45 16.97 3.45 12V6.3c0-.6.36-1.14.9-1.38l7.2-2.7a1.5 1.5 0 011.05 0l7.2 2.7c.54.24.9.78.9 1.38V12z',
+  outline: 'M3.75 6h.008v.008H3.75V6zm0 6h.008v.008H3.75V12zm0 6h.008v.008H3.75V18zM8.25 6h12M8.25 12h12M8.25 18h12',
+  import: 'M12 16.5V3m0 13.5l-4-4m4 4l4-4M3.75 16.5v2.25A2.25 2.25 0 006 21h12a2.25 2.25 0 002.25-2.25V16.5',
+  format: 'M4 6h16M4 12h10M4 18h13',
+  clear: 'M6 18L18 6M6 6l12 12',
+}
+
 const COMMANDS = [
-  { name: 'find',    arg: 'topic',  hint: 'Search 15 databases' },
+  { name: 'find',    arg: 'topic',  hint: 'Search 16 databases' },
   { name: 'check',   arg: '',       hint: 'Check the draft in your document' },
   { name: 'verify',  arg: '',       hint: 'Verify the reference list in your document' },
   { name: 'outline', arg: '',       hint: 'Plan the paper from your saved sources' },
+  { name: 'import',  arg: '',       hint: 'Bring in a RIS, BibTeX, or DOI list' },
   { name: 'format',  arg: 'style',  hint: 'Switch citation style' },
   { name: 'clear',   arg: '',       hint: 'Dismiss the floating cards' },
 ]
+
+function CommandIcon({ name }) {
+  return (
+    <span className="grid place-items-center h-[22px] w-[22px] shrink-0 rounded-md
+      bg-hair/[0.06] border border-hair/[0.08] text-brand-600 dark:text-signal">
+      <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+        strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d={ICON[name]} />
+      </svg>
+    </span>
+  )
+}
 
 function chatKey(id) { return `firmo_chat_${id}` }
 
@@ -48,6 +75,7 @@ export default function OmniBar() {
   const pushPopover = useUIStore(s => s.pushPopover)
   const updatePopover = useUIStore(s => s.updatePopover)
   const closeAllPopovers = useUIStore(s => s.closeAllPopovers)
+  const setShowImport = useUIStore(s => s.setShowImport)
 
   const doc = useWorkspaceStore(s => s.doc)
   const projectId = useWorkspaceStore(s => s.activeProjectId)
@@ -110,6 +138,9 @@ export default function OmniBar() {
         return true
       case 'outline':
         buildOutline(sources)
+        return true
+      case 'import':
+        setShowImport(true)
         return true
       case 'format': {
         const style = CITATION_STYLES.find(
@@ -215,19 +246,26 @@ export default function OmniBar() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 8 }}
                 transition={SPRING}
-                className="glass p-1.5 flex flex-col"
+                className="glass p-1.5 flex flex-col gap-0.5"
               >
-                {matches.map(c => (
+                {matches.map((c, i) => (
                   <button
                     key={c.name}
                     onClick={() => setValue(`/${c.name}${c.arg ? ' ' : ''}`)}
-                    className="flex items-center gap-3 px-2.5 py-1.5 rounded-md text-left
+                    className="group flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-left
                       hover:bg-raised transition-colors"
                   >
-                    <span className="font-mono text-[11px] text-brand-500 dark:text-signal shrink-0">
-                      /{c.name}{c.arg ? ` ${c.arg}` : ''}
+                    <CommandIcon name={c.name} />
+                    <span className="font-mono text-[11px] text-t1 shrink-0">
+                      /{c.name}
+                      {c.arg && <span className="text-t3"> {c.arg}</span>}
                     </span>
-                    <span className="text-[11px] text-t2 truncate">{c.hint}</span>
+                    <span className="text-[11px] text-t3 truncate flex-1">{c.hint}</span>
+                    {i === 0 && (
+                      <Keycap className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                        tab
+                      </Keycap>
+                    )}
                   </button>
                 ))}
               </motion.div>
@@ -259,15 +297,12 @@ export default function OmniBar() {
           </AnimatePresence>
           </div>
 
-          {/* The bar */}
-          <div
-            className={`hud flex items-center gap-2.5 px-3.5 py-2.5 transition-all duration-200 ${
-              focused ? 'ring-1 ring-brand-500/50' : ''
-            }`}
-          >
-            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-              busy ? 'bg-brand-500 dark:bg-signal animate-pulseDot' : 'bg-t3'
-            }`} />
+          {/* The dock. It hangs over the document rather than sitting on the
+              viewport edge, and lights its own border on focus. */}
+          <div className="dock flex items-center gap-2.5 pl-3.5 pr-2 py-2">
+            <span className="shrink-0 pl-0.5">
+              <LED live={busy} />
+            </span>
             <input
               ref={inputRef}
               value={value}
@@ -286,17 +321,24 @@ export default function OmniBar() {
                   ? 'Type / for commands…'
                   : `Ask your ${sources.length} source${sources.length === 1 ? '' : 's'}, or type / for commands…`
               }
-              className="flex-1 min-w-0 bg-transparent outline-none text-[13px] text-t1
-                placeholder:text-t3"
+              className="flex-1 min-w-0 bg-transparent outline-none focus-visible:outline-none
+                text-[13px] text-t1 placeholder:text-t3"
             />
-            <kbd className="hidden sm:block font-mono text-[10px] text-t3 border border-line
-              rounded px-1.5 py-0.5 shrink-0">⌘K</kbd>
+            {!value && (
+              <span className="hidden sm:flex items-center gap-1 shrink-0" aria-hidden="true">
+                <Keycap>⌘</Keycap>
+                <Keycap>K</Keycap>
+              </span>
+            )}
             <button
               onClick={() => ask(value)}
               disabled={!value.trim() || busy}
-              className="btn-primary text-xs py-1.5 px-3 shrink-0"
+              className="btn-primary text-xs py-1.5 px-3 shrink-0 flex items-center gap-2"
             >
-              {busy ? '…' : 'Ask'}
+              {busy ? 'Asking…' : 'Ask'}
+              {!busy && value.trim() && (
+                <span className="font-mono text-[10px] opacity-60">↵</span>
+              )}
             </button>
           </div>
 

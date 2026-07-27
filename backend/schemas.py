@@ -82,3 +82,47 @@ class AskSourcesRequest(BaseModel):
     question: str
     claim: str
     papers: list[dict]
+
+
+class RegisterRequest(BaseModel):
+    email: str
+    password: str
+    name: str = ""
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class SyncProject(BaseModel):
+    id: str
+    name: str = "Untitled paper"
+    # Sources, draft, and chat. Kept opaque here so the client can add to a
+    # project's contents without a schema change on both sides.
+    data: dict = {}
+    # Milliseconds since the epoch, from the client's clock: it is the only
+    # clock that knows when the student actually made the edit.
+    updated_at: int = 0
+    deleted: bool = False
+
+
+class SyncRequest(BaseModel):
+    projects: list[SyncProject] = []
+
+
+class ImportRequest(BaseModel):
+    text: str
+    # auto | ris | bibtex | doi. "auto" is what the UI sends; the explicit
+    # values exist so an uploaded .bib is not re-sniffed and mis-detected.
+    format: str = "auto"
+
+
+class DocxExportRequest(BaseModel):
+    # The draft itself, which may legitimately be empty when a student only
+    # wants the works-cited page.
+    text: str = ""
+    papers: list[dict] = []
+    style: str = "apa"
+    title: str = ""
+    author: str = ""

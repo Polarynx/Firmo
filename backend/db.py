@@ -109,6 +109,112 @@ class Project(Base):
 Index("ix_projects_user_updated", Project.user_id, Project.updated_at)
 
 
+class Event(Base):
+    """One thing that happened while a paper was being written.
+
+    This is the process record: append-only, ordered, and hash-chained. Firmo
+    already generates every piece of it — searches run, sources opened and
+    saved, claims flagged and resolved, citations inserted, and the chat turns
+    where Firmo refused to write prose — and until now threw all of it away.
+
+    Kept as rows rather than inside `Project.data` because the whole point is
+    that it can be replayed and verified independently of the document, and
+    because a blob that is rewritten on every sync is the one shape an
+    append-only log must not have.
+
+    `prev_hash`/`hash` chain each row to the one before it, so a record cannot
+    be quietly edited after the fact: changing any payload changes that row's
+    hash and breaks every hash after it. This is not tamper-*proof* — the
+    server could rewrite the whole chain — it is tamper-*evident*, which is
+    what a student needs to be able to show an instructor.
+
+    `seq` is assigned by the server on receipt, not by the client, because the
+    server is the only party that can order events from two devices.
+    """
+
+    __tablename__ = "events"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(64), index=True)
+    user_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    seq: Mapped[int] = mapped_column(default=0)
+    # The client's clock, so an event logged offline keeps the time it happened.
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    kind: Mapped[str] = mapped_column(String(40), index=True)
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    prev_hash: Mapped[str] = mapped_column(String(64), default="")
+    hash: Mapped[str] = mapped_column(String(64), default="")
+
+
+# The chain is read and appended in project order, always.
+Index("ix_events_project_seq", Event.project_id, Event.seq, unique=True)
+
+
+class Passage(Base):
+    """One chunk of one paper a student has actually read into their project.
+
+    Firmo's ranking and claim-matching have only ever seen titles and abstracts,
+    which is a hard ceiling on what it can say: an abstract cannot tell you that
+    the finding you are citing lives on page 7 and is hedged in the next
+    sentence. This table is where the papers themselves go, so a claim can be
+    matched against evidence rather than against a summary.
+
+    Scoped to a project, not to a user or globally. Two students researching the
+    same topic will both ingest the same open-access paper, and that duplication
+    is worth the simplicity: a shared corpus would need eviction, per-user
+    access rules, and a story for what happens when a project is deleted.
+
+    `vec` holds the embedding as base64 float32 rather than as a JSON array of
+    floats — the JSON spelling of a 1024-dimension vector is about 20KB against
+    5.5KB packed, and a project with twenty papers has a few thousand of them.
+    """
+
+    __tablename__ = "passages"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    project_id: Mapped[str] = mapped_column(String(64), index=True)
+    user_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    # DOI where there is one, else a stable hash of the title: the key a paper
+    # is known by inside one project.
+    source_key: Mapped[str] = mapped_column(String(200), index=True)
+    title: Mapped[str] = mapped_column(String(300), default="")
+    page: Mapped[int] = mapped_column(default=0)
+    idx: Mapped[int] = mapped_column(default=0)
+    text: Mapped[str] = mapped_column(Text, default="")
+    vec: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+Index("ix_passages_project_source", Passage.project_id, Passage.source_key)
+
+
+class Share(Base):
+    """A public, read-only link to one project's process record.
+
+    The token is the capability: anyone holding it can read the record, nobody
+    can write to it, and revoking sets `revoked_at` rather than deleting, so a
+    link that was handed to an instructor fails closed instead of 404-ing into
+    ambiguity.
+    """
+
+    __tablename__ = "shares"
+
+    token: Mapped[str] = mapped_column(String(64), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(64), index=True)
+    user_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    title: Mapped[str] = mapped_column(String(200), default="")
+    author: Mapped[str] = mapped_column(String(120), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 async def init_db() -> None:
     """Create tables if they are not there yet.
 

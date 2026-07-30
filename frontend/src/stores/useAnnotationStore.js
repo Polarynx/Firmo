@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { postJSON, streamNDJSON } from '../lib/api'
+import { useRecordStore } from './useRecordStore'
 import { useUIStore } from './useUIStore'
 import { useWorkspaceStore } from './useWorkspaceStore'
 
@@ -109,6 +110,24 @@ export const useAnnotationStore = create((set, get) => ({
       }
     } finally {
       set({ draftLoading: false })
+
+      // Recorded here rather than when the check was launched: a cancelled or
+      // failed run is not work done, and the count of sentences that needed
+      // backing is only known once the claims have arrived. This is the event
+      // that shows a student went looking for the holes in their own draft.
+      const claims = get().claims
+      if (claims) {
+        const needing = claims.filter(
+          c => c.status === 'needs_citation' || c.status === 'shaky',
+        ).length
+        const projectId = useWorkspaceStore.getState().ensureProject()
+        useRecordStore.getState().log(projectId, 'draft.check', {
+          claims: claims.length,
+          needing,
+        })
+        useRecordStore.getState().logDraft(projectId, useWorkspaceStore.getState().doc)
+      }
+
       draftAbort = null
       useWorkspaceStore.getState().setMode('idle')
       // The structural read is what a student wants next, so fetch it now

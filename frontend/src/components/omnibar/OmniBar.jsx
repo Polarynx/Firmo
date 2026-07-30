@@ -6,6 +6,7 @@ import { useWorkspaceStore } from '../../stores/useWorkspaceStore'
 import { useSavedSources } from '../../stores/selectors'
 import { useAnnotationStore } from '../../stores/useAnnotationStore'
 import { useResearchStore } from '../../stores/useResearchStore'
+import { useRecordStore } from '../../stores/useRecordStore'
 import { streamNDJSON } from '../../lib/api'
 import { runIntent } from '../../lib/runIntent'
 import { CITATION_STYLES, SPRING } from '../../lib/constants'
@@ -79,6 +80,7 @@ export default function OmniBar() {
 
   const doc = useWorkspaceStore(s => s.doc)
   const projectId = useWorkspaceStore(s => s.activeProjectId)
+  const logRecord = useRecordStore(s => s.log)
   const projectName = useWorkspaceStore(s => s.projects.find(p => p.id === s.activeProjectId)?.name || '')
   const sources = useSavedSources()
   const setCitationStyle = useWorkspaceStore(s => s.setCitationStyle)
@@ -182,6 +184,7 @@ export default function OmniBar() {
 
     let answer = ''
     let failed = false
+    let declined = false
     try {
       await streamNDJSON('/api/paper-chat', {
         messages: history.slice(-12),
@@ -193,6 +196,10 @@ export default function OmniBar() {
           if (ev.event === 'delta') {
             answer += ev.text
             updatePopover(id, { body: answer })
+          } else if (ev.event === 'declined') {
+            // Firmo said no to writing prose. The server reports it; the client
+            // never infers it from the question.
+            declined = true
           } else if (ev.event === 'error') {
             failed = true
           }
@@ -202,6 +209,14 @@ export default function OmniBar() {
       if (e.name !== 'AbortError') failed = true
     } finally {
       setBusy(false)
+    }
+
+    if (!failed && answer) {
+      logRecord(
+        useWorkspaceStore.getState().ensureProject(),
+        declined ? 'chat.refusal' : 'chat.turn',
+        { asked: q.slice(0, 300) },
+      )
     }
 
     if (failed && !answer) {

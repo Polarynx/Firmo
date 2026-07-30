@@ -31,6 +31,7 @@ export const useUIStore = create((set, get) => ({
   showProjects: false,
   showImport: false,
   showAuth: false,
+  showRecord: false,
 
   setSidebarView: sidebarView => set({ sidebarView }),
   toggleSidebar: () => set(s => ({ sidebarOpen: !s.sidebarOpen })),
@@ -68,6 +69,7 @@ export const useUIStore = create((set, get) => ({
   setShowProjects: showProjects => set({ showProjects }),
   setShowImport: showImport => set({ showImport }),
   setShowAuth: showAuth => set({ showAuth }),
+  setShowRecord: showRecord => set({ showRecord }),
 }))
 
 // Paint the theme before first render so there is no flash of the wrong one.

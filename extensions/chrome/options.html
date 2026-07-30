@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="popup.css" />
+    <style>
+      body { width: 460px; }
+    </style>
+  </head>
+  <body>
+    <header class="masthead">
+      <span class="emblem">F</span>
+      <span class="wordmark">Firmo</span>
+      <span class="eyebrow">Settings</span>
+    </header>
+    <main class="view">
+      <form class="stack" id="form">
+        <p class="lede">
+          Point the extension at your Firmo deployment. Leave these as they are if you are
+          running Firmo locally.
+        </p>
+        <label class="field">
+          <span class="eyebrow">API address</span>
+          <input type="url" id="apiBase" placeholder="https://firmo-api.onrender.com" required />
+        </label>
+        <label class="field">
+          <span class="eyebrow">Workspace address</span>
+          <input type="url" id="appBase" placeholder="https://firmo.vercel.app" required />
+        </label>
+        <button class="btn-primary" type="submit">Save settings</button>
+        <p class="record" id="saved"></p>
+      </form>
+    </main>
+    <script src="options.js"></script>
+  </body>
+</html>

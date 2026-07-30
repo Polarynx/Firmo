@@ -5,49 +5,57 @@
 /* ══════════════════════════════════════════════════════════════════════════
    Theme tokens.
 
-   The workspace is obsidian-first, built as a depth hierarchy rather than a
-   flat black: the canvas sits furthest back, panels lift off it, and floating
-   cards lift off those. Every surface below is referenced semantically
-   (bg-app, bg-panel, text-t2 …) so no component hard-codes a palette, and the
-   light theme is the same room with the lamp on.
+   Two ideas hold the whole palette together.
+
+   1. Depth, not flatness. The canvas sits furthest back, panels lift off it,
+      floating cards lift off those. Every surface is referenced semantically
+      (bg-app, bg-panel, text-t2 …) so no component hard-codes a colour, and
+      the light theme is the same room with the lamp on.
+
+   2. The ground is warm, the signal is cold. Dark mode is a reading room at
+      night — warm ink, not blue-black, and never a terminal. Against it the
+      one accent is cobalt, so a *verified* thing separates from the page by
+      temperature as much as by hue. See --unverified below: colour in this
+      workspace is earned.
    ══════════════════════════════════════════════════════════════════════════ */
 :root {
-  --c-app:    250 249 246;   /* paper-50    — base canvas   */
-  --c-panel:  255 255 255;   /* side panels                 */
-  --c-raised: 244 242 236;   /* cards, hover                */
-  --c-sheet:  255 255 255;
-  --c-line:   226 222 211;
-  --c-edge:   199 194 180;
-  --c-t1:      23  32  28;
-  --c-t2:      92 102  98;
-  --c-t3:     140 149 144;
+  --c-app:    247 245 240;   /* paper-50    — base canvas   */
+  --c-panel:  255 254 252;   /* side panels                 */
+  --c-raised: 240 237 230;   /* cards, hover                */
+  --c-sheet:  255 254 252;
+  --c-line:   224 219 209;
+  --c-edge:   194 187 174;
+  --c-t1:      26  22  19;
+  --c-t2:      92  84  76;
+  --c-t3:     140 131 121;
 
-  /* Translucent stroke: ink on paper, white on obsidian. */
+  /* Translucent stroke: ink on paper, white on ink. */
   --hair: 0 0 0;
 
-  --accent:      4 120  87;  /* #047857 emerald-700, light theme */
-  --accent-soft: 6  95  70;  /* #065F46 */
-  --glow: rgba(4, 120, 87, 0.07);
-  --mesh: rgba(4, 120, 87, 0.09);
+  --accent:      41  70 200;  /* #2946C8 cobalt, light theme */
+  --accent-soft: 31  53 160;  /* #1F35A0 */
+  /* The hueless "not backed yet" state. Never used as a brand colour. */
+  --unverified: 140 131 121;
+  --glow: rgba(41, 70, 200, 0.08);
 }
 
 .dark {
-  --c-app:      8   9  12;   /* #08090C — base canvas, deepest layer          */
-  --c-panel:   13  14  20;   /* #0D0E14 — side panels, elevation 1            */
-  --c-raised:  20  23  34;   /* #141722 — floating cards, elevation 2         */
-  --c-sheet:   13  14  20;
-  --c-line:    30  32  41;   /* reads as white/8 composited on the panel      */
-  --c-edge:    51  55  66;   /* reads as white/16                             */
-  --c-t1:     237 240 245;
-  --c-t2:     148 156 173;
-  --c-t3:     104 112 130;
+  --c-app:     16  14  12;   /* #100E0C — warm ink, deepest layer             */
+  --c-panel:   25  21  18;   /* #191512 — side panels, elevation 1            */
+  --c-raised:  34  28  24;   /* #221C18 — floating cards, elevation 2         */
+  --c-sheet:   25  21  18;
+  --c-line:    46  39  33;   /* reads as white/8 composited on the panel      */
+  --c-edge:    74  64  55;   /* reads as white/16                             */
+  --c-t1:     240 236 230;
+  --c-t2:     165 155 145;
+  --c-t3:     120 110 101;
 
   --hair: 255 255 255;
 
-  --accent:      52 211 153; /* #34D399 mint, survives on obsidian */
-  --accent-soft: 16 185 129; /* #10B981 */
-  --glow: rgba(16, 185, 129, 0.07);
-  --mesh: rgba(16, 185, 129, 0.10);
+  --accent:     122 158 255; /* #7A9EFF cobalt, cold against the warm ground */
+  --accent-soft: 77 124 254; /* #4D7CFE */
+  --unverified: 120 110 101;
+  --glow: rgba(122, 158, 255, 0.09);
 }
 
 @layer base {
@@ -59,20 +67,21 @@
     /* The workspace owns its own scroll regions; the window never scrolls. */
     overflow: hidden;
   }
-  /* Fraunces carries a real optical-size axis. Letting the browser drive it
+  /* Newsreader carries a real optical-size axis. Letting the browser drive it
      means the 3rem hero is cut like a masthead and a 13px card heading is cut
      like body copy, instead of one shape scaled up and down. */
   .font-display {
     font-optical-sizing: auto;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.015em;
   }
-  /* Editorial italic: the academic voice, used for theses and pulled quotes. */
+  /* Editorial italic: the academic voice, used for theses and pulled quotes.
+     Newsreader's italic is a drawn italic, not a slant, so it carries the
+     shift in voice on its own without any extra weight or colour. */
   .display-italic {
-    font-family: 'Fraunces', Georgia, serif;
+    font-family: 'Newsreader', Georgia, serif;
     font-optical-sizing: auto;
     font-style: italic;
-    font-variation-settings: 'SOFT' 20;
-    letter-spacing: -0.01em;
+    letter-spacing: -0.005em;
   }
   ::selection {
     background: rgb(var(--accent) / 0.25);
@@ -94,8 +103,11 @@
       disabled:active:scale-100;
   }
   .dark .btn-primary {
-    @apply bg-brand-500 hover:bg-brand-400 text-obsidian-base;
-    box-shadow: 0 0 0 1px rgb(255 255 255 / 0.06) inset, 0 6px 18px -8px rgb(16 185 129 / 0.7);
+    @apply bg-brand-500 hover:bg-brand-400;
+    /* The label sits on a saturated cobalt plate, so it reverses out to the
+       page's own ground rather than to white. */
+    color: rgb(var(--c-app));
+    box-shadow: 0 0 0 1px rgb(255 255 255 / 0.06) inset, 0 6px 18px -8px rgb(77 124 254 / 0.55);
   }
   .btn-ghost {
     @apply px-3 py-1.5 rounded-lg border border-hair/10
@@ -239,11 +251,13 @@
   .confidence-track {
     @apply relative h-1 w-full rounded-full overflow-hidden bg-hair/[0.08];
   }
+  /* Graphite, not cobalt: a relevance score is the ranker's estimate, not
+     evidence the student holds. Only things that are actually backed earn
+     the accent. */
   .confidence-fill {
     @apply absolute inset-y-0 left-0 rounded-full;
     transform-origin: left center;
-    background: linear-gradient(90deg, rgb(var(--accent-soft)), rgb(var(--accent)));
-    box-shadow: 0 0 8px rgb(var(--accent) / 0.5);
+    background: rgb(var(--unverified));
   }
 
   /* ── The mark ────────────────────────────────────────────────────────────
@@ -251,21 +265,22 @@
      Tailwind gradient utilities: `from-*`/`to-*` do not resolve in this
      build, and every other gradient in the workspace is hand-written anyway. */
   .emblem {
-    @apply grid place-items-center h-[26px] w-[26px] rounded-lg
-      font-display font-bold text-[15px] leading-none;
-    background: linear-gradient(135deg, rgb(var(--accent)), rgb(var(--accent-soft)));
+    @apply grid place-items-center h-[26px] w-[26px] rounded-record
+      font-display font-semibold text-[16px] leading-none;
+    background: rgb(var(--accent));
     color: rgb(var(--c-app));
-    box-shadow: 0 0 20px rgb(var(--accent) / 0.28);
   }
   :root:not(.dark) .emblem {
     /* On paper the plate is the dark object, so the letter reverses out. */
     color: #ffffff;
   }
 
-  /* Publisher badge: the database a record came from, as a stamped mark. */
+  /* Publisher badge: the database a record came from, as a stamped mark.
+     Square, like everything in the workspace that is a printed record rather
+     than a control you press. */
   .stamp {
     @apply inline-flex items-center justify-center h-[18px] min-w-[18px] px-1
-      rounded font-mono text-[9px] font-semibold uppercase tracking-[0.06em]
+      rounded-record font-mono text-[9px] font-semibold uppercase tracking-[0.06em]
       bg-hair/[0.06] text-t2 border border-hair/[0.08];
   }
 }
@@ -305,59 +320,17 @@
     display: none;
   }
 
-  /* Light moving across clipped text. Reserved for a single accent word —
-     it is the one animated piece of typography in the product. */
-  .shimmer-text {
-    background-image: linear-gradient(
-      100deg,
-      rgb(var(--accent-soft)) 0%,
-      rgb(var(--accent)) 25%,
-      rgb(var(--c-t1)) 45%,
-      rgb(var(--accent)) 65%,
-      rgb(var(--accent-soft)) 100%
-    );
-    background-size: 200% auto;
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-    -webkit-text-fill-color: transparent;
-    animation: shimmerText 6s linear infinite;
+  /* The rule under a masthead. One hairline, full bleed, no ornament — the
+     line a journal prints under its own name. */
+  .masthead-rule {
+    border-bottom: 1px solid rgb(var(--hair) / 0.12);
   }
 }
 
-/* ── Ambient mesh ───────────────────────────────────────────────────────────
-   A low-opacity emerald gradient behind the workspace, breathing slowly. It
-   keeps the obsidian from reading as flat black and signals that the
-   workspace is live and listening. Inert, purely atmospheric. */
-.ambient {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  overflow: hidden;
-  z-index: 0;
-}
-.ambient::before,
-.ambient::after {
-  content: '';
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(100px);
-  background: var(--mesh);
-  animation: meshDrift 11s ease-in-out infinite;
-}
-.ambient::before {
-  width: 680px;
-  height: 680px;
-  top: -300px;
-  left: -180px;
-}
-.ambient::after {
-  width: 560px;
-  height: 560px;
-  bottom: -280px;
-  right: -140px;
-  animation-delay: -5.5s;
-}
+/* The breathing accent mesh and the shimmering hero word that used to live
+   here were removed deliberately: neither said anything about research, and
+   ambient glow is the single most generic thing a dark workspace can do. The
+   atmosphere now comes from the warm ground and the type. */
 
 /* ── Progress ───────────────────────────────────────────────────────────────
    Never a spinner. A light travels the top edge of the working zone while the
@@ -399,10 +372,14 @@
    highlight overlay MUST share these metrics exactly or the marks drift off
    the words they belong to. */
 .canvas-type {
-  font-family: 'Inter', system-ui, sans-serif;
-  font-size: 17px;
-  line-height: 1.75;
-  letter-spacing: -0.003em;
+  /* Serif, because this is a manuscript. The student's prose is the one place
+     in the product that is not interface, and setting it in the UI sans made
+     it read as a form field with a large font size. */
+  font-family: 'Newsreader', Georgia, serif;
+  font-optical-sizing: auto;
+  font-size: 18.5px;
+  line-height: 1.7;
+  letter-spacing: 0;
   white-space: pre-wrap;
   overflow-wrap: break-word;
   word-break: normal;
@@ -428,13 +405,13 @@
 }
 .mark-amber   { background-color: rgba(245, 158, 11, 0.15); box-shadow: inset 0 -2px 0 #FBBF24; }
 .mark-red     { background-color: rgba(239, 68, 68, 0.15);  box-shadow: inset 0 -2px 0 #F87171; }
-.mark-green   { background-color: rgba(16, 185, 129, 0.16); box-shadow: inset 0 -2px 0 #34D399; }
+.mark-green   { background-color: rgba(74, 222, 128, 0.15); box-shadow: inset 0 -2px 0 #4ADE80; }
 .mark-dotted  { box-shadow: inset 0 -1px 0 rgba(148, 163, 184, 0.45); }
 .mark-pending { background-color: rgba(148, 163, 184, 0.10); }
 
 .mark-amber:hover  { background-color: rgba(245, 158, 11, 0.26); }
 .mark-red:hover    { background-color: rgba(239, 68, 68, 0.26); }
-.mark-green:hover  { background-color: rgba(16, 185, 129, 0.28); }
+.mark-green:hover  { background-color: rgba(74, 222, 128, 0.26); }
 .mark-dotted:hover { background-color: rgba(148, 163, 184, 0.10); }
 
 .mark-claim.is-selected {
@@ -510,20 +487,13 @@
 @media (prefers-reduced-motion: reduce) {
   .edge-progress,
   .edge-progress::before,
-  .ambient::before,
-  .ambient::after,
   .skeleton,
   .stream-caret,
-  .shimmer-text,
   .led-ping,
   .node-pulse,
   .edge-draw,
   .animate-fadeInUp,
   .animate-pulseDot {
     animation: none !important;
-  }
-  .shimmer-text {
-    /* The gradient still reads; only the sweep stops. */
-    background-position: 25% 50%;
   }
 }

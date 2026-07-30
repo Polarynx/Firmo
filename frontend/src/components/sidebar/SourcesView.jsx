@@ -5,7 +5,8 @@ import { useUIStore } from '../../stores/useUIStore'
 import { useSavedSources } from '../../stores/selectors'
 import { paperId } from '../../lib/projects'
 import { SOURCE_LABELS, STANCE, SPRING } from '../../lib/constants'
-import { EmptyNote, SkeletonCard, StatusLine } from '../ui/primitives'
+import { EmptyNote, StatusLine } from '../ui/primitives'
+import QueryLedger from './QueryLedger'
 import SourceCard from './SourceCard'
 
 // View 1: source discovery. Two tiers — squarely on-topic first, background
@@ -85,7 +86,7 @@ export default function SourcesView() {
               : `${core.length} relevant`}
           </span>
           {(stanceFilter !== 'all' || hiddenSources.size > 0) && (
-            <span className="record text-brand-500 dark:text-signal">{filtered.length} shown</span>
+            <span className="record text-unverified">{filtered.length} shown</span>
           )}
         </div>
       )}
@@ -159,11 +160,9 @@ export default function SourcesView() {
         </details>
       )}
 
-      {results.length === 0 && isSearching && (
-        <div className="flex flex-col gap-3">
-          {[0, 1, 2].map(i => <SkeletonCard key={i} />)}
-        </div>
-      )}
+      {/* While the first results are still out, show what Firmo is actually
+          doing rather than three grey rectangles pretending to be cards. */}
+      {results.length === 0 && isSearching && <QueryLedger />}
 
       {!provisional && core.length === 0 && related.length > 0 && (
         <p className="text-[11px] text-t2 leading-relaxed">

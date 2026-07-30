@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header class="masthead">
+      <span class="emblem">F</span>
+      <span class="wordmark">Firmo</span>
+      <span class="eyebrow" id="project-label"></span>
+    </header>
+
+    <main id="view" class="view">
+      <p class="record" id="status">Reading this page…</p>
+    </main>
+
+    <!-- Templates, kept in the document rather than built as strings, so the
+         markup is inspectable and there is no innerHTML with page data in it. -->
+    <template id="tpl-signin">
+      <form class="stack" id="signin-form">
+        <p class="lede">Sign in to save this paper to your project.</p>
+        <label class="field">
+          <span class="eyebrow">Email</span>
+          <input type="email" id="email" autocomplete="username" required />
+        </label>
+        <label class="field">
+          <span class="eyebrow">Password</span>
+          <input type="password" id="password" autocomplete="current-password" required />
+        </label>
+        <button class="btn-primary" type="submit">Sign in</button>
+        <p class="record error" id="signin-error"></p>
+      </form>
+    </template>
+
+    <template id="tpl-paper">
+      <div class="stack">
+        <div class="card">
+          <p class="title" id="paper-title"></p>
+          <p class="record" id="paper-meta"></p>
+        </div>
+        <label class="field">
+          <span class="eyebrow">Save to</span>
+          <select id="project"></select>
+        </label>
+        <button class="btn-primary" id="save">Save to Firmo</button>
+        <p class="record error" id="save-error"></p>
+      </div>
+    </template>
+
+    <template id="tpl-done">
+      <div class="stack done">
+        <p class="title" id="done-title"></p>
+        <p class="record" id="done-meta"></p>
+        <a class="btn-ghost" id="open-firmo" href="#" target="_blank">Open in Firmo</a>
+      </div>
+    </template>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

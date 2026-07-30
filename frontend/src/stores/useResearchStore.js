@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { postJSON, streamNDJSON } from '../lib/api'
 import { paperId } from '../lib/projects'
+import { useRecordStore } from './useRecordStore'
 import { useUIStore } from './useUIStore'
 import { useWorkspaceStore } from './useWorkspaceStore'
 
@@ -40,6 +41,8 @@ export const useResearchStore = create((set, get) => ({
   showRelated: false,
   isSearching: false,
   statusMsg: '',
+  // The fan-out arms for the search in flight, each with its own hit count.
+  arms: [],
   error: '',
   moreLoading: false,
   history: loadHistory(),
@@ -80,6 +83,7 @@ export const useResearchStore = create((set, get) => ({
       searchedQuery: activeQuery,
       isSearching: true,
       statusMsg: 'Reading your topic…',
+      arms: [],
       error: '',
       brief: null,
       inputType: 'topic',
@@ -102,7 +106,12 @@ export const useResearchStore = create((set, get) => ({
         onEvent: ev => {
           switch (ev.event) {
             case 'status':
-              set({ statusMsg: ev.message })
+              // Arms ride along on the status ticks, so the ledger's counts
+              // update at the same rate as the message above them.
+              set(ev.arms ? { statusMsg: ev.message, arms: ev.arms } : { statusMsg: ev.message })
+              break
+            case 'arms':
+              set({ arms: ev.arms || [] })
               break
             case 'brief': {
               const corrected = ev.corrected_input || activeQuery
@@ -118,13 +127,26 @@ export const useResearchStore = create((set, get) => ({
             case 'papers':
               set({ results: ev.results || [], provisional: true })
               break
-            case 'ranked':
+            case 'ranked': {
               set({
                 results: ev.results || [],
                 provisional: false,
                 stanceCounts: ev.stance_counts || null,
               })
+              // Recorded once the search has actually resolved, not when it was
+              // fired: a cancelled or failed search is not work done, and a
+              // record that logs intentions rather than outcomes proves nothing.
+              // A search is often the very first thing a student does, before
+              // any project exists — and the record is keyed on one, so without
+              // this the opening move of every session went unrecorded.
+              const projectId = useWorkspaceStore.getState().ensureProject()
+              useRecordStore.getState().log(projectId, 'search.run', {
+                query: activeQuery,
+                kept: (ev.results || []).length,
+                considered: ev.total_considered || 0,
+              })
               break
+            }
             case 'invalid':
               invalid = true
               set({ error: 'invalid_query' })

@@ -39,6 +39,12 @@ DOAB_URL = "https://directory.doabooks.org/rest/search"
 # usually returns nothing; a free API key makes it a reliable source again.
 _S2_KEY = os.getenv("SEMANTIC_SCHOLAR_API_KEY")
 
+# OpenAlex's polite pool wants a real address, and it is the one index Firmo now
+# leans on hardest: keyword search, seed resolution, references and cited-by all
+# go through it, so a search can spend a dozen calls there. A placeholder here
+# earns 429s under load — set OPENALEX_MAILTO in the environment.
+OPENALEX_MAILTO = os.getenv("OPENALEX_MAILTO", "firmo@example.com")
+
 _client: Optional[httpx.AsyncClient] = None
 
 
@@ -53,8 +59,52 @@ def get_client() -> httpx.AsyncClient:
     return _client
 
 
-async def _get(url: str, params: dict, timeout: float = 15.0, headers: Optional[dict] = None) -> httpx.Response:
-    resp = await get_client().get(url, params=params, timeout=timeout, headers=headers)
+# ── Rate-limit circuit breaker ────────────────────────────────────────────────
+# Once a host starts answering 429, every further call is both useless and rude,
+# and with retries attached it is actively harmful: a search that should take 17
+# seconds took 29, spent entirely on sleeping between rejections. So when a host
+# rate-limits us, stop calling it for a cooldown and fail instantly instead.
+_COOLDOWN_S = 60.0
+_limited_until: dict[str, float] = {}
+
+
+def _host(url: str) -> str:
+    return url.split("/", 3)[2] if "//" in url else url
+
+
+class RateLimited(Exception):
+    """This host is in cooldown; the caller should degrade, not wait."""
+
+
+async def _get(url: str, params: dict, timeout: float = 15.0, headers: Optional[dict] = None,
+               retries: int = 0) -> httpx.Response:
+    """One GET, with a per-host rate-limit breaker and optional backoff.
+
+    `retries` is opt-in per call site: a connector that is one of sixteen firing
+    in parallel should fail fast and let the others carry the search, but a
+    citation hop is a chain — if the seed lookup gets a 429 the whole walk is
+    lost, so those calls are worth one patient retry.
+    """
+    host = _host(url)
+    loop = asyncio.get_running_loop()
+    if loop.time() < _limited_until.get(host, 0.0):
+        raise RateLimited(host)
+
+    delay = 0.6
+    for attempt in range(retries + 1):
+        resp = await get_client().get(url, params=params, timeout=timeout, headers=headers)
+        if resp.status_code in (429, 503):
+            _limited_until[host] = loop.time() + _COOLDOWN_S
+            if attempt < retries:
+                wait = resp.headers.get("retry-after")
+                await asyncio.sleep(
+                    min(float(wait), 5.0) if (wait or "").isdigit() else delay)
+                delay *= 2
+                continue
+        elif resp.is_success:
+            _limited_until.pop(host, None)
+        resp.raise_for_status()
+        return resp
     resp.raise_for_status()
     return resp
 
@@ -362,53 +412,64 @@ async def search_openalex(query: str, limit: int = 8, year_from: Optional[int] =
         "search": query,
         "filter": filter_str,
         "per-page": limit,
-        "select": "id,title,authorships,publication_year,abstract_inverted_index,doi,cited_by_count,primary_location,is_retracted",
+        "select": OPENALEX_SELECT,
         "sort": "relevance_score:desc",
-        "mailto": "firmo@example.com",  # polite pool, faster responses
+        "mailto": OPENALEX_MAILTO,  # polite pool, faster responses
     }
     try:
         data = (await _get(OPENALEX_URL, params)).json()
     except Exception:
         return []
 
-    results = []
-    for work in data.get("results", []):
-        title = work.get("title", "")
-        if not title:
-            continue
+    return [p for p in (_openalex_paper(w) for w in data.get("results", [])) if p]
 
-        authors = [
-            a.get("author", {}).get("display_name", "")
-            for a in work.get("authorships", [])
-        ]
 
-        # Reconstruct abstract from inverted index
-        abstract = ""
-        inv = work.get("abstract_inverted_index")
-        if inv:
-            word_positions = [(word, pos) for word, positions in inv.items() for pos in positions]
-            word_positions.sort(key=lambda x: x[1])
-            abstract = " ".join(w for w, _ in word_positions)
+# The fields every OpenAlex read needs. Kept in one place because the keyword
+# search and the citation-graph expansion below must return identically shaped
+# papers, or the deduper sees the same work twice.
+OPENALEX_SELECT = (
+    "id,title,authorships,publication_year,abstract_inverted_index,doi,"
+    "cited_by_count,primary_location,is_retracted"
+)
 
-        doi_raw = work.get("doi", "")
-        doi = doi_raw.replace("https://doi.org/", "") if doi_raw else None
-        loc = work.get("primary_location") or {}
-        journal = (loc.get("source") or {}).get("display_name")
-        url = loc.get("landing_page_url") or (f"https://doi.org/{doi}" if doi else "")
 
-        results.append({
-            "title": title,
-            "authors": authors,
-            "year": work.get("publication_year"),
-            "abstract": abstract,
-            "url": url,
-            "doi": doi,
-            "journal": journal,
-            "citationCount": work.get("cited_by_count", 0),
-            "source": "openalex",
-            "retracted": bool(work.get("is_retracted")),
-        })
-    return results
+def _openalex_paper(work: dict) -> Optional[dict]:
+    """One OpenAlex work as a Firmo paper, or None if it is unusable."""
+    title = work.get("title", "")
+    if not title:
+        return None
+
+    authors = [
+        a.get("author", {}).get("display_name", "")
+        for a in work.get("authorships", [])
+    ]
+
+    # Reconstruct abstract from inverted index
+    abstract = ""
+    inv = work.get("abstract_inverted_index")
+    if inv:
+        word_positions = [(word, pos) for word, positions in inv.items() for pos in positions]
+        word_positions.sort(key=lambda x: x[1])
+        abstract = " ".join(w for w, _ in word_positions)
+
+    doi_raw = work.get("doi", "")
+    doi = doi_raw.replace("https://doi.org/", "") if doi_raw else None
+    loc = work.get("primary_location") or {}
+    journal = (loc.get("source") or {}).get("display_name")
+    url = loc.get("landing_page_url") or (f"https://doi.org/{doi}" if doi else "")
+
+    return {
+        "title": title,
+        "authors": authors,
+        "year": work.get("publication_year"),
+        "abstract": abstract,
+        "url": url,
+        "doi": doi,
+        "journal": journal,
+        "citationCount": work.get("cited_by_count", 0),
+        "source": "openalex",
+        "retracted": bool(work.get("is_retracted")),
+    }
 
 
 async def search_arxiv(query: str, limit: int = 8, year_from: Optional[int] = None) -> list[dict]:
@@ -904,13 +965,19 @@ async def search_all(
     to search a smaller, quicker subset instead of every database.
     """
     connectors = connectors or ALL_CONNECTORS
-    tasks = [
-        asyncio.create_task(fn(q, limit=limit, year_from=year_from))
-        for q in queries
-        for fn, limit in connectors
-    ]
+    tasks = {}
+    for q in queries:
+        for fn, limit in connectors:
+            task = asyncio.create_task(fn(q, limit=limit, year_from=year_from))
+            # Which query a task belongs to, so the caller can report progress
+            # per search arm rather than as one undifferentiated bar. A student
+            # watching "Collecting results · 214 papers" learns nothing; watching
+            # each of their seven queries land tells them which phrasing worked.
+            tasks[task] = q
+
     total = len(tasks)
     papers: list[dict] = []
+    per_query: dict[str, int] = {q: 0 for q in queries}
     done_count = 0
 
     loop = asyncio.get_running_loop()
@@ -924,14 +991,208 @@ async def search_all(
         for t in done:
             done_count += 1
             try:
-                papers.extend(t.result())
+                found = t.result()
             except Exception:
-                pass
+                continue
+            papers.extend(found)
+            per_query[tasks[t]] = per_query.get(tasks[t], 0) + len(found)
         if done and on_progress:
-            await on_progress(done_count, total, len(papers))
+            await on_progress(done_count, total, len(papers), dict(per_query))
 
     for t in pending:
         t.cancel()
+    return papers
+
+
+# ── Citation-graph expansion ──────────────────────────────────────────────────
+#
+# Why this exists. The eval harness showed recall@10 of 0.06: for a topic like
+# high-conflict divorce and children, the canonical papers were not merely
+# ranked badly, they were absent from the entire 60-paper pool. Keyword fan-out
+# cannot reach them, because the phrase a student types and the title a 2001
+# paper was given rarely share vocabulary.
+#
+# What does reach them is the citation graph. The canonical paper on a topic is,
+# almost by definition, the one that the on-topic papers we *did* find all cite,
+# or the one they all descend from. So: take the best few hits, walk one hop in
+# both directions, and let the neighbourhood surface its own landmarks.
+
+
+async def _openalex_by_ids(ids: list[str], year_from: Optional[int] = None) -> list[dict]:
+    """Fetch OpenAlex works by ID, in batches the filter parameter can carry."""
+    out: list[dict] = []
+    for i in range(0, len(ids), 40):
+        batch = ids[i:i + 40]
+        short = [w.rsplit("/", 1)[-1] for w in batch]
+        filter_str = "openalex_id:" + "|".join(short)
+        if year_from:
+            filter_str += f",publication_year:>{year_from - 1}"
+        try:
+            data = (await _get(OPENALEX_URL, {
+                "filter": filter_str,
+                "per-page": len(short),
+                "select": OPENALEX_SELECT,
+                "mailto": OPENALEX_MAILTO,
+            }, retries=1)).json()
+        except Exception:
+            continue
+        out.extend(p for p in (_openalex_paper(w) for w in data.get("results", [])) if p)
+    return out
+
+
+SEED_SELECT = "id,title,referenced_works"
+
+
+async def _seed_work(paper: dict) -> Optional[dict]:
+    """The OpenAlex work for one of our papers, with its outbound references.
+
+    Resolving by DOI is exact, but most connectors hand back records without
+    one — Semantic Scholar and BASE especially — and the best-ranked hits are
+    routinely among them. When only DOI-bearing papers could seed the hop, four
+    of the top six seeds were skipped and the walk started from whatever
+    obscure record happened to carry a DOI. So fall back to a title lookup,
+    accepted only on a near-exact match, since a loose title match would seed
+    the walk from the wrong paper entirely.
+    """
+    doi = paper.get("doi")
+    if doi:
+        try:
+            return (await _get(
+                f"{OPENALEX_URL}/doi:{doi}",
+                {"select": SEED_SELECT, "mailto": OPENALEX_MAILTO},
+                timeout=10.0, retries=1,
+            )).json()
+        except Exception:
+            pass
+
+    title = (paper.get("title") or "").strip()
+    if len(title) < 12:
+        return None
+    try:
+        data = (await _get(OPENALEX_URL, {
+            "search": title[:200],
+            "per-page": 3,
+            "select": SEED_SELECT,
+            "mailto": OPENALEX_MAILTO,
+        }, timeout=10.0, retries=1)).json()
+    except Exception:
+        return None
+
+    want = _title_key(title)
+    for work in data.get("results", []):
+        if _title_key(work.get("title") or "") == want:
+            return work
+    return None
+
+
+def _title_key(title: str) -> str:
+    """A title reduced to comparable form: lowercase, alphanumerics only."""
+    return re.sub(r'[^a-z0-9]+', '', (title or "").lower())
+
+
+async def _cited_by(work_id: str, limit: int, year_from: Optional[int] = None) -> list[dict]:
+    """The most-cited papers that cite this one — the descendants that matter."""
+    short = work_id.rsplit("/", 1)[-1]
+    filter_str = f"cites:{short}"
+    if year_from:
+        filter_str += f",publication_year:>{year_from - 1}"
+    try:
+        data = (await _get(OPENALEX_URL, {
+            "filter": filter_str,
+            "per-page": limit,
+            "select": OPENALEX_SELECT,
+            "sort": "cited_by_count:desc",
+            "mailto": OPENALEX_MAILTO,
+        }, retries=1)).json()
+    except Exception:
+        return []
+    return [p for p in (_openalex_paper(w) for w in data.get("results", [])) if p]
+
+
+async def expand_by_citations(
+    seeds: list[dict],
+    max_seeds: int = 6,
+    max_refs: int = 120,
+    cited_by_per_seed: int = 15,
+    year_from: Optional[int] = None,
+    seed_budget: float = 7.0,
+    budget: float = 9.0,
+) -> list[dict]:
+    """One hop out from the best hits, in both directions along the citation graph.
+
+    `seeds` are already-ranked papers, best first; only those with a DOI can be
+    resolved. Runs under its own time budget for the same reason `search_all`
+    does — a slow hop must never hold up a search that already has results.
+
+    References are ranked by **co-citation**, not taken in list order. A seed
+    cites 85–135 works, the great majority of them method notes and tangents, so
+    reading the first N of each list is close to sampling at random — that is
+    what kept Amato's 2001 meta-analysis out of the pool even when six papers
+    that cite it were already in hand. The work that several independent seeds
+    all cite is the landmark of that literature, so shared references are
+    fetched first and singletons only fill whatever room is left.
+    """
+    # Try more papers than we need seeds: some will not resolve at all, and a
+    # walk that starts from two records is a walk with no co-citation signal.
+    candidates = [p for p in seeds if p.get("title")][:max_seeds * 2]
+    if not candidates:
+        return []
+
+    loop = asyncio.get_running_loop()
+
+    # Resolving seeds gets its own clock. Folded into the fetch budget it ate
+    # the whole window — a dozen title lookups can take longer than the hop
+    # they exist to start — and the walk returned nothing at all.
+    try:
+        resolved = await asyncio.wait_for(
+            asyncio.gather(*(_seed_work(p) for p in candidates), return_exceptions=True),
+            timeout=seed_budget,
+        )
+    except asyncio.TimeoutError:
+        return []
+    works = [w for w in resolved
+             if isinstance(w, dict) and w.get("id") and w.get("referenced_works")]
+    works = works[:max_seeds]
+    if not works:
+        return []
+
+    deadline = loop.time() + budget
+
+    shared: dict[str, int] = {}
+    order: dict[str, int] = {}
+    for w in works:
+        for i, rid in enumerate((w.get("referenced_works") or [])):
+            shared[rid] = shared.get(rid, 0) + 1
+            order.setdefault(rid, i)
+    # most co-cited first; ties broken by how early the seeds cite it
+    ref_ids = sorted(shared, key=lambda r: (-shared[r], order[r]))[:max_refs]
+
+    tasks = [asyncio.create_task(_openalex_by_ids(ref_ids, year_from))] if ref_ids else []
+    tasks += [
+        asyncio.create_task(_cited_by(w["id"], cited_by_per_seed, year_from))
+        for w in works
+    ]
+
+    papers: list[dict] = []
+    pending = set(tasks)
+    while pending:
+        timeout = deadline - loop.time()
+        if timeout <= 0:
+            break
+        done, pending = await asyncio.wait(
+            pending, timeout=timeout, return_when=asyncio.FIRST_COMPLETED)
+        for t in done:
+            try:
+                papers.extend(t.result())
+            except Exception:
+                pass
+    for t in pending:
+        t.cancel()
+
+    # Mark provenance so the UI can say *why* a paper is in the pool. These did
+    # not answer a query; they were reached from something that did.
+    for p in papers:
+        p["via"] = "citations"
     return papers
 
 

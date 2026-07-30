@@ -7,12 +7,14 @@ import { useResearchStore } from '../../stores/useResearchStore'
 import { SPRING } from '../../lib/constants'
 
 import TopBar from './TopBar'
+import Spine from './Spine'
 import DocumentCanvas from '../canvas/DocumentCanvas'
 import ContextSidebar from '../sidebar/ContextSidebar'
 import OmniBar from '../omnibar/OmniBar'
 import Walkthrough from '../Walkthrough'
 import ImportSheet from '../sidebar/ImportSheet'
 import AuthSheet from './AuthSheet'
+import RecordSheet from './RecordSheet'
 
 // ── The workspace ──────────────────────────────────────────────────────────
 // Three zones, one screen, no page ever reloads. The window itself never
@@ -30,6 +32,8 @@ export default function WorkspaceLayout() {
   const setShowImport = useUIStore(s => s.setShowImport)
   const showAuth = useUIStore(s => s.showAuth)
   const setShowAuth = useUIStore(s => s.setShowAuth)
+  const showRecord = useUIStore(s => s.showRecord)
+  const setShowRecord = useUIStore(s => s.setShowRecord)
 
   const setDoc = useWorkspaceStore(s => s.setDoc)
   const executeSearch = useResearchStore(s => s.executeSearch)
@@ -58,11 +62,13 @@ export default function WorkspaceLayout() {
 
   return (
     <div className="relative h-full w-full flex flex-col bg-app text-t1 overflow-hidden">
-      <div className="ambient" aria-hidden="true" />
-
       <TopBar />
 
       <div className="relative z-10 flex-1 flex min-h-0 overflow-hidden">
+        {/* The ledger rail. Outside Zone A rather than inside it, because the
+            record is about the whole session, not about the document. */}
+        <Spine />
+
         {/* Zone A, with Zone C floating inside it so the HUD centres over the
             document rather than over the whole window. */}
         <div id="zone-a" className="relative flex-1 min-w-0 flex">
@@ -127,6 +133,7 @@ export default function WorkspaceLayout() {
       <AnimatePresence>
         {showImport && <ImportSheet key="import" open onClose={() => setShowImport(false)} />}
         {showAuth && <AuthSheet key="auth" onClose={() => setShowAuth(false)} />}
+        {showRecord && <RecordSheet key="record" onClose={() => setShowRecord(false)} />}
       </AnimatePresence>
 
       {showWalkthrough && <Walkthrough onClose={() => setShowWalkthrough(false)} />}

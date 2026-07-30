@@ -1,7 +1,9 @@
 import { create } from 'zustand'
 import { postJSON } from '../lib/api'
 import { loadStore, saveStore, newProject, paperId } from '../lib/projects'
+import { scheduleIngest } from '../lib/corpus'
 import { scheduleSync, syncNow } from '../lib/sync'
+import { useRecordStore } from './useRecordStore'
 
 // The document and the project it belongs to. Everything the student is
 // building — the prose, the saved sources, the bibliography that assembles
@@ -103,6 +105,29 @@ export const useWorkspaceStore = create((set, get) => ({
     if (merged) get().applyMerged(merged)
   },
 
+  /**
+   * The id of the paper being worked on, creating one if there is none.
+   *
+   * The process record is keyed on a project, so anything that happens before a
+   * project exists is silently dropped — and the first thing a student ever
+   * does is run a search, which is exactly the event most worth having. Rather
+   * than teach every caller to check, work starts a paper.
+   */
+  ensureProject: () => {
+    const { projects, activeProjectId } = get()
+    if (projects.length === 0) {
+      const p = newProject('My paper')
+      set({ projects: [p], activeProjectId: p.id })
+      get().persist()
+      return p.id
+    }
+    if (!activeProjectId || !projects.some(p => p.id === activeProjectId)) {
+      set({ activeProjectId: projects[0].id })
+      return projects[0].id
+    }
+    return activeProjectId
+  },
+
   /** Save or unsave a source. Creates a starter project on the first save. */
   toggleSource: (paper, savedQuery = '') => {
     let { projects, activeProjectId } = get()
@@ -115,15 +140,31 @@ export const useWorkspaceStore = create((set, get) => ({
       activeProjectId = projects[0].id
     }
     const id = paperId(paper)
+    let removed = false
     projects = projects.map(p => {
       if (p.id !== activeProjectId) return p
       const exists = p.sources.some(s => paperId(s) === id)
+      removed = exists
       const sources = exists
         ? p.sources.filter(s => paperId(s) !== id)
         : [{ ...paper, savedAt: Date.now(), savedQuery }, ...p.sources]
       return { ...p, sources }
     })
     set({ projects, activeProjectId })
+    // A saved source is the smallest unit of "I did the work", so it is the
+    // event the record leans on hardest.
+    useRecordStore.getState().log(
+      activeProjectId,
+      removed ? 'source.remove' : 'source.save',
+      { title: paper.title || '', doi: paper.doi || '', year: paper.year || null,
+        query: savedQuery || '' },
+    )
+    // Read the paper itself in the background, so the next claim the student
+    // writes can be matched against its pages rather than its abstract.
+    if (!removed) {
+      const project = projects.find(p => p.id === activeProjectId)
+      scheduleIngest(activeProjectId, project?.sources || [])
+    }
     get().persist()
     get().refreshBibliography()
   },

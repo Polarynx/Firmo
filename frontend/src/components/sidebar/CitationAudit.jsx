@@ -85,7 +85,13 @@ export default function CitationAudit() {
               <p className="font-mono text-[10.5px] text-t2 leading-relaxed break-words min-w-0">
                 {it.raw}
               </p>
-              <span className="shrink-0"><Chip tone={tone} /></span>
+              {/* The verdict lands as a stamp. This is the one place in the
+                  workspace where a machine has just finished judging something
+                  the student wrote, and it should read that way. Still
+                  checking? Then nothing has been decided, so nothing lands. */}
+              <span className="shrink-0">
+                <Chip tone={tone} land={it.verdict !== 'checking'} />
+              </span>
             </div>
             {it.note && <p className="text-[11px] text-t2 leading-relaxed">{it.note}</p>}
             {it.matched?.url && (

@@ -1,5 +1,5 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 
 import { useWorkspaceStore } from '../../stores/useWorkspaceStore'
 import { useAnnotationStore } from '../../stores/useAnnotationStore'
@@ -29,7 +29,53 @@ import BibliographyBlock from './BibliographyBlock'
 // fall through to the textarea and keep the caret working while a claim stays
 // clickable.
 
+// ── The opening sequence ───────────────────────────────────────────────────
+// The empty canvas plays once, as one orchestrated take, and ends on the claim
+// mark. Everything is timed backwards from that beat: the rule is ruled, the
+// title is set line by line, and only then does something read the sentence and
+// mark it. Scattered fades arriving together would say nothing; this says what
+// the product does before a word of copy is read.
+//
+// `EASE` is a long, decelerating curve — things here settle like objects coming
+// to rest, they do not bounce.
+const EASE = [0.16, 1, 0.3, 1]
+
+const HERO = {
+  rest: {},
+  run: { transition: { staggerChildren: 0.09, delayChildren: 0.12 } },
+}
+
+// The rule is ruled, left to right.
+const RULE = {
+  rest: { scaleX: 0 },
+  run: { scaleX: 1, transition: { duration: 0.7, ease: EASE } },
+}
+
+// A line of type rising into its slug. The wrapper clips it.
+const LINE = {
+  rest: { y: '110%' },
+  run: { y: '0%', transition: { duration: 0.75, ease: EASE } },
+}
+
+const FADE_UP = {
+  rest: { opacity: 0, y: 10 },
+  run: { opacity: 1, y: 0, transition: { duration: 0.55, ease: EASE } },
+}
+
+// The claim mark. `clipPath` sweeps the wash and its baseline rule across the
+// words left to right — the direction the reader is already travelling — so the
+// mark reads as something moving through the sentence rather than appearing on
+// top of it. Delayed past the rest of the stagger: it is the closing beat.
+const SWEEP = {
+  rest: { clipPath: 'inset(0 100% 0 0)' },
+  run: {
+    clipPath: 'inset(0 0% 0 0)',
+    transition: { duration: 0.85, ease: EASE, delay: 0.35 },
+  },
+}
+
 export default function DocumentCanvas() {
+  const reduceMotion = useReducedMotion()
   const doc = useWorkspaceStore(s => s.doc)
   const setDoc = useWorkspaceStore(s => s.setDoc)
   const activeMode = useWorkspaceStore(s => s.activeMode)
@@ -263,41 +309,99 @@ export default function DocumentCanvas() {
               stops the animation and it never lets go at all. */}
           {!doc.trim() && !brief && (
             <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={SPRING}
-              className="flex flex-col gap-4 pt-6"
+              variants={HERO}
+              // Reduced motion gets the finished frame, not a faster take: the
+              // sequence is the point, and half of it is worse than none.
+              initial={reduceMotion ? 'run' : 'rest'}
+              animate="run"
+              className="flex flex-col gap-5 pt-4"
             >
-              <h1 className="font-display font-semibold text-[2.6rem] sm:text-[3.4rem] leading-[1.02] text-t1">
-                What are we<br />
-                <span className="display-italic shimmer-text">researching</span> today?
+              {/* The masthead of a working paper, not the greeting of a chat
+                  app. The old hero asked what you were researching today, which
+                  is a question every assistant asks; this one states what the
+                  tool is for.
+
+                  The whole block plays as one sequence rather than as six
+                  elements fading in together: the rule is ruled, the title is
+                  set, and then the claim layer marks the sentence. That last
+                  beat is the product, so everything before it is timed to hand
+                  over to it. */}
+              <div className="pb-3">
+                <span className="eyebrow">Firmo — working paper</span>
+                <motion.div
+                  variants={RULE}
+                  className="mt-3 h-px bg-hair/20 origin-left"
+                />
+              </div>
+
+              {/* Each line is clipped by its own wrapper so the type rises into
+                  place, the way a line of metal type drops into a stick. */}
+              <h1 className="font-display font-semibold text-[2.6rem] sm:text-[3.5rem]
+                leading-[0.98] text-t1 max-w-[15ch]">
+                <span className="block overflow-hidden pb-[0.06em]">
+                  <motion.span variants={LINE} className="block">Every claim,</motion.span>
+                </span>
+                <span className="block overflow-hidden pb-[0.06em]">
+                  <motion.span variants={LINE} className="block">
+                    <span className="display-italic font-normal">accounted for</span>.
+                  </motion.span>
+                </span>
               </h1>
-              <p className="text-[15px] text-t2 leading-relaxed max-w-[46ch]">
+
+              {/* The product's central object, shown before a word is typed: a
+                  sentence of prose with the claim layer already on it. */}
+              <motion.div variants={FADE_UP} className="flex flex-col gap-2 py-1">
+                <p className="canvas-type !text-[17px] text-t1 max-w-[52ch]">
+                  Remote work raised productivity,{' '}
+                  {/* The wash and rule sweep left to right under the words,
+                      because that is the direction a reader is already moving.
+                      A fade would land the mark everywhere at once and lose the
+                      sense that something is reading the sentence. */}
+                  <motion.mark
+                    variants={SWEEP}
+                    className="mark-claim mark-amber cursor-default"
+                  >
+                    though the effect faded after the first year
+                  </motion.mark>
+                  .
+                </p>
+                <motion.span variants={FADE_UP} className="record pl-0.5">
+                  ↑ needs a source · Firmo finds it, cites it, files it
+                </motion.span>
+              </motion.div>
+
+              <motion.p variants={FADE_UP}
+                className="text-[14.5px] text-t2 leading-relaxed max-w-[48ch]">
                 Type a topic and Firmo searches sixteen databases. Paste a draft and it
-                marks every claim that needs backing. Paste a reference list and it checks
-                each entry against the publisher's record.
-              </p>
+                marks every sentence that needs a source. Paste a reference list and it
+                checks each entry against the publisher's record.
+              </motion.p>
 
               {/* Three ways in, each a real query. Reading about the tool is
-                  slower than watching it run once. */}
-              <div className="flex flex-col gap-2 pt-1">
-                <span className="eyebrow">Try one</span>
-                <div className="flex flex-wrap gap-2">
-                  {EXAMPLE_TOPICS.map(topic => (
-                    <motion.button
-                      key={topic}
-                      whileHover={{ y: -1 }}
-                      whileTap={{ scale: 0.98 }}
-                      transition={SPRING}
-                      onClick={() => { setDoc(topic); runIntent(topic, 'search') }}
-                      className="glass-quiet px-3 py-1.5 text-[12px] text-t2 hover:text-t1
-                        hover:border-hair/20 transition-colors text-left"
-                    >
-                      {topic}
-                    </motion.button>
-                  ))}
-                </div>
-              </div>
+                  slower than watching it run once. Set as catalogue rows rather
+                  than as chips: they are records you pull, not tags — so they
+                  slide out of the drawer on hover instead of lighting up. */}
+              <motion.div variants={FADE_UP}
+                className="flex flex-col pt-2 border-t border-hair/10">
+                {EXAMPLE_TOPICS.map(topic => (
+                  <motion.button
+                    key={topic}
+                    onClick={() => { setDoc(topic); runIntent(topic, 'search') }}
+                    whileHover={{ x: 6 }}
+                    whileTap={{ x: 2 }}
+                    transition={SPRING}
+                    className="group flex items-baseline gap-3 py-2.5 text-left
+                      border-b border-hair/[0.06] hover:border-hair/20 transition-colors"
+                  >
+                    <span className="record shrink-0 group-hover:text-brand-600
+                      dark:group-hover:text-signal transition-colors">search</span>
+                    <span className="font-narrow text-[15px] text-t2 group-hover:text-t1
+                      transition-colors">{topic}</span>
+                    <span className="ml-auto shrink-0 record opacity-0 group-hover:opacity-100
+                      transition-opacity">↵</span>
+                  </motion.button>
+                ))}
+              </motion.div>
             </motion.div>
           )}
 

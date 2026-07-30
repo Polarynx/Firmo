@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Firmo for Word.
+
+  Word is where the papers that get handed in are actually written, especially
+  once a department supplies the template. This is the same surface as the
+  Google Docs add-on: the project's sources, a citation at the cursor, and a
+  works-cited page built from the publisher's record.
+
+  Unlike the Docs add-on, this runs entirely in a webview, so its requests to
+  the Firmo API are ordinary browser requests from this add-in's own origin —
+  which is why the backend allows extension-style origins by regex. Replace
+  every https://localhost:3000 below with wherever you host the taskpane.
+-->
+<OfficeApp
+  xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0"
+  xmlns:ov="http://schemas.microsoft.com/office/taskpaneappversionoverrides"
+  xsi:type="TaskPaneApp">
+
+  <!-- Generate your own GUID before publishing; this one is a placeholder. -->
+  <Id>8f2b1c40-6f3a-4c1e-9a7d-2b5e0c9f1a33</Id>
+  <Version>0.1.0.0</Version>
+  <ProviderName>Firmo</ProviderName>
+  <DefaultLocale>en-US</DefaultLocale>
+  <DisplayName DefaultValue="Firmo" />
+  <Description DefaultValue="Bring your Firmo sources into the paper you are writing: cite at the cursor and build a works-cited page from the publisher's record." />
+  <IconUrl DefaultValue="https://localhost:3000/icon-32.png" />
+  <HighResolutionIconUrl DefaultValue="https://localhost:3000/icon-80.png" />
+  <SupportUrl DefaultValue="https://github.com/placeholder/firmo" />
+
+  <AppDomains>
+    <AppDomain>https://localhost:8000</AppDomain>
+  </AppDomains>
+
+  <Hosts>
+    <Host Name="Document" />
+  </Hosts>
+
+  <Requirements>
+    <Sets DefaultMinVersion="1.3">
+      <Set Name="WordApi" MinVersion="1.3" />
+    </Sets>
+  </Requirements>
+
+  <DefaultSettings>
+    <SourceLocation DefaultValue="https://localhost:3000/taskpane.html" />
+  </DefaultSettings>
+
+  <Permissions>ReadWriteDocument</Permissions>
+
+  <VersionOverrides xmlns="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="VersionOverridesV1_0">
+    <Hosts>
+      <Host xsi:type="Document">
+        <DesktopFormFactor>
+          <GetStarted>
+            <Title resid="GetStarted.Title" />
+            <Description resid="GetStarted.Description" />
+            <LearnMoreUrl resid="GetStarted.LearnMoreUrl" />
+          </GetStarted>
+          <ExtensionPoint xsi:type="PrimaryCommandSurface">
+            <OfficeTab id="TabHome">
+              <Group id="Firmo.Group">
+                <Label resid="Firmo.GroupLabel" />
+                <Control xsi:type="Button" id="Firmo.TaskpaneButton">
+                  <Label resid="Firmo.TaskpaneButton.Label" />
+                  <Supertip>
+                    <Title resid="Firmo.TaskpaneButton.Label" />
+                    <Description resid="Firmo.TaskpaneButton.Tooltip" />
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Firmo.Icon16" />
+                    <bt:Image size="32" resid="Firmo.Icon32" />
+                    <bt:Image size="80" resid="Firmo.Icon80" />
+                  </Icon>
+                  <Action xsi:type="ShowTaskpane">
+                    <TaskpaneId>ButtonId1</TaskpaneId>
+                    <SourceLocation resid="Firmo.Taskpane.Url" />
+                  </Action>
+                </Control>
+              </Group>
+            </OfficeTab>
+          </ExtensionPoint>
+        </DesktopFormFactor>
+      </Host>
+    </Hosts>
+
+    <Resources>
+      <bt:Images>
+        <bt:Image id="Firmo.Icon16" DefaultValue="https://localhost:3000/icon-16.png" />
+        <bt:Image id="Firmo.Icon32" DefaultValue="https://localhost:3000/icon-32.png" />
+        <bt:Image id="Firmo.Icon80" DefaultValue="https://localhost:3000/icon-80.png" />
+      </bt:Images>
+      <bt:Urls>
+        <bt:Url id="Firmo.Taskpane.Url" DefaultValue="https://localhost:3000/taskpane.html" />
+        <bt:Url id="GetStarted.LearnMoreUrl" DefaultValue="https://github.com/placeholder/firmo" />
+      </bt:Urls>
+      <bt:ShortStrings>
+        <bt:String id="Firmo.GroupLabel" DefaultValue="Firmo" />
+        <bt:String id="Firmo.TaskpaneButton.Label" DefaultValue="Sources" />
+        <bt:String id="GetStarted.Title" DefaultValue="Firmo is ready." />
+      </bt:ShortStrings>
+      <bt:LongStrings>
+        <bt:String id="Firmo.TaskpaneButton.Tooltip" DefaultValue="Open your Firmo sources and cite them in this document." />
+        <bt:String id="GetStarted.Description" DefaultValue="Open the Firmo pane from the Home tab to cite your saved sources." />
+      </bt:LongStrings>
+    </Resources>
+  </VersionOverrides>
+</OfficeApp>

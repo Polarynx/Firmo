@@ -115,9 +115,25 @@ export default function SourceCard({ paper, index = 0, query = '', showStance = 
       {/* Call-number line */}
       <div className="flex items-center justify-between gap-2 record">
         <span className="flex items-center gap-2 min-w-0">
-          <span className="text-brand-600 dark:text-signal font-medium shrink-0">
+          {/* The call number is cobalt only once the source is in the project.
+              Colour in this workspace marks evidence the student actually
+              holds; a result they have merely been shown is still graphite.
+
+              Saving is the moment that colour is earned, so it is worth a beat:
+              the number lands like a stamp rather than fading between two
+              greys. `key` on the saved state is what makes it replay — without
+              it React reuses the element and the animation never runs again. */}
+          <motion.span
+            key={isSaved ? 'saved' : 'unsaved'}
+            initial={isSaved ? { scale: 1.3, rotate: -7 } : false}
+            animate={{ scale: 1, rotate: 0 }}
+            transition={{ type: 'spring', stiffness: 620, damping: 18 }}
+            className={`font-medium shrink-0 origin-left transition-colors ${
+              isSaved ? 'text-brand-600 dark:text-signal' : 'text-unverified'
+            }`}
+          >
             Nº {String(index + 1).padStart(2, '0')}
-          </span>
+          </motion.span>
           {paper.source && (
             <Stamp
               code={SOURCE_STAMPS[paper.source] || paper.source.slice(0, 4)}
@@ -130,9 +146,16 @@ export default function SourceCard({ paper, index = 0, query = '', showStance = 
         </span>
         <span className="flex items-center gap-2 shrink-0">
           {paper.year && <span className="tabular-nums">{paper.year}</span>}
-          <button
+          {/* The bookmark presses in and springs back, the way a physical one
+              would. Paired with the call number landing beside it and a tick
+              appearing on the spine, one click reads as one event in three
+              places — which is the product's argument in miniature. */}
+          <motion.button
             onClick={() => toggleSource(paper, query)}
             title={isSaved ? 'Remove from project' : 'Save to project'}
+            whileTap={{ scale: 0.82 }}
+            animate={isSaved ? { scale: [1, 1.22, 1] } : { scale: 1 }}
+            transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
             className={`transition-colors ${
               isSaved ? 'text-brand-500 dark:text-signal' : 'text-t3 hover:text-brand-500 dark:hover:text-signal'
             }`}
@@ -141,7 +164,7 @@ export default function SourceCard({ paper, index = 0, query = '', showStance = 
               fill={isSaved ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={1.75}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
             </svg>
-          </button>
+          </motion.button>
         </span>
       </div>
 
@@ -204,8 +227,12 @@ export default function SourceCard({ paper, index = 0, query = '', showStance = 
         </div>
       )}
 
+      {/* Firmo's own gloss on the paper. Set in the editorial italic rather
+          than in the accent: this is the tool talking, not evidence the
+          student holds, and cobalt here would claim a standing it has not
+          earned. */}
       {summary && (
-        <p className="text-xs leading-relaxed text-brand-600 dark:text-signal/90 italic">{summary}</p>
+        <p className="display-italic text-[12.5px] leading-relaxed text-t2">{summary}</p>
       )}
 
       {abstract && !compact && (
@@ -221,7 +248,7 @@ export default function SourceCard({ paper, index = 0, query = '', showStance = 
       )}
 
       {why && (
-        <div className="border-l-2 border-brand-500 dark:border-signal/70 bg-brand-500/[0.06] rounded-r px-3 py-2">
+        <div className="border-l-2 border-unverified/50 bg-hair/[0.04] rounded-r-record px-3 py-2">
           <span className="eyebrow block mb-1">What this means</span>
           <p className="text-[11.5px] text-t1 leading-relaxed">{why}</p>
         </div>

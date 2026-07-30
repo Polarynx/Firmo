@@ -118,6 +118,58 @@ class ImportRequest(BaseModel):
     format: str = "auto"
 
 
+class RecordEvent(BaseModel):
+    # Client-generated, so a retried flush appends once rather than twice.
+    id: str
+    kind: str
+    # Milliseconds since the epoch, from the client's clock: an event logged
+    # offline should keep the time it actually happened.
+    at: int = 0
+    payload: dict = {}
+
+
+class RecordAppendRequest(BaseModel):
+    project_id: str
+    events: list[RecordEvent] = []
+
+
+class ResolveRequest(BaseModel):
+    """What an external client knows about the page a student is looking at."""
+    url: str = ""
+    doi: str = ""
+    title: str = ""
+    # Free text scraped from the page, used only as a last resort to find a DOI.
+    hint: str = ""
+
+
+class SaveSourceRequest(BaseModel):
+    project_id: str = ""
+    paper: dict = {}
+    # Where the save came from: "extension", "docs", "word". Recorded, so the
+    # process record can show that a source was captured while reading rather
+    # than found through Firmo's own search.
+    origin: str = "extension"
+
+
+class CorpusIngestRequest(BaseModel):
+    project_id: str
+    # The saved sources to read. Only those already carrying an open-access PDF
+    # link are fetched; the rest are reported back as skipped.
+    papers: list[dict] = []
+
+
+class CorpusSearchRequest(BaseModel):
+    project_id: str
+    claim: str
+    top_k: int = 4
+
+
+class ShareRequest(BaseModel):
+    project_id: str
+    title: str = ""
+    author: str = ""
+
+
 class DocxExportRequest(BaseModel):
     # The draft itself, which may legitimately be empty when a student only
     # wants the works-cited page.

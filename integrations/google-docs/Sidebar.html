@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top" />
+    <style>
+      /* The sidebar is Firmo inside Google's chrome, so it keeps Firmo's rules
+         — records square, controls rounded, cobalt earned — but stays on a
+         light ground, because Docs is a white page and a dark panel bolted to
+         the side of it reads as a foreign object rather than as part of the
+         document. */
+      :root {
+        --app: #f7f5f0;
+        --panel: #fffefc;
+        --line: rgba(0, 0, 0, 0.09);
+        --t1: #1a1613;
+        --t2: #5c544c;
+        --t3: #8c8379;
+        --accent: #2946c8;
+        --danger: #c2453b;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 12px;
+        background: var(--app);
+        color: var(--t1);
+        font-family: Archivo, Roboto, Arial, sans-serif;
+        font-size: 13px;
+      }
+      .eyebrow {
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 9px;
+        text-transform: uppercase;
+        letter-spacing: 0.18em;
+        color: var(--t3);
+      }
+      .record {
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 10px;
+        color: var(--t3);
+        margin: 0;
+      }
+      .record.error { color: var(--danger); letter-spacing: 0; }
+      .record:empty { display: none; }
+      .stack { display: flex; flex-direction: column; gap: 10px; }
+      .row { display: flex; gap: 6px; align-items: center; }
+      label { display: flex; flex-direction: column; gap: 3px; }
+      input, select {
+        width: 100%;
+        padding: 6px 7px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        color: var(--t1);
+        font: inherit;
+      }
+      button {
+        padding: 7px 10px;
+        border-radius: 8px;
+        border: 0;
+        background: var(--accent);
+        color: #fff;
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button.ghost {
+        background: transparent;
+        border: 1px solid var(--line);
+        color: var(--t2);
+        font-weight: 500;
+      }
+      button:disabled { opacity: 0.5; cursor: default; }
+      .source {
+        border: 1px solid var(--line);
+        border-radius: 2px;
+        background: var(--panel);
+        padding: 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+      .source .title {
+        font-family: Newsreader, Georgia, serif;
+        font-size: 13px;
+        font-weight: 600;
+        line-height: 1.3;
+      }
+      .source .cite {
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 10px;
+        color: var(--accent);
+      }
+      hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; }
+    </style>
+  </head>
+  <body>
+    <div id="root" class="stack">
+      <p class="record">Connecting to Firmo…</p>
+    </div>
+
+    <script>
+      var state = { settings: null, projects: [], projectId: '', style: 'apa', sources: [] };
+
+      function el(tag, attrs, children) {
+        var node = document.createElement(tag);
+        Object.keys(attrs || {}).forEach(function (key) {
+          if (key === 'class') node.className = attrs[key];
+          else if (key === 'text') node.textContent = attrs[key];
+          else if (key.indexOf('on') === 0) node.addEventListener(key.slice(2), attrs[key]);
+          else node.setAttribute(key, attrs[key]);
+        });
+        (children || []).forEach(function (child) { node.appendChild(child); });
+        return node;
+      }
+
+      function render(nodes) {
+        var root = document.getElementById('root');
+        root.innerHTML = '';
+        nodes.forEach(function (n) { root.appendChild(n); });
+      }
+
+      function fail(message) {
+        render([el('p', { class: 'record error', text: message })]);
+      }
+
+      function run(fn, args, onSuccess, onError) {
+        google.script.run
+          .withSuccessHandler(onSuccess)
+          .withFailureHandler(function (e) {
+            (onError || fail)(e.message || String(e));
+          })[fn].apply(null, args || []);
+      }
+
+      // ── Screens ──────────────────────────────────────────────────────────
+
+      function signInScreen(message) {
+        var email = el('input', { type: 'email', placeholder: 'you@university.edu' });
+        var password = el('input', { type: 'password' });
+        var error = el('p', { class: 'record error', text: message || '' });
+        var button = el('button', { text: 'Sign in' });
+
+        button.addEventListener('click', function () {
+          button.disabled = true;
+          run('signIn', [email.value.trim(), password.value], function (settings) {
+            state.settings = settings;
+            loadProjects();
+          }, function (m) {
+            button.disabled = false;
+            error.textContent = m;
+          });
+        });
+
+        render([
+          el('p', { class: 'eyebrow', text: 'Firmo' }),
+          el('p', { text: 'Sign in to bring your sources into this document.' }),
+          el('label', {}, [el('span', { class: 'eyebrow', text: 'Email' }), email]),
+          el('label', {}, [el('span', { class: 'eyebrow', text: 'Password' }), password]),
+          button,
+          error,
+          settingsLink()
+        ]);
+      }
+
+      function settingsLink() {
+        return el('button', {
+          class: 'ghost',
+          text: 'Change Firmo address',
+          onclick: function () {
+            var input = el('input', { type: 'url', value: state.settings.apiBase });
+            var save = el('button', {
+              text: 'Save',
+              onclick: function () {
+                run('saveSettings', [input.value], function (settings) {
+                  state.settings = settings;
+                  signInScreen('Signed out. Sign in to the new address.');
+                });
+              }
+            });
+            render([
+              el('p', { class: 'eyebrow', text: 'Firmo address' }),
+              input,
+              save
+            ]);
+          }
+        });
+      }
+
+      function loadProjects() {
+        render([el('p', { class: 'record', text: 'Loading your papers…' })]);
+        run('listProjects', [], function (projects) {
+          state.projects = projects || [];
+          if (!state.projects.length) {
+            render([
+              el('p', { text: 'No papers in your Firmo account yet. Start one in Firmo, save a source, then come back.' }),
+              el('button', { class: 'ghost', text: 'Sign out', onclick: doSignOut })
+            ]);
+            return;
+          }
+          state.projectId = state.projects[0].id;
+          loadSources();
+        }, function (message) {
+          signInScreen(message);
+        });
+      }
+
+      function loadSources() {
+        render([el('p', { class: 'record', text: 'Loading sources…' })]);
+        run('getSources', [state.projectId, state.style], function (data) {
+          state.sources = data.sources || [];
+          mainScreen(data.name);
+        });
+      }
+
+      function mainScreen(projectName) {
+        var projectSelect = el('select', {
+          onchange: function (e) { state.projectId = e.target.value; loadSources(); }
+        });
+        state.projects.forEach(function (p) {
+          var option = el('option', { value: p.id, text: p.name });
+          if (p.id === state.projectId) option.selected = true;
+          projectSelect.appendChild(option);
+        });
+
+        var styleSelect = el('select', {
+          onchange: function (e) { state.style = e.target.value; loadSources(); }
+        });
+        [['apa', 'APA 7'], ['mla', 'MLA 9'], ['chicago', 'Chicago'],
+         ['harvard', 'Harvard'], ['ieee', 'IEEE']].forEach(function (pair) {
+          var option = el('option', { value: pair[0], text: pair[1] });
+          if (pair[0] === state.style) option.selected = true;
+          styleSelect.appendChild(option);
+        });
+
+        var status = el('p', { class: 'record', text: '' });
+
+        var worksCited = el('button', {
+          text: 'Add works-cited page',
+          onclick: function () {
+            worksCited.disabled = true;
+            status.textContent = 'Writing the page…';
+            run('insertWorksCited', [state.projectId, state.style], function (count) {
+              worksCited.disabled = false;
+              status.textContent = count + ' entries added at the end of the document.';
+            }, function (message) {
+              worksCited.disabled = false;
+              status.textContent = message;
+            });
+          }
+        });
+
+        var nodes = [
+          el('label', {}, [el('span', { class: 'eyebrow', text: 'Paper' }), projectSelect]),
+          el('label', {}, [el('span', { class: 'eyebrow', text: 'Style' }), styleSelect]),
+          el('hr', {}),
+          el('p', { class: 'eyebrow', text: state.sources.length + ' saved sources' })
+        ];
+
+        state.sources.forEach(function (source) {
+          var cite = el('button', {
+            class: 'ghost',
+            text: 'Cite ' + source.inText,
+            onclick: function () {
+              run('insertCitation', [' ' + source.inText], function (where) {
+                status.textContent = where === 'cursor'
+                  ? 'Inserted at your cursor.'
+                  : 'No cursor in the document, so it went to the end.';
+              });
+            }
+          });
+          nodes.push(el('div', { class: 'source' }, [
+            el('p', { class: 'title', text: source.title }),
+            el('p', {
+              class: 'record',
+              text: [(source.authors || [])[0], source.year, source.journal]
+                .filter(Boolean).join(' · ')
+            }),
+            cite
+          ]));
+        });
+
+        nodes.push(el('hr', {}));
+        nodes.push(worksCited);
+        nodes.push(status);
+        nodes.push(el('button', { class: 'ghost', text: 'Sign out', onclick: doSignOut }));
+        render(nodes);
+      }
+
+      function doSignOut() {
+        run('signOut', [], function (settings) {
+          state.settings = settings;
+          signInScreen();
+        });
+      }
+
+      run('getSettings', [], function (settings) {
+        state.settings = settings;
+        if (settings.signedIn) loadProjects();
+        else signInScreen();
+      });
+    </script>
+  </body>
+</html>

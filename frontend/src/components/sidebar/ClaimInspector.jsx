@@ -5,12 +5,14 @@ import { useAnnotationStore } from '../../stores/useAnnotationStore'
 import { useWorkspaceStore } from '../../stores/useWorkspaceStore'
 import { useSavedIds } from '../../stores/selectors'
 import { useUIStore } from '../../stores/useUIStore'
+import { useRecordStore } from '../../stores/useRecordStore'
 import { useResearchStore } from '../../stores/useResearchStore'
 import { placeClaims } from '../../lib/claims'
 import { inTextCitation } from '../../lib/cite'
 import { paperId } from '../../lib/projects'
 import { CLAIM_STATUS, SOURCE_LABELS, SPRING } from '../../lib/constants'
 import { Chip, EmptyNote, StatusLine } from '../ui/primitives'
+import EvidenceDrawer from './EvidenceDrawer'
 
 // View 2: one claim, the evidence for it, and a single button that resolves it.
 // "Cite & save" is the whole product in one click — the in-text citation lands
@@ -68,6 +70,9 @@ function EvidenceRow({ paper, actionLabel, onAction, done, doneLabel }) {
 
 export default function ClaimInspector() {
   const doc = useWorkspaceStore(s => s.doc)
+  const projectId = useWorkspaceStore(s => s.activeProjectId)
+  const ensureProject = useWorkspaceStore(s => s.ensureProject)
+  const logRecord = useRecordStore(s => s.log)
   const spliceDoc = useWorkspaceStore(s => s.spliceDoc)
   const style = useWorkspaceStore(s => s.citationStyle)
   const toggleSource = useWorkspaceStore(s => s.toggleSource)
@@ -113,6 +118,15 @@ export default function ClaimInspector() {
     }
     if (!savedIds.has(paperId(paper))) toggleSource(paper)
     updateClaim(claim.id, { status: 'cited', citedAs: c, quote: newQuote })
+
+    // A sentence that needed backing now has it. This is the single most
+    // meaningful entry the record can carry, because it is the exact moment a
+    // student closed a gap in their own argument.
+    logRecord(ensureProject(), 'citation.insert', {
+      citation: c,
+      title: paper.title || '',
+      claim: (claim.claim || claim.quote || '').slice(0, 240),
+    })
   }
 
   function applyRewrite() {
@@ -164,6 +178,11 @@ export default function ClaimInspector() {
           {claim.explanation && (
             <p className="text-[11.5px] text-t2 leading-relaxed">{claim.explanation}</p>
           )}
+
+          {/* The sentence that actually backs this, if the project's papers
+              have been read. Sits above the recommendations, because evidence
+              the student already holds outranks a suggestion to go find some. */}
+          <EvidenceDrawer claim={claim} projectId={projectId} />
 
           {claim.status === 'cited' && claim.citedAs && (
             <p className="text-[11.5px] text-brand-600 dark:text-signal leading-relaxed">

@@ -45,8 +45,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import main as firmo  # noqa: E402
 from sources import (  # noqa: E402
     build_query_terms,
+    expand_by_citations,
     get_client,
     normalize_doi,
+    paper_id,
     process_papers,
     search_all,
 )
@@ -103,9 +105,12 @@ async def run_case(case: dict, k: int) -> dict:
     started = time.monotonic()
 
     # Mirrors /api/research exactly, minus the streaming and the PDF enrichment,
-    # so a number here is a number about what students actually get.
+    # so a number here is a number about what students actually get. Being a
+    # hand-copy, it drifts: it read `corrected_query` for a while, a key the
+    # planner has never emitted, so every case silently ran on the uncorrected
+    # query. If you change the endpoint's pipeline, change it here too.
     plan = await firmo.plan_research(query)
-    final_query = plan.get("corrected_query") or query
+    final_query = plan.get("corrected_input") or query
 
     fanout = [final_query[:120]] + [
         q for q in plan.get("search_queries", [])[:6] if q.lower() != final_query.lower()
@@ -117,6 +122,20 @@ async def run_case(case: dict, k: int) -> dict:
 
     anchor = firmo._topic_anchor(final_query, plan)
     await firmo.attach_semantic_scores(anchor, papers)
+
+    # One hop along the citation graph, from the best hits so far.
+    def _sem(p):
+        s = firmo._semantic_of(p)
+        return s if s is not None else 0.0
+
+    seeds = sorted(papers, key=_sem, reverse=True)[:12]
+    extra = await expand_by_citations(seeds)
+    if extra:
+        known = {paper_id(p) for p in papers}
+        fresh = [p for p in process_papers(extra) if paper_id(p) not in known]
+        if fresh:
+            await firmo.attach_semantic_scores(anchor, fresh)
+            papers.extend(fresh)
 
     ranked = await firmo.rerank_and_tag(final_query, plan.get("brief", ""), papers,
                                         query_terms=query_terms)

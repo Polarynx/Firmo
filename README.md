@@ -136,6 +136,26 @@ Ground truth in `eval/benchmark.json` must be verified against CrossRef before
 being added. A first draft of that file was written from memory and a third of
 its DOIs were wrong.
 
+## Where Firmo goes when the student leaves the tab
+
+Most students do not write the paper in Firmo. They find sources in a browser
+and write in Docs or Word, so a tool that ends at its own text box gets used
+once. These carry the project out to where the work actually happens; each
+folder has its own README with install and publishing steps.
+
+| | What it does |
+|---|---|
+| `extensions/chrome` | Saves the paper in the open tab to a project, resolved against CrossRef or DataCite rather than scraped off the page. |
+| `integrations/google-docs` | Apps Script sidebar: the project's sources, a citation at the cursor, a works-cited page. |
+| `integrations/word` | The same surface as an Office.js taskpane. |
+
+Two backend endpoints exist for them. `POST /api/resolve` turns a DOI, a URL or
+an exact title into a real record, and refuses rather than guessing — a citation
+built from a guess looks right and fails when a marker checks it. `POST
+/api/sources/save` appends one source server side; external clients must never
+go through `/api/sync`, which is last-write-wins over a whole project and would
+overwrite whatever the student was typing in another tab.
+
 ## Deploying
 
 Frontend on Vercel, backend on Render, both from `main`. `backend/.env` is

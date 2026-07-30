@@ -56,6 +56,22 @@ export const CITATION_STYLES = [
   { key: 'ieee', label: 'IEEE' },
 ]
 
+// ── One rule governs every colour below ────────────────────────────────────
+//
+//   Cobalt is earned. It marks something the student can actually stand
+//   behind — a verified citation, a claim their own sources cover, a source
+//   they have saved. Nothing wears it for being new, selected, or on brand.
+//
+//   Graphite (`text-unverified`) is the resting state: real, but not yet
+//   backed. It is deliberately hueless, so an unfinished paper looks
+//   unfinished and a finished one visibly gains colour as the work gets done.
+//
+//   Amber and red stay reserved for "needs your attention" and "this is
+//   wrong". Green belongs to the claim layer in the draft.
+//
+// Add a status here rather than hard-coding classes in a component, or the
+// rule stops being checkable.
+
 export const STANCE = {
   supports: {
     label: 'Supports',
@@ -77,9 +93,9 @@ export const STANCE = {
   },
   background: {
     label: 'Background',
-    chip: 'text-t2 border-line',
-    dot: 'bg-t3',
-    rail: 'border-l-line',
+    chip: 'text-unverified border-unverified/30',
+    dot: 'bg-unverified',
+    rail: 'border-l-unverified/50',
   },
 }
 
@@ -119,13 +135,13 @@ export const CLAIM_STATUS = {
   },
   fine: {
     label: 'No citation needed',
-    chip: 'text-t2 border-line',
-    dot: 'bg-t3',
+    chip: 'text-unverified border-unverified/30',
+    dot: 'bg-unverified',
   },
   unchecked: {
     label: 'Not checked',
-    chip: 'text-t2 border-line',
-    dot: 'bg-t3',
+    chip: 'text-unverified border-unverified/30',
+    dot: 'bg-unverified',
   },
 }
 
@@ -160,7 +176,12 @@ export const VERDICT = {
     dot: 'bg-red-500',
     rail: 'border-l-red-500',
   },
-  unchecked: { label: 'Try again', chip: 'text-t2 border-line', dot: 'bg-t3', rail: 'border-l-line' },
+  unchecked: {
+    label: 'Try again',
+    chip: 'text-unverified border-unverified/30',
+    dot: 'bg-unverified',
+    rail: 'border-l-unverified/50',
+  },
 }
 
 export const VERDICT_ORDER = ['not_found', 'retracted', 'mismatch', 'unchecked', 'verified', 'checking']

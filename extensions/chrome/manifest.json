@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "Save to Firmo",
+  "version": "0.1.0",
+  "description": "Save any paper you are reading to your Firmo project, with its real citation record.",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": ["http://localhost:8000/*", "http://localhost:5173/*"],
+  "optional_host_permissions": ["https://*/*"],
+  "action": {
+    "default_title": "Save to Firmo",
+    "default_popup": "popup.html"
+  },
+  "options_page": "options.html"
+}

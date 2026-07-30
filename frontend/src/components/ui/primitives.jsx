@@ -1,19 +1,40 @@
 import { motion } from 'framer-motion'
 import { SPRING } from '../../lib/constants'
+import CitationLattice from './CitationLattice'
 
-/** A status pill: dot, label, optional count. The workspace's smallest badge. */
-export function Chip({ tone, label, count, title, className = '' }) {
+/**
+ * A status pill: dot, label, optional count. The workspace's smallest badge.
+ *
+ * `land` makes it arrive like a stamp pressed onto the card — oversized and
+ * askew for a moment, then square. Reserved for verdicts that have just been
+ * decided, where something genuinely changed; a chip that merely describes a
+ * state it has always been in should not perform.
+ */
+export function Chip({ tone, label, count, title, land = false, className = '' }) {
   if (!tone) return null
-  return (
-    <span
-      title={title}
-      className={`inline-flex items-center gap-1.5 font-mono text-[9px] font-medium uppercase
-        tracking-[0.14em] px-2 py-0.5 rounded border whitespace-nowrap ${tone.chip} ${className}`}
-    >
+  const classes = `inline-flex items-center gap-1.5 font-mono text-[9px] font-medium uppercase
+    tracking-[0.14em] px-2 py-0.5 rounded-record border whitespace-nowrap ${tone.chip} ${className}`
+  const content = (
+    <>
       <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${tone.dot}`} />
       {label ?? tone.label}
       {count != null && <span className="opacity-60">{count}</span>}
-    </span>
+    </>
+  )
+
+  if (!land) {
+    return <span title={title} className={classes}>{content}</span>
+  }
+  return (
+    <motion.span
+      title={title}
+      initial={{ scale: 1.45, rotate: -9, opacity: 0 }}
+      animate={{ scale: 1, rotate: 0, opacity: 1 }}
+      transition={{ type: 'spring', stiffness: 700, damping: 20 }}
+      className={classes}
+    >
+      {content}
+    </motion.span>
   )
 }
 
@@ -155,55 +176,6 @@ export function ErrorNote({ children, onRetry }) {
   )
 }
 
-/**
- * A citation network drawing itself: nodes connecting to a centre, which is
- * exactly the shape the panel is about to fill with. Used instead of a dashed
- * box, which reads as a broken upload field rather than as an invitation.
- */
-export function CitationGraph({ className = '' }) {
-  const nodes = [
-    { x: 26,  y: 30, d: 0 },
-    { x: 108, y: 18, d: 0.5 },
-    { x: 166, y: 52, d: 1.0 },
-    { x: 22,  y: 78, d: 1.5 },
-    { x: 92,  y: 92, d: 2.0 },
-    { x: 160, y: 96, d: 2.5 },
-  ]
-  const cx = 94
-  const cy = 56
-  return (
-    <svg
-      viewBox="0 0 188 112"
-      className={`w-full max-w-[188px] h-auto ${className}`}
-      aria-hidden="true"
-      fill="none"
-    >
-      {nodes.map((n, i) => (
-        <line
-          key={`e${i}`}
-          x1={cx} y1={cy} x2={n.x} y2={n.y}
-          stroke="rgb(var(--accent))"
-          strokeWidth="1"
-          className="edge-draw"
-          style={{ animationDelay: `${n.d * 0.28}s` }}
-        />
-      ))}
-      {nodes.map((n, i) => (
-        <circle
-          key={`n${i}`}
-          cx={n.x} cy={n.y} r="2.4"
-          fill="rgb(var(--accent))"
-          className="node-pulse"
-          style={{ animationDelay: `${n.d * 0.35}s` }}
-        />
-      ))}
-      {/* The centre is the student's own topic: filled, not hollow. */}
-      <circle cx={cx} cy={cy} r="6" fill="rgb(var(--accent) / 0.16)" />
-      <circle cx={cx} cy={cy} r="3.2" fill="rgb(var(--accent))" />
-    </svg>
-  )
-}
-
 /** Empty state: a quiet instruction on a real surface, never a dead panel. */
 export function EmptyNote({ title, children, action, graphic = false }) {
   return (
@@ -213,7 +185,7 @@ export function EmptyNote({ title, children, action, graphic = false }) {
       transition={SPRING}
       className="glass-quiet px-5 py-6 flex flex-col items-center gap-3 text-center"
     >
-      {graphic && <CitationGraph className="mb-1 opacity-90" />}
+      {graphic && <CitationLattice className="-mt-2 mb-1" />}
       {title && <p className="text-sm font-medium text-t1">{title}</p>}
       <p className="text-xs text-t2 leading-relaxed max-w-[34ch]">{children}</p>
       {action}

@@ -3,6 +3,7 @@ import json
 import math
 import os
 import re
+import secrets
 import traceback
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -16,7 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 load_dotenv()
@@ -37,7 +38,13 @@ from schemas import (
     ExportRequest,
     ImportRequest,
     LoginRequest,
+    CorpusIngestRequest,
+    CorpusSearchRequest,
+    RecordAppendRequest,
     RegisterRequest,
+    ResolveRequest,
+    SaveSourceRequest,
+    ShareRequest,
     SyncRequest,
     MoreSourcesRequest,
     OutlineRequest,
@@ -53,7 +60,9 @@ from sources import (
     build_query_terms,
     clean_paper,
     enrich_unpaywall,
+    expand_by_citations,
     get_client,
+    normalize_doi,
     paper_id,
     process_papers,
     quality_score,
@@ -61,8 +70,10 @@ from sources import (
     search_all,
 )
 import citations
+import corpus
 import docx_export
 import importers
+import record
 
 
 def _get_client_ip(request: Request) -> str:
@@ -143,9 +154,23 @@ _allowed_origins = [
     if o.strip()
 ]
 
+# The browser extension and the Word add-in each speak from their own origin —
+# `chrome-extension://<id>` and an Office webview host — and neither is known
+# ahead of time. Allowing that scheme is safe here because CORS is not the
+# security boundary in this API: every endpoint an external client touches
+# requires a bearer token, and no request is authenticated by a cookie, so
+# there is nothing a hostile page could ride on by being allowed to ask.
+# (The Google Docs add-on does not need an entry at all: Apps Script calls out
+# server side, so no browser origin is involved.)
+_allowed_origin_regex = os.getenv(
+    "ALLOWED_ORIGIN_REGEX",
+    r"^(chrome-extension|moz-extension|safari-web-extension)://[a-z0-9-]+$",
+)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_origins,
+    allow_origin_regex=_allowed_origin_regex or None,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -512,19 +537,27 @@ async def research(req: ResearchRequest, request: Request):
 
             progress: asyncio.Queue = asyncio.Queue()
 
-            async def on_progress(done: int, total: int, count: int):
+            async def on_progress(done: int, total: int, count: int, per_query: dict):
                 # drop updates the consumer hasn't caught up with, since only the freshest matters
                 if progress.empty():
                     await progress.put(_ev(
                         "status", stage="search",
                         message=f"Collecting results · {count} papers so far",
                         done=done, total=total, papers=count,
+                        # Per-arm counts, so the UI can show the search as the
+                        # ledger of queries it actually is.
+                        arms=[{"query": q, "found": n} for q, n in per_query.items()],
                     ))
 
             # the topic itself is often the single best search string, so always include it
             fanout_queries = [final_query[:120]] + [
                 q for q in plan["search_queries"][:6] if q.lower() != final_query.lower()
             ]
+
+            # Announce the arms before any of them resolve, so the ledger draws
+            # its rows immediately and fills in, rather than popping into
+            # existence one row at a time.
+            yield _ev("arms", arms=[{"query": q, "found": None} for q in fanout_queries])
             # the vocabulary the LLM chose (scholarly synonyms + named entities) is the
             # yardstick for lexical relevance, used for the preview and the rerank pool
             query_terms = build_query_terms(fanout_queries)
@@ -554,16 +587,42 @@ async def research(req: ResearchRequest, request: Request):
             anchor = _topic_anchor(final_query, plan)
             have_semantic = await attach_semantic_scores(anchor, papers)
 
-            # provisional preview so the student sees papers immediately, ordered by
-            # semantic closeness (or lexical overlap as a fallback), so even the first
-            # glimpse is on-topic rather than just the most-cited keyword match.
             def _prov_key(p):
                 if have_semantic and _semantic_of(p) is not None:
                     return (_semantic_of(p), quality_score(p))
                 return (relevance_score(p, query_terms) / 30.0, quality_score(p))
 
+            # provisional preview so the student sees papers immediately, ordered by
+            # semantic closeness (or lexical overlap as a fallback), so even the first
+            # glimpse is on-topic rather than just the most-cited keyword match.
             preview = sorted(papers, key=_prov_key, reverse=True)[:12]
             yield _ev("papers", results=preview, provisional=True, total_found=len(papers))
+
+            # ── One hop along the citation graph ──────────────────────────────
+            # Keyword fan-out alone left the canonical papers out of the pool
+            # entirely, not merely ranked low: the words a student types and the
+            # title a landmark paper was given in 2001 rarely overlap. The
+            # papers that *did* land on topic cite those landmarks, so walk out
+            # from the best few and let the neighbourhood name its own.
+            yield _ev("status", stage="expand",
+                      message="Following citations from the best matches…")
+            try:
+                extra = await expand_by_citations(preview[:12], year_from=req.year_from)
+            except Exception:
+                traceback.print_exc()
+                extra = []
+            if extra:
+                known = {paper_id(p) for p in papers}
+                fresh = [p for p in process_papers(extra, year_from=req.year_from)
+                         if paper_id(p) not in known]
+                if fresh:
+                    # Score the new arrivals on the same anchor, or they cannot be
+                    # compared with the pool they are joining.
+                    await attach_semantic_scores(anchor, fresh)
+                    papers.extend(fresh)
+                    yield _ev("status", stage="expand",
+                              message=f"{len(fresh)} more papers found through citations")
+
             yield _ev("status", stage="rank",
                       message=f"Ranking {len(papers)} papers for relevance…")
 
@@ -682,7 +741,15 @@ You help the student understand their sources and plan their paper. Strict rules
 2. Ground every factual statement in the saved sources, referring to them as (Surname, Year). If the sources do not cover a question, say so plainly and suggest 2 or 3 short search phrases to try in Find sources.
 3. Be concrete and brief: short paragraphs or dash lists, no filler, no em-dashes.
 4. Plain text only. No markdown symbols like ** or ## or bullets other than a simple dash.
-5. Only discuss the student's research, sources, and paper planning. Politely decline anything else."""
+5. Only discuss the student's research, sources, and paper planning. Politely decline anything else.
+6. Whenever you decline to write prose under rule 1, make the very first line of your reply exactly [[DECLINED]] and nothing else, then continue normally on the next line. This marker is stripped before the student sees it; it exists so the refusal can be recorded."""
+
+# The marker rule above is what makes "Firmo never writes your prose" provable
+# rather than merely claimed. It is deliberately the model's own judgment and
+# not a pattern match on the student's question: guessing from the request would
+# put refusals that never happened into an integrity record, which is the one
+# failure that would make the whole record worthless.
+DECLINE_MARKER = "[[DECLINED]]"
 
 
 def _chat_sources_block(papers: list[dict]) -> str:
@@ -712,12 +779,46 @@ async def paper_chat(req: PaperChatRequest):
 
     async def generate():
         try:
+            # The decline marker, if there is one, is the first thing the model
+            # emits — but it can arrive split across several deltas, so hold the
+            # opening text back until there is enough of it to judge, then
+            # release it. Holding ~24 characters costs an imperceptible moment
+            # at the start of a reply and is the difference between a reliable
+            # signal and one that misses whenever tokenisation lands badly.
+            head = ""
+            decided = False
+            declined = False
+
             async for delta in chat_stream(
                 [{"role": "system", "content": system}, *history],
                 max_tokens=650, temperature=0.3,
             ):
+                if not decided:
+                    head += delta
+                    if len(head.lstrip()) < len(DECLINE_MARKER) and len(head) < 64:
+                        continue
+                    decided = True
+                    stripped = head.lstrip()
+                    if stripped.startswith(DECLINE_MARKER):
+                        declined = True
+                        head = stripped[len(DECLINE_MARKER):].lstrip("\r\n")
+                        yield _ev("declined")
+                    if head:
+                        yield _ev("delta", text=head)
+                    continue
                 yield _ev("delta", text=delta)
-            yield _ev("done")
+
+            # A reply shorter than the buffer never got released above.
+            if not decided and head:
+                stripped = head.lstrip()
+                if stripped.startswith(DECLINE_MARKER):
+                    declined = True
+                    stripped = stripped[len(DECLINE_MARKER):].lstrip("\r\n")
+                    yield _ev("declined")
+                if stripped:
+                    yield _ev("delta", text=stripped)
+
+            yield _ev("done", declined=declined)
         except Exception:
             print("[paper-chat ERROR]")
             traceback.print_exc()
@@ -1256,6 +1357,597 @@ async def sync(req: SyncRequest, user: db.User = Depends(auth.require_user),
     return {"projects": [_project_out(p) for p in merged], "server_time": _ms(db.now())}
 
 
+# ── External clients ──────────────────────────────────────────────────────────
+# The browser extension, the Google Docs add-on, and the Word add-in all need
+# the same two things: turn whatever is on screen into a real paper record, and
+# add it to a project without trampling anything.
+#
+# That second point is why these endpoints exist at all rather than reusing
+# /api/sync. Sync is last-write-wins over a whole project: an extension that
+# pushed a project blob would have to hold the entire draft in memory and would
+# overwrite whatever the student typed in the tab next door. Appending server
+# side is the only version of this that cannot lose work.
+
+_DOI_IN_TEXT = re.compile(r'\b10\.\d{4,9}/[-._;()/:a-z0-9]+', re.IGNORECASE)
+
+
+def _doi_from(*texts: str) -> Optional[str]:
+    for text in texts:
+        if not text:
+            continue
+        m = _DOI_IN_TEXT.search(text)
+        if m:
+            # Trailing punctuation is part of the sentence, not of the DOI.
+            return normalize_doi(m.group(0).rstrip('.,;)]"\''))
+    return None
+
+
+@app.post("/api/resolve")
+async def resolve_source(req: ResolveRequest):
+    """Whatever the student is looking at, as a paper record.
+
+    Open in this order because it is the order of decreasing certainty: a DOI is
+    an identifier, a title is a guess, and a page URL is a hope. Returns 404
+    rather than a half-filled record — a citation built from a guess is worse
+    than no citation, since the student cannot tell it is wrong.
+    """
+    doi = normalize_doi(req.doi) or _doi_from(req.doi, req.url, req.hint)
+    if doi:
+        item = await _crossref_by_doi(doi)
+        if item:
+            return {"paper": attach_safety_flags(clean_paper(_paper_from_crossref(item)))}
+        # CrossRef is not the whole world. arXiv — which for a computer science
+        # or physics student is most of what they read — registers with
+        # DataCite, so a CrossRef-only lookup fails on the single most likely
+        # page for the extension to be opened on.
+        paper = await _datacite_by_doi(doi)
+        if paper:
+            return {"paper": attach_safety_flags(clean_paper(paper))}
+
+    title = (req.title or "").strip()
+    if len(title) > 12:
+        matches = await _crossref_bibliographic(title, None)
+        for item in (matches or [])[:3]:
+            found = (item.get("title") or [""])[0]
+            if _same_title(found, title):
+                return {"paper": attach_safety_flags(clean_paper(_paper_from_crossref(item)))}
+
+    raise HTTPException(
+        status_code=404,
+        detail="Couldn't identify a paper on this page. Open the article's own page, or copy its DOI.",
+    )
+
+
+async def _datacite_by_doi(doi: str) -> Optional[dict]:
+    """A paper record from DataCite, for the DOIs CrossRef does not hold."""
+    try:
+        resp = await get_client().get(
+            f"https://api.datacite.org/dois/{doi}", timeout=12.0,
+            headers={"Accept": "application/vnd.api+json"},
+        )
+        if resp.status_code != 200:
+            return None
+        attrs = resp.json().get("data", {}).get("attributes", {}) or {}
+    except Exception:
+        return None
+
+    titles = attrs.get("titles") or []
+    title = (titles[0].get("title") if titles else "") or ""
+    if not title.strip():
+        return None
+
+    authors = []
+    for creator in (attrs.get("creators") or [])[:30]:
+        name = (creator.get("name") or "").strip()
+        if not name:
+            given, family = creator.get("givenName", ""), creator.get("familyName", "")
+            name = f"{given} {family}".strip()
+        if name:
+            # DataCite gives "Family, Given"; everywhere else in Firmo an author
+            # reads "Given Family", and the citation formatter expects that.
+            if "," in name and len(name.split(",")) == 2:
+                family, given = [part.strip() for part in name.split(",")]
+                name = f"{given} {family}".strip()
+            authors.append(name)
+
+    descriptions = attrs.get("descriptions") or []
+    abstract = next(
+        (d.get("description", "") for d in descriptions
+         if (d.get("descriptionType") or "").lower() == "abstract"),
+        (descriptions[0].get("description", "") if descriptions else ""),
+    )
+
+    return {
+        "title": title,
+        "authors": authors,
+        "year": attrs.get("publicationYear"),
+        "abstract": abstract or "",
+        "url": attrs.get("url") or f"https://doi.org/{doi}",
+        "doi": attrs.get("doi") or doi,
+        "journal": attrs.get("publisher") or None,
+        "citationCount": attrs.get("citationCount") or 0,
+        "source": "datacite",
+    }
+
+
+def _same_title(found: str, wanted: str) -> bool:
+    """Is this the same paper, or merely a similarly worded one?
+
+    Fuzzy similarity is not good enough for this decision. Asked for "Attention
+    Is All You Need", a 0.82 similarity bar happily returned "Is Attention All
+    You Need?" — a different paper, by different authors, arguing the opposite.
+    A student would have had no way to notice.
+
+    So the bar is exact match on the letters and digits, ignoring case,
+    punctuation and spacing. Subtitles, accents and typography still differ
+    often enough that this rejects real matches sometimes; that direction of
+    error is recoverable (the student pastes the DOI) and the other is not.
+    """
+    strip = lambda s: re.sub(r'[^a-z0-9]+', '', (s or "").lower())
+    a, b = strip(found), strip(wanted)
+    return bool(a) and a == b
+
+
+def _paper_from_crossref(item: dict) -> dict:
+    authors = []
+    for a in item.get("author", []) or []:
+        name = f"{a.get('given', '')} {a.get('family', '')}".strip()
+        if name:
+            authors.append(name)
+    titles = item.get("title") or [""]
+    containers = item.get("container-title") or []
+    doi = item.get("DOI")
+    return {
+        "title": titles[0] if titles else "",
+        "authors": authors,
+        "year": _crossref_year(item),
+        "abstract": re.sub(r"<[^>]+>", "", item.get("abstract", "") or ""),
+        "url": item.get("URL") or (f"https://doi.org/{doi}" if doi else ""),
+        "doi": doi,
+        "journal": containers[0] if containers else None,
+        "citationCount": item.get("is-referenced-by-count", 0) or 0,
+        "source": "crossref",
+    }
+
+
+@app.get("/api/projects")
+async def list_projects(user: db.User = Depends(auth.require_user),
+                        session: AsyncSession = Depends(auth.get_session)):
+    """Just enough for an external client to let the student pick a paper."""
+    rows = (await session.execute(
+        select(db.Project)
+        .where(db.Project.user_id == user.id, db.Project.deleted_at.is_(None))
+        .order_by(db.Project.updated_at.desc())
+    )).scalars().all()
+    return {"projects": [
+        {"id": p.id, "name": p.name, "sources": len((p.data or {}).get("sources") or [])}
+        for p in rows
+    ]}
+
+
+@app.post("/api/sources/save")
+async def save_source(req: SaveSourceRequest,
+                      user: db.User = Depends(auth.require_user),
+                      session: AsyncSession = Depends(auth.get_session)):
+    """Add one source to a project, without touching anything else in it.
+
+    Creates a paper when the student has none — someone who installs the
+    extension before ever opening Firmo should still be able to save, and
+    landing them on an error instead is how a tool loses its first use.
+    """
+    paper = clean_paper(req.paper or {})
+    if not (paper.get("title") or "").strip():
+        raise HTTPException(status_code=400, detail="paper must have a title")
+
+    project = None
+    if req.project_id:
+        project = await session.get(db.Project, req.project_id)
+        if project is not None and project.user_id != user.id:
+            raise HTTPException(status_code=404, detail="project not found")
+
+    if project is None:
+        project = (await session.execute(
+            select(db.Project)
+            .where(db.Project.user_id == user.id, db.Project.deleted_at.is_(None))
+            .order_by(db.Project.updated_at.desc())
+            .limit(1)
+        )).scalar_one_or_none()
+
+    if project is None:
+        project = db.Project(
+            id=db.new_id(), user_id=user.id, name="My paper",
+            data={"sources": [], "doc": ""},
+        )
+        session.add(project)
+
+    data = dict(project.data or {})
+    sources = list(data.get("sources") or [])
+    key = paper_id(paper)
+    if any(paper_id(s) == key for s in sources):
+        return {"saved": False, "reason": "already in this paper",
+                "project": {"id": project.id, "name": project.name},
+                "sources": len(sources)}
+
+    paper["savedAt"] = int(datetime.now(timezone.utc).timestamp() * 1000)
+    paper["savedVia"] = (req.origin or "extension")[:20]
+    data["sources"] = [paper, *sources]
+    # Reassigned rather than mutated: SQLAlchemy does not track in-place edits
+    # to a JSON column, so appending to the existing list would commit nothing.
+    project.data = data
+    project.updated_at = db.now()
+
+    # The record is the point of the product, and a source captured while
+    # reading is exactly the kind of work it should show.
+    head = await _chain_head(session, project.id)
+    prev_hash = head.hash if head else record.GENESIS
+    seq = (head.seq if head else 0) + 1
+    at = db.now()
+    payload = record.clean_payload({
+        "title": paper.get("title", ""), "doi": paper.get("doi") or "",
+        "via": paper["savedVia"],
+    })
+    session.add(db.Event(
+        id=db.new_id(), project_id=project.id, user_id=user.id, seq=seq, at=at,
+        kind="source.save", payload=payload, prev_hash=prev_hash,
+        hash=record.event_hash(prev_hash, seq, at, "source.save", payload),
+    ))
+
+    await session.commit()
+    return {"saved": True, "project": {"id": project.id, "name": project.name},
+            "sources": len(data["sources"])}
+
+
+# ── The project corpus ────────────────────────────────────────────────────────
+# See corpus.py for why this exists. In short: everything above this line ranks
+# and judges papers on their abstracts, and an abstract cannot tell you which
+# sentence on which page actually backs the claim you are making.
+
+
+@app.post("/api/corpus/ingest")
+async def corpus_ingest(req: CorpusIngestRequest,
+                        user: db.User = Depends(auth.require_user),
+                        session: AsyncSession = Depends(auth.get_session)):
+    """Read the open-access PDFs of a project's saved sources into passages.
+
+    Streams, because ingesting eight papers is a minute of work and a student
+    watching a dead spinner will assume it has hung. Papers already ingested are
+    skipped rather than re-read: this is called again every time a source is
+    saved, and re-embedding a corpus on each addition would cost real money.
+    """
+    project = await session.get(db.Project, req.project_id)
+    if project is None or project.user_id != user.id:
+        raise HTTPException(status_code=404, detail="project not found")
+
+    async def generate():
+        try:
+            existing = set((await session.execute(
+                select(db.Passage.source_key).where(
+                    db.Passage.project_id == project.id
+                ).distinct()
+            )).scalars().all())
+
+            todo = []
+            skipped = 0
+            for paper in req.papers[:40]:
+                key = corpus.source_key(paper)
+                if key in existing:
+                    continue
+                if not corpus.pdf_url_for(paper):
+                    skipped += 1
+                    continue
+                todo.append((key, paper))
+
+            yield _ev("status", total=len(todo), skipped=skipped,
+                      message=f"Reading {len(todo)} paper{'' if len(todo) == 1 else 's'}…")
+
+            async def _get(url):
+                return await get_client().get(url, timeout=20.0, follow_redirects=True)
+
+            done = 0
+            for key, paper in todo:
+                title = (paper.get("title") or "")[:300]
+                data = await corpus.fetch_pdf(corpus.pdf_url_for(paper), _get)
+                passages = await corpus.extract(data) if data else []
+                if not passages:
+                    # A scanned PDF, a dead link, or a publisher refusing the
+                    # request. Named rather than silently dropped, so the panel
+                    # can say which papers Firmo could not read.
+                    done += 1
+                    yield _ev("paper", title=title, passages=0, done=done,
+                              total=len(todo), reason="no readable text")
+                    continue
+
+                vecs = await embed_texts([p[1][:800] for p in passages])
+                stored = 0
+                for i, ((page, text), vec) in enumerate(zip(passages, vecs)):
+                    if vec is None:
+                        continue
+                    session.add(db.Passage(
+                        project_id=project.id,
+                        user_id=user.id,
+                        source_key=key,
+                        title=title,
+                        page=page,
+                        idx=i,
+                        text=text[:2000],
+                        vec=corpus.pack(vec),
+                    ))
+                    stored += 1
+                await session.commit()
+                done += 1
+                yield _ev("paper", title=title, passages=stored, done=done, total=len(todo))
+
+            total = (await session.execute(
+                select(func.count()).select_from(db.Passage)
+                .where(db.Passage.project_id == project.id)
+            )).scalar_one()
+            yield _ev("done", passages=total)
+        except Exception:
+            print("[corpus ingest ERROR]")
+            traceback.print_exc()
+            yield _ev("error", message="Couldn't finish reading these papers.")
+
+    return StreamingResponse(generate(), media_type="application/x-ndjson")
+
+
+@app.post("/api/corpus/search")
+async def corpus_search(req: CorpusSearchRequest,
+                        user: db.User = Depends(auth.require_user),
+                        session: AsyncSession = Depends(auth.get_session)):
+    """The passages in this project that actually bear on a claim.
+
+    This is the endpoint the evidence drawer reads: not "here are some papers
+    about your topic" but "here is the sentence, on this page, of this paper".
+    """
+    claim = (req.claim or "").strip()
+    if not claim:
+        raise HTTPException(status_code=400, detail="claim is empty")
+
+    project = await session.get(db.Project, req.project_id)
+    if project is None or project.user_id != user.id:
+        raise HTTPException(status_code=404, detail="project not found")
+
+    rows = (await session.execute(
+        select(db.Passage).where(db.Passage.project_id == project.id)
+    )).scalars().all()
+    if not rows:
+        return {"passages": [], "corpus_size": 0}
+
+    vecs = await embed_texts([claim])
+    if not vecs or vecs[0] is None:
+        raise HTTPException(status_code=503, detail="Couldn't read that claim just now")
+
+    top = corpus.rank(vecs[0], rows, top_k=max(1, min(req.top_k, 10)))
+    return {
+        "corpus_size": len(rows),
+        "passages": [
+            {
+                "text": row.text,
+                "page": row.page,
+                "title": row.title,
+                "source_key": row.source_key,
+                "score": round(score, 4),
+            }
+            for score, row in top
+        ],
+    }
+
+
+@app.get("/api/corpus/{project_id}")
+async def corpus_stats(project_id: str,
+                       user: db.User = Depends(auth.require_user),
+                       session: AsyncSession = Depends(auth.get_session)):
+    project = await session.get(db.Project, project_id)
+    if project is None or project.user_id != user.id:
+        raise HTTPException(status_code=404, detail="project not found")
+    rows = (await session.execute(
+        select(db.Passage.source_key, db.Passage.title, func.count(db.Passage.id))
+        .where(db.Passage.project_id == project_id)
+        .group_by(db.Passage.source_key, db.Passage.title)
+    )).all()
+    return {
+        "papers": [{"source_key": k, "title": t, "passages": n} for k, t, n in rows],
+        "passages": sum(n for _, _, n in rows),
+    }
+
+
+# ── The process record ────────────────────────────────────────────────────────
+# See record.py for what this is for and what it does and does not prove.
+
+
+def _event_out(ev: db.Event) -> dict:
+    return {
+        "seq": ev.seq,
+        "at": _ms(ev.at),
+        "kind": ev.kind,
+        "payload": ev.payload or {},
+        "hash": ev.hash,
+        "prev_hash": ev.prev_hash,
+    }
+
+
+async def _chain_head(session: AsyncSession, project_id: str) -> Optional[db.Event]:
+    return (await session.execute(
+        select(db.Event)
+        .where(db.Event.project_id == project_id)
+        .order_by(db.Event.seq.desc())
+        .limit(1)
+    )).scalar_one_or_none()
+
+
+@app.post("/api/record/append")
+async def record_append(req: RecordAppendRequest,
+                        user: db.User = Depends(auth.require_user),
+                        session: AsyncSession = Depends(auth.get_session)):
+    """Append events to a project's record. Idempotent, append-only.
+
+    The client batches events and flushes them, so the same batch can arrive
+    twice after a dropped connection. Events carry a client-generated id and
+    anything already stored is skipped rather than chained a second time —
+    duplicate rows in an append-only log would be indistinguishable from the
+    student having done the work twice.
+    """
+    project_id = (req.project_id or "").strip()[:64]
+    if not project_id:
+        raise HTTPException(status_code=400, detail="project_id is required")
+
+    incoming = [e for e in req.events if e.kind in record.KINDS and e.id]
+    if not incoming:
+        head = await _chain_head(session, project_id)
+        return {"appended": 0, "seq": head.seq if head else 0,
+                "head": head.hash if head else record.GENESIS}
+
+    known = set((await session.execute(
+        select(db.Event.id).where(
+            db.Event.project_id == project_id,
+            db.Event.id.in_([e.id[:64] for e in incoming]),
+        )
+    )).scalars().all())
+
+    head = await _chain_head(session, project_id)
+    prev_hash = head.hash if head else record.GENESIS
+    seq = head.seq if head else 0
+
+    appended = 0
+    for ev in incoming:
+        eid = ev.id[:64]
+        if eid in known:
+            continue
+        known.add(eid)
+        seq += 1
+        at = _from_ms(ev.at) if ev.at else db.now()
+        payload = record.clean_payload(ev.payload)
+        digest = record.event_hash(prev_hash, seq, at, ev.kind, payload)
+        session.add(db.Event(
+            id=eid,
+            project_id=project_id,
+            user_id=user.id,
+            seq=seq,
+            at=at,
+            kind=ev.kind,
+            payload=payload,
+            prev_hash=prev_hash,
+            hash=digest,
+        ))
+        prev_hash = digest
+        appended += 1
+
+    await session.commit()
+    return {"appended": appended, "seq": seq, "head": prev_hash}
+
+
+async def _record_body(session: AsyncSession, project_id: str) -> dict:
+    events = (await session.execute(
+        select(db.Event)
+        .where(db.Event.project_id == project_id)
+        .order_by(db.Event.seq.asc())
+    )).scalars().all()
+
+    counts: dict[str, int] = {}
+    for ev in events:
+        counts[ev.kind] = counts.get(ev.kind, 0) + 1
+
+    return {
+        "events": [_event_out(e) for e in events],
+        "counts": counts,
+        "head": events[-1].hash if events else record.GENESIS,
+        "verification": record.verify(events),
+        "started_at": _ms(events[0].at) if events else None,
+        "last_at": _ms(events[-1].at) if events else None,
+    }
+
+
+@app.get("/api/record/{project_id}")
+async def record_read(project_id: str,
+                      user: db.User = Depends(auth.require_user),
+                      session: AsyncSession = Depends(auth.get_session)):
+    project = await session.get(db.Project, project_id)
+    if project is None or project.user_id != user.id:
+        raise HTTPException(status_code=404, detail="project not found")
+    body = await _record_body(session, project_id)
+    share = (await session.execute(
+        select(db.Share).where(
+            db.Share.project_id == project_id, db.Share.revoked_at.is_(None)
+        )
+    )).scalar_one_or_none()
+    return {**body, "project": {"id": project.id, "name": project.name},
+            "share_token": share.token if share else None}
+
+
+@app.post("/api/record/share")
+async def record_share(req: ShareRequest,
+                       user: db.User = Depends(auth.require_user),
+                       session: AsyncSession = Depends(auth.get_session)):
+    """Mint (or return) the public link for a project's record.
+
+    Re-issuing is deliberately a no-op when a live link already exists: a
+    student who clicks Share twice should not silently invalidate the URL they
+    already pasted into an assignment submission.
+    """
+    project = await session.get(db.Project, req.project_id)
+    if project is None or project.user_id != user.id:
+        raise HTTPException(status_code=404, detail="project not found")
+
+    existing = (await session.execute(
+        select(db.Share).where(
+            db.Share.project_id == project.id, db.Share.revoked_at.is_(None)
+        )
+    )).scalar_one_or_none()
+    if existing:
+        if req.title:
+            existing.title = req.title[:200]
+        if req.author:
+            existing.author = req.author[:120]
+        await session.commit()
+        return {"token": existing.token}
+
+    share = db.Share(
+        token=secrets.token_urlsafe(24),
+        project_id=project.id,
+        user_id=user.id,
+        title=(req.title or project.name or "")[:200],
+        author=(req.author or user.name or "")[:120],
+    )
+    session.add(share)
+    await session.commit()
+    return {"token": share.token}
+
+
+@app.post("/api/record/unshare")
+async def record_unshare(req: ShareRequest,
+                         user: db.User = Depends(auth.require_user),
+                         session: AsyncSession = Depends(auth.get_session)):
+    shares = (await session.execute(
+        select(db.Share).where(
+            db.Share.project_id == req.project_id,
+            db.Share.user_id == user.id,
+            db.Share.revoked_at.is_(None),
+        )
+    )).scalars().all()
+    for s in shares:
+        s.revoked_at = db.now()
+    await session.commit()
+    return {"revoked": len(shares)}
+
+
+@app.get("/api/record/public/{token}")
+async def record_public(token: str, session: AsyncSession = Depends(auth.get_session)):
+    """The read-only record behind a shared link.
+
+    No authentication: the token is the capability. It returns the log and the
+    verification result and nothing else — not the draft, not the sources, and
+    not the owner's email.
+    """
+    share = (await session.execute(
+        select(db.Share).where(db.Share.token == token, db.Share.revoked_at.is_(None))
+    )).scalar_one_or_none()
+    if share is None:
+        raise HTTPException(status_code=404, detail="this link is not active")
+    body = await _record_body(session, share.project_id)
+    return {**body, "title": share.title, "author": share.author,
+            "shared_at": _ms(share.created_at)}
+
+
 @app.post("/api/export-docx")
 async def export_docx(req: DocxExportRequest):
     """The draft and its works-cited page, as a Word document.
@@ -1553,7 +2245,13 @@ async def _crossref_bibliographic(title: str, author: Optional[str]) -> Optional
         try:
             r = await get_client().get(
                 "https://api.crossref.org/works",
-                params={"query.bibliographic": q, "rows": 3,
+                # Eight rather than three: CrossRef's relevance order puts
+                # duplicate and reprint deposits above the record actually
+                # cited, so the genuine paper was falling outside the candidate
+                # pool entirely and a correct citation got reported as wrong.
+                # Widening it is only safe now that candidates are ranked on the
+                # author and year too, not on title similarity alone.
+                params={"query.bibliographic": q, "rows": 8,
                         "select": "DOI,title,author,issued,container-title,URL"},
                 timeout=8.0,
             )
@@ -1579,29 +2277,116 @@ def _crossref_year(item: dict) -> Optional[int]:
     return parts[0][0] if parts and parts[0] else None
 
 
+def _agreement(entry: dict, item: dict) -> dict:
+    """How far a CrossRef record agrees with what the student wrote down.
+
+    Title, year and author are reported separately because they answer two
+    different questions. Together they decide whether this is even the same
+    work; only once that is settled do the disagreements become criticism of
+    the citation.
+    """
+    try:
+        claimed_year = int(entry.get("year"))
+    except (TypeError, ValueError):
+        claimed_year = None
+    m_year = _crossref_year(item)
+    m_authors = [a.get("family", "") for a in item.get("author", []) if a.get("family")]
+    author = str(entry.get("author") or "").strip().lower()
+
+    return {
+        "title_sim": _title_similarity(str(entry.get("title") or ""), (item.get("title") or [""])[0]),
+        # None means "the entry didn't say", which is not the same as a conflict.
+        "year_ok": None if not (claimed_year and m_year) else abs(claimed_year - m_year) <= 1,
+        "claimed_year": claimed_year,
+        "author_ok": None if not (author and m_authors) else author in [a.lower() for a in m_authors],
+        "m_year": m_year,
+        "m_authors": m_authors,
+    }
+
+
+def _same_work(ag: dict) -> bool:
+    """Whether a CrossRef hit is the work the entry was pointing at.
+
+    A near-exact title is enough on its own. Below that, CrossRef's relevance
+    search will happily return a real paper on a similar subject for a citation
+    that was invented outright — an invented "Quantum entanglement in municipal
+    wastewater treatment" scores 0.66 against a real paper on municipal
+    wastewater treatment. Calling that "found, but check the title" is worse
+    than saying nothing: it tells the student their fabricated source exists.
+
+    So in the middle band the author decides. A surname is the most
+    discriminating thing a reference carries, and a disagreeing one is taken as
+    a refutation rather than a detail to report. The year cannot play that role:
+    a tolerance of a year either way is a coincidence a few candidates wide, and
+    it was exactly the coincidence that let the invented entry through.
+    """
+    sim = ag["title_sim"]
+    if sim >= 0.85:
+        return True
+    if sim < 0.55:
+        return False
+    if ag["author_ok"] is not None:
+        return ag["author_ok"]
+    # No author to check against, so the title has to carry more of the weight,
+    # and the year is only allowed to break the tie.
+    return sim >= 0.75 and ag["year_ok"] is not False
+
+
+def _later_deposit(ag: dict) -> bool:
+    """Whether a year disagreement is the index's fault rather than the student's.
+
+    Some venues never deposited their older proceedings with CrossRef, and a
+    registrar later backfills them under the current year: "Attention is all you
+    need" exists on CrossRef only as seven identical 2025 deposits, none of them
+    the 2017 paper everyone cites. Ranking cannot fix that, because the record
+    the student is right about is not in the index at all.
+
+    So when the title and the authors both match exactly and the only quarrel is
+    a deposit date after the year cited, the year is not reported. Cited later
+    than the record still is: that is a student misreading a publication date,
+    which is the error this check exists to catch.
+    """
+    return (
+        ag["title_sim"] >= 0.95
+        and ag["author_ok"] is True
+        and ag["claimed_year"] is not None
+        and ag["m_year"] is not None
+        and ag["m_year"] > ag["claimed_year"]
+    )
+
+
 async def _verify_entry(entry: dict) -> dict:
     async with _CITE_CONCURRENCY:
         title = str(entry.get("title") or "")
         doi = re.sub(r"^(https?://doi\.org/|doi:)\s*", "", str(entry.get("doi") or ""), flags=re.I).strip().lower() or None
 
-        matched, sim = None, 0.0
+        matched, ag = None, None
         lookup_failed = False
+        # A DOI the student supplied is an assertion about identity, so a record
+        # fetched by DOI is taken as the intended work.
         if doi:
             item = await _crossref_by_doi(doi)
             if item:
                 matched = item
-                sim = _title_similarity(title, (item.get("title") or [""])[0]) if title else 1.0
+                ag = _agreement(entry, item)
+                if not title:
+                    ag["title_sim"] = 1.0
         if matched is None and title:
             items = await _crossref_bibliographic(title, entry.get("author"))
             if items is None:
                 lookup_failed = True
             else:
+                # Rank on everything the entry claims, not the title alone: the
+                # index will put a 2025 reprint above the paper actually cited,
+                # and picking it turns a correct citation into a false alarm.
+                best = -1.0
                 for item in items:
-                    s = _title_similarity(title, (item.get("title") or [""])[0])
-                    if s > sim:
-                        matched, sim = item, s
+                    a = _agreement(entry, item)
+                    score = a["title_sim"] + 0.2 * (a["year_ok"] is True) + 0.2 * (a["author_ok"] is True)
+                    if score > best:
+                        matched, ag, best = item, a, score
 
-        if matched is None or sim < 0.55:
+        if matched is None or not _same_work(ag):
             if lookup_failed:
                 return {"verdict": "unchecked",
                         "note": "Couldn't reach the publisher index for this one. Run the check again in a moment.",
@@ -1611,11 +2396,9 @@ async def _verify_entry(entry: dict) -> dict:
                     "matched": None}
 
         m_doi = (matched.get("DOI") or "").lower() or None
-        m_year = _crossref_year(matched)
-        m_authors = [a.get("family", "") for a in matched.get("author", []) if a.get("family")]
         matched_out = {
             "title": (matched.get("title") or [""])[0],
-            "year": m_year,
+            "year": ag["m_year"],
             "doi": m_doi,
             "url": matched.get("URL") or (f"https://doi.org/{m_doi}" if m_doi else None),
         }
@@ -1626,17 +2409,12 @@ async def _verify_entry(entry: dict) -> dict:
                     "matched": matched_out}
 
         problems = []
-        if sim < 0.85:
+        if ag["title_sim"] < 0.85:
             problems.append("the title differs from the published record")
-        try:
-            claimed_year = int(entry.get("year"))
-        except (TypeError, ValueError):
-            claimed_year = None
-        if claimed_year and m_year and abs(claimed_year - m_year) > 1:
-            problems.append(f"the year on record is {m_year}")
-        author = str(entry.get("author") or "").lower()
-        if author and m_authors and author not in [a.lower() for a in m_authors]:
-            problems.append(f"the first author on record is {m_authors[0]}")
+        if ag["year_ok"] is False and not _later_deposit(ag):
+            problems.append(f"the year on record is {ag['m_year']}")
+        if ag["author_ok"] is False:
+            problems.append(f"the first author on record is {ag['m_authors'][0]}")
 
         if problems:
             return {"verdict": "mismatch",

@@ -10,9 +10,11 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
-        display: ['Fraunces', 'Georgia', 'serif'],
-        mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
+        sans: ['Archivo', 'system-ui', 'sans-serif'],
+        // Dense metadata rows: same voice, narrower set width.
+        narrow: ['Archivo Narrow', 'Archivo', 'system-ui', 'sans-serif'],
+        display: ['Newsreader', 'Georgia', 'serif'],
+        mono: ['IBM Plex Mono', 'ui-monospace', 'monospace'],
       },
       colors: {
         // ── Semantic workspace surfaces ──
@@ -31,53 +33,71 @@ export default {
         // rather than a solid grey line that has to be tuned twice.
         hair: 'rgb(var(--hair) / <alpha-value>)',
 
-        // Emerald: the signal colour. Pine at the dark end for the light
-        // theme, mint at the bright end so it survives on obsidian.
+        // ── Cobalt ink: the *verified* colour ──
+        // Colour in this workspace is earned, not decorative. A source, a
+        // claim, or a citation renders in graphite until something backs it,
+        // and turns cobalt once it does. The ground is warm and the signal is
+        // cold, so a backed thing separates from the page by temperature as
+        // well as by hue — and green stays free for the claim layer, which
+        // already means "good" in the draft.
         brand: {
-          50:  '#ecfdf5',
-          100: '#d1fae5',
-          200: '#a7f3d0',
-          300: '#6ee7b7',
-          400: '#34d399',  // dark-theme accent
-          500: '#10b981',  // primary signal
-          600: '#059669',
-          700: '#047857',  // light-theme accent
-          800: '#065f46',
-          900: '#064e3b',
-          950: '#022c22',
+          50:  '#eef2ff',
+          100: '#dde4ff',
+          200: '#bcc9ff',
+          300: '#93a9ff',
+          400: '#7a9eff',  // dark-theme accent
+          500: '#4d7cfe',  // primary signal
+          600: '#3560e8',
+          700: '#2946c8',  // light-theme accent
+          800: '#1f35a0',
+          900: '#1b2c7a',
+          950: '#121b4d',
         },
-        // brighter than brand-500 so "verified" still reads at 10px on #08090C
-        signal: '#34d399',
+        // brighter than brand-500 so "verified" still reads at 10px on #100E0C
+        signal: '#7a9eff',
+        // The unverified state. Deliberately hueless against the warm ground:
+        // anything the student has not backed yet reads as unfinished pencil.
+        // Themed, so it is graphite on paper and ash on ink.
+        unverified: 'rgb(var(--unverified) / <alpha-value>)',
         // annotation rules, matched to the washes painted in index.css
         annot: {
           amber: '#fbbf24',
-          green: '#34d399',
+          green: '#4ade80',
           red:   '#f87171',
         },
 
         // warm paper neutrals (light theme surfaces)
         paper: {
-          50:  '#faf9f6',
-          100: '#f4f2ec',
-          200: '#e7e3d8',
+          50:  '#f7f5f0',
+          100: '#f0ede6',
+          200: '#e0dbd1',
         },
-        // layered obsidian (dark theme surfaces)
-        obsidian: {
-          base:   '#08090c',
-          panel:  '#0d0e14',
-          raised: '#141722',
-          lift:   '#1b1f2c',
+        // layered warm ink (dark theme surfaces) — a reading room at night,
+        // not a terminal.
+        ink: {
+          base:   '#100e0c',
+          panel:  '#191512',
+          raised: '#221c18',
+          lift:   '#2b241f',
         },
         highlight: '#f5c84c',
       },
       letterSpacing: {
         tightest: '-0.03em',
       },
+      // ── Radius carries meaning ──
+      // A record is square, because a catalogue card, a DOI and a works-cited
+      // entry are printed things. A control is rounded, because it is a thing
+      // you press. When every surface shared one radius nothing read as a
+      // record, and the workspace was all chrome.
+      borderRadius: {
+        record: '2px',
+        control: '8px',
+      },
       boxShadow: {
         // The command dock genuinely floats; it needs more than a panel shadow.
         dock: '0 1px 0 0 rgb(255 255 255 / 0.06) inset, 0 24px 60px -18px rgb(0 0 0 / 0.75)',
         keycap: '0 1px 0 0 rgb(255 255 255 / 0.06) inset, 0 1px 2px 0 rgb(0 0 0 / 0.4)',
-        glowEmerald: '0 0 25px rgb(16 185 129 / 0.15)',
         card: '0 12px 32px -16px rgb(0 0 0 / 0.5)',
       },
       keyframes: {
@@ -89,12 +109,6 @@ export default {
           '0%':   { backgroundPosition: '-700px 0' },
           '100%': { backgroundPosition: '700px 0' },
         },
-        // Gradient sweep across clipped text. Slow: it should read as a
-        // material the light moves over, not as a marquee.
-        shimmerText: {
-          '0%':   { backgroundPosition: '0% 50%' },
-          '100%': { backgroundPosition: '200% 50%' },
-        },
         pulseDot: {
           '0%, 100%': { opacity: '0.35' },
           '50%':      { opacity: '1' },
@@ -103,11 +117,6 @@ export default {
         edgeSweep: {
           '0%':   { transform: 'translateX(-100%)' },
           '100%': { transform: 'translateX(100%)' },
-        },
-        // The ambient mesh behind the canvas breathes to signal AI readiness.
-        meshDrift: {
-          '0%, 100%': { opacity: '0.55', transform: 'translate3d(0,0,0) scale(1)' },
-          '50%':      { opacity: '0.9',  transform: 'translate3d(0,-2%,0) scale(1.06)' },
         },
         // Confidence bars fill from empty rather than appearing filled.
         barGrow: {
@@ -130,10 +139,8 @@ export default {
       animation: {
         fadeInUp: 'fadeInUp 0.4s ease both',
         shimmer:  'shimmer 1.4s infinite linear',
-        shimmerText: 'shimmerText 6s linear infinite',
         pulseDot: 'pulseDot 1.2s ease-in-out infinite',
         edgeSweep: 'edgeSweep 1.5s ease-in-out infinite',
-        meshDrift: 'meshDrift 11s ease-in-out infinite',
         barGrow: 'barGrow 0.7s cubic-bezier(0.16, 1, 0.3, 1) both',
       },
     },

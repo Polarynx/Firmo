@@ -56,6 +56,7 @@ from schemas import (
 from sources import (
     ALL_CONNECTORS,
     FAST_CONNECTORS,
+    OPENALEX_MAILTO,
     attach_safety_flags,
     build_query_terms,
     clean_paper,
@@ -114,6 +115,12 @@ def _rate_key(request: Request) -> str:
 if not os.getenv("MISTRAL_API_KEY"):
     print("[startup WARN] MISTRAL_API_KEY is not set, so briefs and ranking will use "
           "fallbacks. Check backend/.env and restart the server.")
+
+if not OPENALEX_MAILTO:
+    print("[startup WARN] OPENALEX_MAILTO is not set to a real address, so OpenAlex "
+          "calls go to the common pool. OpenAlex meters by budget as well as rate, "
+          "and citation expansion leans on it hardest, so searches will throttle "
+          "sooner. Set it in backend/.env to an address you own.")
 
 limiter = Limiter(key_func=_rate_key)
 
@@ -190,18 +197,35 @@ Step 1. Classify what they typed as input_type:
 
 Step 2. corrected_input: the input with ONLY spelling and grammar fixed. Correct only words you can identify with certainty from their misspelling. Do NOT guess at garbled words, do NOT change meaning, do NOT correct factual errors. If too garbled to safely correct, return it unchanged.
 
-Step 3. brief: 2–4 sentences written directly to the student, plain language:
-- topic → the current research landscape: what researchers focus on, what is well-established, what is still debated
-- thesis → an honest assessment of what the evidence actually says about their thesis, including nuance they should address in the paper
-- question → a direct answer based on current evidence, with the key caveat
+Step 2b. question_shape: what KIND of question this is. This decides what a good
+answer even looks like, so read the question's own grammar rather than assuming a
+debate:
+- "extent": asks HOW MUCH or HOW EFFECTIVE, about something that could in principle be measured. "How effective are carbon offsets", "to what extent does a four-day week affect retention". The answer is a magnitude and the conditions on it, NOT a yes or no. An opening "to what extent" is not enough on its own — ask whether a study could report a number here.
+- "mechanism": asks HOW or IN WHAT WAYS X produces Y. "How did the East India Company transform indigenous legal frameworks". The answer is a set of pathways.
+- "comparison": weighs rival explanations, periods, or populations against each other. The words "rather than", "versus", "primarily", "as opposed to", or "compared with" naming two real alternatives decide this shape, and they outrank an opening "to what extent": "attributable primarily to trade interdependence RATHER THAN military invasion" is a comparison, not a magnitude. Both sides are positive claims; neither is the negation of the other.
+- "enumeration": asks WHAT ARE the factors, limits, vulnerabilities, or implications. "What are the primary cybersecurity vulnerabilities of DAOs". The answer is a list, and its quality is coverage.
+- "interpretive": a reading of texts, norms, or concepts rather than a measurement. Literary criticism, historiography, political philosophy, ethics. "What are the ethical implications of predictive triage". There is no dataset that settles it; positions are argued, not tested. This shape is decided by WHAT IS BEING ASKED ABOUT and outranks the question's opening words: "to what extent does trauma in post-colonial fiction subvert Western redemption arcs" is interpretive, because no quantity of anything is being estimated — "extent" there means "how persuasively can this reading be made", which is an argument, not a measurement.
+- "causal": a plain arguable claim that X causes or harms Y, where the honest opposition is simply that it does not.
+- "none": a bare topic with no question in it yet.
+
+Step 3. brief: 2–4 sentences written directly to the student, plain language. Answer
+in the shape the question was asked in — a magnitude question gets a magnitude, an
+enumeration question gets the actual list:
+- extent → the size of the effect as the literature reports it, and what it depends on. Say plainly if estimates disagree.
+- mechanism → the two or three pathways that do the work, named.
+- comparison → which side the weight of evidence sits on and what the other side still explains.
+- enumeration → the items themselves, the well-established ones first.
+- interpretive → the main positions and what actually separates them. Do not pretend one is proven.
+- causal → an honest assessment of what the evidence says, including nuance they must address.
+- none → the current research landscape: what is well-established, what is still contested.
 
 Step 4. angles: 3 or 4 strong angles for their paper. Each is an object with "title" (a short angle name) and "why" (one sentence on what to argue or explore there).
 
 Step 5. related: exactly 3 short related topics or questions worth exploring next.
 
-Step 6. search_queries: 6 academic search queries that together maximise coverage by varying terminology, sub-topics, and angles. Each query MUST be a short plain keyword phrase of 3–6 words, the kind that works in a simple search box (e.g. "sleep deprivation memory students"). NO boolean operators (AND/OR), NO quotes, NO long sentences, since those return zero results. Critically, use the vocabulary SCHOLARS use in titles and abstracts, not the student's colloquial phrasing: "the 1400s" → "fifteenth century" or "late precontact", "Native American tribes" → "Indigenous peoples North America", "old China" → the dynasty name. Include the specific named entities researchers study (cultures, regions, periods, mechanisms, populations) rather than generic umbrella words. If input_type is "thesis" or "question", make 2 of the 6 target counter-evidence or complicating factors, because a good paper must address them.
+Step 6. search_queries: 6 academic search queries that together maximise coverage by varying terminology, sub-topics, and angles. Each query MUST be a short plain keyword phrase of 3–6 words, the kind that works in a simple search box (e.g. "sleep deprivation memory students"). NO boolean operators (AND/OR), NO quotes, NO long sentences, since those return zero results. Critically, use the vocabulary SCHOLARS use in titles and abstracts, not the student's colloquial phrasing: "the 1400s" → "fifteenth century" or "late precontact", "Native American tribes" → "Indigenous peoples North America", "old China" → the dynasty name. Include the specific named entities researchers study (cultures, regions, periods, mechanisms, populations) rather than generic umbrella words. Spend 2 of the 6 on whatever would most change the answer, which depends on the shape: for "causal" and "comparison" that is counter-evidence and the rival explanation; for "extent" it is null results, meta-analyses, and effect-size reviews; for "mechanism" it is the competing pathway; for "enumeration" it is the corners of the list a keyword search would miss; for "interpretive" it is the opposing school of thought.
 
-Return ONLY valid JSON with keys: input_type, corrected_input, brief, angles, related, search_queries"""
+Return ONLY valid JSON with keys: input_type, question_shape, corrected_input, brief, angles, related, search_queries"""
 
 
 # A stripped-down plan used as a second chance when the full plan call fails
@@ -212,6 +236,7 @@ BRIEF_ONLY_PROMPT = """A student wants to research this: "{query}"
 
 Return ONLY valid JSON with these keys:
 - input_type: one of "topic", "thesis", "question", "invalid"
+- question_shape: one of "extent" (how much / how effective), "mechanism" (how / in what ways), "comparison" (this rather than that), "enumeration" (what are the factors or implications), "interpretive" (a reading or a normative position, not a measurement), "causal" (X causes Y), "none"
 - corrected_input: the text with only clear spelling/grammar fixed (else unchanged)
 - brief: 2-3 plain-language sentences telling the student what the research actually says about this
 - search_queries: 5 short academic keyword phrases, 3-6 words each, no boolean operators, no quotes"""
@@ -224,15 +249,56 @@ def _fallback_plan(query: str) -> dict:
     q = " ".join(words[:7]) or query[:80]
     return {
         "input_type": "topic",
+        "question_shape": "none",
         "corrected_input": query,
         # No LLM analysis this time, but the sources are still real and ranked. Kept
         # deliberately non-alarming; brief_ok=False flags it as not a real analysis.
         "brief": "Firmo couldn't write its analysis for this one, but the sources below are real and ranked by relevance.",
         "brief_ok": False,
+        "brief_items": [],
         "angles": [],
         "related": [],
         "search_queries": [q, q + " research", q + " review", q + " study", q + " meta-analysis"],
     }
+
+
+def _brief_items(b) -> list[str]:
+    """The brief's list form, when it has one.
+
+    An enumeration question's honest answer IS a list, and the model returns one
+    unprompted. Flattening it into a paragraph to fit a string field throws away
+    the structure the question was asking for, so the items are kept alongside
+    the prose and the panel renders whichever it was given.
+    """
+    if not isinstance(b, list):
+        return []
+    out = []
+    for x in b:
+        s = _flatten_brief(x).strip()
+        if s:
+            out.append(s[:400])
+    return out[:8]
+
+
+def _flatten_brief(b) -> str:
+    """The brief as prose, whatever shape the model chose to send it in.
+
+    Asking for "2-4 sentences" reliably gets a string until the question is one
+    that wants a list — the enumeration and mechanism shapes especially — and
+    then the model answers in the shape of the question and returns an array or
+    an object. That is arguably the better answer, so it is joined rather than
+    rejected: treating it as a failure threw the whole plan away and re-ran the
+    student's query on the cheaper prompt for no reason they could see.
+    """
+    if isinstance(b, str):
+        return b
+    if isinstance(b, list):
+        # Semicolons, because the items are list entries and running them
+        # together with spaces produces a sentence that parses wrong.
+        return "; ".join(_flatten_brief(x).rstrip(" .;") for x in b if x)
+    if isinstance(b, dict):
+        return " ".join(_flatten_brief(v) for v in b.values() if v)
+    return "" if b is None else str(b)
 
 
 async def _minimal_plan(query: str) -> dict:
@@ -240,10 +306,12 @@ async def _minimal_plan(query: str) -> dict:
     if data.get("input_type") != "invalid" and not data.get("search_queries"):
         raise ValueError("no search_queries")
     data.setdefault("corrected_input", query)
-    data.setdefault("brief", "")
+    data["question_shape"] = _coerce_shape(data.get("question_shape"))
+    data["brief_items"] = _brief_items(data.get("brief"))
+    data["brief"] = _flatten_brief(data.get("brief"))
     data.setdefault("angles", [])
     data.setdefault("related", [])
-    data["brief_ok"] = bool((data.get("brief") or "").strip())
+    data["brief_ok"] = bool(data["brief"].strip())
     return data
 
 
@@ -253,10 +321,12 @@ async def plan_research(query: str) -> dict:
         if plan.get("input_type") != "invalid" and not plan.get("search_queries"):
             raise ValueError("no search_queries")
         plan.setdefault("corrected_input", query)
-        plan.setdefault("brief", "")
+        plan["question_shape"] = _coerce_shape(plan.get("question_shape"))
+        plan["brief_items"] = _brief_items(plan.get("brief"))
+        plan["brief"] = _flatten_brief(plan.get("brief"))
         plan.setdefault("angles", [])
         plan.setdefault("related", [])
-        plan["brief_ok"] = bool((plan.get("brief") or "").strip())
+        plan["brief_ok"] = bool(plan["brief"].strip())
         return plan
     except Exception:
         traceback.print_exc()
@@ -354,16 +424,45 @@ score 0–10 (be strict, since most surface matches are NOT relevant):
 - 1–4: wrong subject, wrong population, or wrong domain, only shares surface words
 - 0: unrelated
 
-stance (role of the paper relative to the topic):
-- "supports": evidence for the thesis/topic as stated
-- "counters": challenges, contradicts, or significantly complicates it
-- "mixed": genuinely both
-- "background": useful context, methods, or foundational work rather than direct evidence
+stance — what this paper will DO in the student's paper. Judge by function, not by
+whether it agrees with anyone:
+- "finding": answers the question head-on. {finding_hint}
+- "tension": cuts against the answer the student is likely to reach — a null result, a rival explanation, a counter-reading, a serious limitation. {tension_hint}
+- "conditional": the answer CHANGES depending on population, period, method, or setting, and this paper names what it turns on. Cues: "varied by", "heterogeneous effects", "moderated by", "only in", "depended on", "differed between", "subgroup", "context-dependent", "mixed results across". TAKE THIS ONE FIRST when it applies: a paper whose real headline is that the answer is not the same everywhere is almost always ALSO readable as a finding or as a tension, and calling it either of those throws away the one thing about it a student most needs. "Offsets worked in Brazil but not Indonesia" is conditional, not a counterpoint.
+- "framework": supplies the APPARATUS rather than an answer — a theory, a method, a measurement instrument, a definition, a taxonomy, a review of how the field has argued. If the student would cite it in their methods or theory section, it is framework.
+- "context": the MATERIAL the question is about — the novel or the archive itself, an incident report, a country or period description, a statistic quoted for background. If the student would cite it for a fact rather than for an idea, it is context.
+
+Order of precedence when two fit: conditional > tension > finding > framework > context.
+
+"tension" is not a slot that must be filled. A question about what the vulnerabilities
+of a system ARE has findings and framework and very little tension, and inventing
+some would be worse than reporting none.
 
 Papers:
 {papers}
 
-Return ONLY valid JSON: {{"papers": [{{"index": 0, "score": 8, "stance": "supports"}}, ...]}}. One entry per paper, every index present."""
+Return ONLY valid JSON: {{"papers": [{{"index": 0, "score": 8, "stance": "finding"}}, ...]}}. One entry per paper, every index present."""
+
+
+# What "answering the question" means depends on the question. Handing the judge
+# the same two sentences for "how much does X cost" and "what did Woolf mean" is
+# how a reading of a novel ends up tagged as evidence against a thesis.
+SHAPE_HINTS = {
+    "extent":      ("Reports a magnitude: an effect size, a rate, a measured degree.",
+                    "Reports a null, negligible, or opposite-signed effect, or shows the headline estimate does not survive better methods."),
+    "mechanism":   ("Traces or tests a pathway by which one thing produces the other.",
+                    "Argues a proposed pathway does not carry the weight, or that a different one does."),
+    "comparison":  ("Weighs the alternatives against each other, or supplies the decisive evidence for one of them.",
+                    "Carries the case for the side the student is arguing against. Both sides are real positions here, so this is not a weaker paper."),
+    "enumeration": ("Names, defines, or evidences one of the items the question is asking for.",
+                    "Argues a commonly listed item is overstated, misclassified, or not actually distinct."),
+    "interpretive": ("Advances a reading, a position, or an argument that answers the question.",
+                     "Argues the opposing reading, or from a school of thought that frames the question differently."),
+    "causal":      ("Reports evidence that the relationship holds.",
+                    "Reports evidence that it does not hold, or that the causation runs the other way."),
+    "none":        ("Directly studies the subject and reports something substantive about it.",
+                    "Complicates or challenges the received account of the subject."),
+}
 
 # Two-tier relevance gate. Rather than one flat list, Firmo separates sources that
 # are directly about the subject (CORE, the 'Relevant' list, shown by default) from
@@ -375,7 +474,26 @@ RELATED_KEEP = 5    # genuinely related, useful as context → 'Related & backgr
 MIN_CORE = 4        # never hand back a bare 'Relevant' list: promote the strongest 7s
 MAX_RESULTS = 60    # hard cap across both tiers; Firmo returns fewer, never padded
 
-VALID_STANCES = {"supports", "counters", "mixed", "background"}
+VALID_STANCES = {"finding", "tension", "conditional", "framework", "context"}
+
+# Old four-way vocabulary, still arriving from a model that has seen the previous
+# prompt in its context or from a record written before the shapes existed.
+LEGACY_STANCES = {
+    "supports": "finding",
+    "counters": "tension",
+    "mixed": "conditional",
+    "background": "framework",
+}
+
+
+def _coerce_shape(s) -> str:
+    return s if s in SHAPE_HINTS else "none"
+
+
+def _coerce_stance(s) -> str:
+    if s in VALID_STANCES:
+        return s
+    return LEGACY_STANCES.get(s, "context")
 
 
 def _semantic_of(p: dict) -> Optional[float]:
@@ -387,8 +505,12 @@ async def rerank_and_tag(
     query: str,
     brief: str,
     papers: list[dict],
-    max_candidates: int = 80,
+    # Raised from 80. The chunks are judged in parallel, so this costs two more
+    # concurrent calls and no extra wall time, and it buys back the tail of the
+    # candidate list where the papers a keyword search phrases badly tend to sit.
+    max_candidates: int = 120,
     query_terms: Optional[set] = None,
+    shape: str = "none",
 ) -> list[dict]:
     """Judge relevance and keep only papers that genuinely qualify.
 
@@ -417,12 +539,24 @@ async def rerank_and_tag(
 
     have_semantic = any(_semantic_of(p) is not None for p in papers)
 
+    # Which papers even reach the judge. This cut is the ceiling on recall: a
+    # paper dropped here can never be returned no matter how good it is, and with
+    # four hundred gathered against a candidate cap of eighty, most of a search
+    # is decided by this line rather than by the ranker.
+    #
+    # `quality_score * 0.001` made that cut on cosine alone — the multiplier is
+    # small enough that a paper with forty thousand citations and one with none
+    # were separated by about a hundredth of a cosine point. Citations are given
+    # a real say here, capped, because the paper a student is most likely to be
+    # faulted for missing is the one their field has already agreed on, and
+    # cosine has no way to know which one that is.
     def cand_key(p: dict):
+        cited = min(1.0, math.log1p(p.get("citationCount") or 0) / math.log1p(3000))
         sem = _semantic_of(p)
         if sem is not None:
-            return sem * 100.0 + quality_score(p) * 0.001
+            return sem + 0.06 * cited
         # lexical fallback lane (embeddings unavailable, or this paper failed to embed)
-        return relevance_score(p, query_terms) * 3.0 + quality_score(p) * 0.01
+        return relevance_score(p, query_terms) / 30.0 + 0.06 * cited
 
     candidates = sorted(papers, key=cand_key, reverse=True)[:max_candidates]
 
@@ -439,14 +573,28 @@ async def rerank_and_tag(
             return 5
         return round(2 + 8 * (sem - lo) / (hi - lo))
 
-    chunks = [candidates[i:i + 20] for i in range(0, len(candidates), 20)]
+    # Fifteen rather than twenty. The chunks are judged concurrently, so the
+    # search waits on the SLOWEST call, and an LLM call's latency tracks the
+    # length of what it writes — twenty verdicts of JSON, not the prompt. Going
+    # from 80 candidates to 120 cost eight seconds of wall time at the old chunk
+    # size; smaller chunks hand the same work to more calls that each finish
+    # sooner, which is the only axis here that is close to free.
+    chunks = [candidates[i:i + 15] for i in range(0, len(candidates), 15)]
 
     async def score_chunk(chunk: list[dict]) -> list[dict]:
         lines = []
         for i, p in enumerate(chunk):
-            snippet = (p.get("abstract") or "")[:300]
+            # 500 rather than 300: whether an effect held everywhere is stated in
+            # the back half of an abstract ("...though effects were concentrated
+            # in high-income settings"), which is exactly the sentence that
+            # decides between "finding" and "conditional".
+            snippet = (p.get("abstract") or "")[:500]
             lines.append(f'[{i}] Title: "{p.get("title", "")}"\n    Abstract: "{snippet}"')
-        prompt = RERANK_PROMPT.format(query=query, brief=brief, papers="\n\n".join(lines))
+        finding_hint, tension_hint = SHAPE_HINTS.get(shape, SHAPE_HINTS["none"])
+        prompt = RERANK_PROMPT.format(
+            query=query, brief=brief, papers="\n\n".join(lines),
+            finding_hint=finding_hint, tension_hint=tension_hint,
+        )
         try:
             parsed = await chat_json(prompt, max_tokens=1200)
             entries = {e["index"]: e for e in parsed.get("papers", []) if isinstance(e.get("index"), int)}
@@ -458,21 +606,49 @@ async def rerank_and_tag(
         for i, p in enumerate(chunk):
             e = entries.get(i)
             if e is None:
-                out.append({**p, "relevanceScore": sem_fallback_score(p), "stance": "background"})
+                # Unjudged, so no claim is made about what it does: "context" is
+                # the one role that asserts nothing beyond being on the subject.
+                out.append({**p, "relevanceScore": sem_fallback_score(p),
+                            "stance": "context", "shape": shape})
                 continue
-            stance = e.get("stance") if e.get("stance") in VALID_STANCES else "background"
-            out.append({**p, "relevanceScore": e.get("score", 0), "stance": stance})
+            out.append({**p, "relevanceScore": e.get("score", 0),
+                        "stance": _coerce_stance(e.get("stance")), "shape": shape})
         return out
 
     scored_chunks = await asyncio.gather(*(score_chunk(c) for c in chunks))
     scored = [p for chunk in scored_chunks for p in chunk]
 
-    # Rank within a tier by MEANING first, so the paper most on-topic sits at the
-    # top and a genuinely relevant source is never buried under one that merely drew
-    # a higher LLM number. (Semantic is 0.0 when embeddings were unavailable, in
-    # which case this cleanly degrades to score-first ordering.)
+    # Rank within a tier on all three signals at once, weighted.
+    #
+    # This used to be a plain tuple — (semantic, llm_score, quality) — which reads
+    # like a sensible priority order and is not one. Cosine similarity is a float
+    # that essentially never ties, so the first element decided every comparison
+    # and the other two were dead code. That was Firmo's recall@10 problem: the
+    # measured recall_total of 0.312 against recall@10 of 0.188 says the papers a
+    # student needs ARE being retrieved and then ordered past position ten.
+    #
+    # Cosine is the wrong thing to hand that job to. As the match bar's own
+    # comment says, it sits near 0.8 for almost anything on the same subject, so
+    # among on-topic papers the ordering it produces is close to arbitrary — and
+    # arbitrary is exactly how the canonical paper on a topic ends up at rank 14
+    # behind four obscure ones that happen to score 0.83.
+    #
+    # So: the LLM's judgement leads, because it is the only signal that read the
+    # abstract and asked whether this belongs in a bibliography. Cosine breaks its
+    # ties, which is the job it is actually good at. Quality gets a real weight
+    # rather than a rounding error, because on a well-worn topic the paper the
+    # student is missing is usually the one everyone else cites.
     def sort_key(p: dict):
-        return (_semantic_of(p) or 0.0, p["relevanceScore"], quality_score(p))
+        sem = _semantic_of(p) or 0.0
+        # log-compressed and capped, so a 40,000-citation classic outranks a
+        # 40-citation paper without a citation count ever overturning the judge.
+        cited = min(1.0, math.log1p(p.get("citationCount") or 0) / math.log1p(3000))
+        return (
+            p["relevanceScore"]                    # 0–10, the judgement
+            + 2.0 * sem                            # 0–2,  fine-grained tie-break
+            + 0.9 * cited                          # 0–0.9, canonical-ness
+            + (0.2 if p.get("abstract") else 0.0)  # judgeable at all
+        )
 
     # Split into the two tiers the student sees separately.
     core = [p for p in scored if p["relevanceScore"] >= CORE_KEEP]
@@ -526,8 +702,10 @@ async def research(req: ResearchRequest, request: Request):
             yield _ev(
                 "brief",
                 input_type=plan.get("input_type", "topic"),
+                question_shape=_coerce_shape(plan.get("question_shape")),
                 corrected_input=final_query,
                 brief=plan.get("brief", ""),
+                brief_items=plan.get("brief_items", []),
                 angles=plan.get("angles", []),
                 related=plan.get("related", []),
             )
@@ -626,27 +804,32 @@ async def research(req: ResearchRequest, request: Request):
             yield _ev("status", stage="rank",
                       message=f"Ranking {len(papers)} papers for relevance…")
 
+            shape = _coerce_shape(plan.get("question_shape"))
             ranked = await rerank_and_tag(final_query, plan.get("brief", ""), papers,
-                                          query_terms=query_terms)
+                                          query_terms=query_terms, shape=shape)
 
-            yield _ev("status", stage="enrich", message="Checking for free PDF versions…")
+            # The cut is decided by now, and enrichment takes real seconds after
+            # it, so the counts go out here rather than with the results. The UI
+            # draws the sift from them, and it can only draw it honestly if it
+            # has the true numbers while there is still time to watch it.
+            yield _ev("status", stage="enrich", message="Checking for free PDF versions…",
+                      kept=len(ranked), considered=len(papers))
             await enrich_unpaywall(ranked, top_n=25)
 
-            # Stance only means something when there's an argument to support or counter.
-            # A plain topic area has no sides, so every source is simply background.
-            is_argument = plan.get("input_type") in ("thesis", "question")
-            if not is_argument:
-                for p in ranked:
-                    p["stance"] = "background"
-
-            stance_counts = {"supports": 0, "counters": 0, "mixed": 0, "background": 0}
+            # The roles are not sides in a debate, so nothing is flattened here any
+            # more. Even a bare topic separates the papers that report something
+            # from the ones that supply the theory or the primary material, and
+            # that distinction is worth as much to a literature review as
+            # for-and-against ever was to an argument.
+            stance_counts = {k: 0 for k in ("finding", "tension", "conditional", "framework", "context")}
             for p in ranked:
-                stance_counts[p.get("stance", "background")] += 1
+                stance_counts[_coerce_stance(p.get("stance"))] += 1
 
             core_count = sum(1 for p in ranked if p.get("tier") == "core")
             related_count = sum(1 for p in ranked if p.get("tier") == "related")
 
             yield _ev("ranked", results=ranked, stance_counts=stance_counts,
+                      question_shape=shape,
                       core_count=core_count, related_count=related_count,
                       total_considered=len(papers))
             yield _ev("done")
@@ -688,7 +871,11 @@ async def more_sources(req: MoreSourcesRequest):
         papers = [p for p in papers if paper_id(p) not in seen]
 
     await attach_semantic_scores(req.claim, papers)
-    ranked = await rerank_and_tag(req.claim, req.claim, papers, max_candidates=60)
+    # Same shape as the search these are joining, so a paper added by "find more"
+    # is judged by the same standard and labelled in the same words as the ones
+    # already on screen.
+    ranked = await rerank_and_tag(req.claim, req.claim, papers, max_candidates=60,
+                                  shape=_coerce_shape(req.question_shape))
     await enrich_unpaywall(ranked, top_n=15)
     return {"results": ranked}
 
@@ -940,6 +1127,11 @@ def _slim_source(p: dict) -> dict:
         "oa_pdf": p.get("oa_pdf"),
         "retracted": p.get("retracted", False),
         "preprint": p.get("preprint", False),
+        # The role travels with the source. A paper that is the counter-reading
+        # in the sidebar was anonymous everywhere else, which made the roles look
+        # like a decoration on one panel rather than a property of the source.
+        "stance": p.get("stance"),
+        "shape": p.get("shape"),
     }
 
 
@@ -2156,9 +2348,19 @@ Draft (paragraphs numbered):
 Return ONLY valid JSON:
 - "thesis": {{"found": bool, "quote": "the thesis sentence copied verbatim from the draft, or null", "assessment": "1-2 sentences: is it specific and arguable, and how to sharpen it. No em-dashes."}}
 - "paragraphs": one entry per numbered paragraph, in order: {{"summary": "what it does, in 5-10 words", "serves_thesis": "yes" | "weak" | "no", "note": "one concrete sentence when weak or no, else null"}}
-- "counterargument": {{"found": bool, "note": "1-2 sentences: where the draft answers an opposing view, or why adding one would strengthen this particular argument"}}
-- "counter_query": when counterargument.found is false and a thesis exists, a 3-6 word plain academic search phrase for the strongest OPPOSING evidence; else null
+- "counterargument": the objection this particular draft owes its reader. Work out what that is from what the draft is doing, rather than assuming it argues one side of a debate:
+    · argues a claim → the strongest opposing evidence
+    · estimates how large or how effective something is → the null or much smaller estimate, and the methods that produce it
+    · enumerates factors, limits, or implications → the significant item it left out, or an item it lists that others dispute
+    · traces a mechanism → the rival pathway that explains the same outcome
+    · reads a text or argues a normative position → the rival reading, or the school of thought that would reframe the question
+  Shape: {{"found": bool, "kind": "opposing_evidence" | "null_result" | "missing_item" | "rival_mechanism" | "rival_reading", "note": "1-2 sentences: where the draft already handles it, or what specifically is missing and why it matters here"}}
+- "counter_query": when counterargument.found is false, a 3-6 word plain academic search phrase that would surface exactly that; else null
 - "top_fix": the single highest-impact structural improvement for this draft, 1-2 sentences"""
+
+
+COUNTER_KINDS = {"opposing_evidence", "null_result", "missing_item",
+                 "rival_mechanism", "rival_reading"}
 
 
 @app.post("/api/argument-review")
@@ -2199,7 +2401,11 @@ async def argument_review(req: ArgumentReviewRequest):
         "thesis": {"found": bool(thesis.get("found")), "quote": thesis.get("quote"),
                    "assessment": str(thesis.get("assessment", ""))},
         "paragraphs": paragraphs,
-        "counterargument": {"found": bool(counter.get("found")), "note": str(counter.get("note", ""))},
+        "counterargument": {
+            "found": bool(counter.get("found")),
+            "kind": counter.get("kind") if counter.get("kind") in COUNTER_KINDS else "opposing_evidence",
+            "note": str(counter.get("note", "")),
+        },
         "counter_sources": counter_sources,
         "top_fix": str(parsed.get("top_fix", "")),
     }
@@ -2217,7 +2423,16 @@ Text:
 
 Return ONLY valid JSON: {{"entries": [{{"raw": "the entry exactly as pasted", "title": "the work's title", "author": "first author's surname or null", "year": 1999 or null, "doi": "the DOI if present, else null"}}, ...]}}. Up to {max_entries} entries, in order. If the text is not a reference list, return {{"entries": []}}."""
 
-_CITE_CONCURRENCY = asyncio.Semaphore(5)
+# How hard one audit leans on CrossRef, and how hard the server does in total.
+#
+# There used to be a single global Semaphore(5) doing both jobs, which meant one
+# student pasting a thirty-entry bibliography held every slot and everyone else's
+# audit sat behind it — on a shared deployment their panel simply hung. Per-audit
+# fairness and politeness to the index are two different limits, so they are two
+# different semaphores: each request gets its own small allowance, and the global
+# ceiling still bounds what the server does to CrossRef as a whole.
+_CITE_PER_AUDIT = 4
+_CITE_TOTAL = asyncio.Semaphore(12)
 
 
 def _title_similarity(a: str, b: str) -> float:
@@ -2355,8 +2570,9 @@ def _later_deposit(ag: dict) -> bool:
     )
 
 
-async def _verify_entry(entry: dict) -> dict:
-    async with _CITE_CONCURRENCY:
+async def _verify_entry(entry: dict, gate: asyncio.Semaphore) -> dict:
+    # `gate` is this audit's own allowance; the global ceiling sits inside it.
+    async with gate, _CITE_TOTAL:
         title = str(entry.get("title") or "")
         doi = re.sub(r"^(https?://doi\.org/|doi:)\s*", "", str(entry.get("doi") or ""), flags=re.I).strip().lower() or None
 
@@ -2450,9 +2666,13 @@ async def check_citations(req: CheckCitationsRequest, request: Request):
                 return
             yield _ev("status", message=f"Checking {len(entries)} entr{'ies' if len(entries) != 1 else 'y'} against publisher records…")
 
+            # This audit's own allowance, so a long bibliography paces itself
+            # rather than monopolising the server's budget for CrossRef.
+            gate = asyncio.Semaphore(_CITE_PER_AUDIT)
+
             async def verify_one(i: int, e: dict) -> dict:
                 try:
-                    res = await _verify_entry(e)
+                    res = await _verify_entry(e, gate)
                 except Exception:
                     traceback.print_exc()
                     res = {"verdict": "not_found", "note": "Could not check this entry.", "matched": None}

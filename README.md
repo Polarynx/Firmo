@@ -84,7 +84,8 @@ Create `backend/.env`:
 
 ```
 MISTRAL_API_KEY=...
-SEMANTIC_SCHOLAR_API_KEY=...     # optional, raises that connector's rate limit
+OPENALEX_MAILTO=you@yourdomain.com   # strongly recommended, see Configuration
+SEMANTIC_SCHOLAR_API_KEY=...         # optional, raises that connector's rate limit
 ```
 
 On Windows, run uvicorn through the venv's interpreter directly
@@ -109,6 +110,7 @@ looks like a brand-new user. Add `?keep` to the URL to keep your work.
 | Variable | Where | What it does |
 |---|---|---|
 | `MISTRAL_API_KEY` | backend | Required. Briefs, ranking, and every judgement fall back without it. |
+| `OPENALEX_MAILTO` | backend | An address you own. Puts Firmo in OpenAlex's polite pool, which is faster and throttles far later — and OpenAlex is the index citation expansion leans on hardest. Unset, Firmo sends no contact at all and warns at startup; a placeholder is worse than nothing, since OpenAlex reads it as junk and drops you to the common pool anyway. |
 | `DATABASE_URL` | backend | Postgres for accounts. Omitted, Firmo uses a local SQLite file. |
 | `FIRMO_SECRET` | backend | Signs session tokens. **Required in production** — startup refuses without it. |
 | `ALLOWED_ORIGINS` | backend | Comma-separated origins allowed by CORS. Must include the deployed frontend. |

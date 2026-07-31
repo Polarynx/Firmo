@@ -343,7 +343,11 @@ export default function DocumentCanvas() {
                 </span>
                 <span className="block overflow-hidden pb-[0.06em]">
                   <motion.span variants={LINE} className="block">
-                    <span className="display-italic font-normal">accounted for</span>.
+                    {/* The full stop lives inside the italic run. Kerning never
+                        crosses an element boundary, so a roman period parked
+                        after </span> gets no pair with the italic "r" and floats
+                        away from it — invisible at 14px, a hole at 56px. */}
+                    <span className="display-italic font-normal">accounted for.</span>
                   </motion.span>
                 </span>
               </h1>
@@ -357,13 +361,19 @@ export default function DocumentCanvas() {
                       because that is the direction a reader is already moving.
                       A fade would land the mark everywhere at once and lose the
                       sense that something is reading the sentence. */}
+                  {/* The full stop lives inside the mark, and has to. Outside
+                      it, the period is not part of the sweep, so it is painted
+                      from the first frame while the clause it belongs to is
+                      still clipped to nothing — a dot floating alone for the
+                      1.2s the reveal takes, and stranded on its own line
+                      whenever the clause wraps. Inside, it arrives with its
+                      sentence and can never be orphaned from "year". */}
                   <motion.mark
                     variants={SWEEP}
                     className="mark-claim mark-amber cursor-default"
                   >
-                    though the effect faded after the first year
+                    though the effect faded after the first year.
                   </motion.mark>
-                  .
                 </p>
                 <motion.span variants={FADE_UP} className="record pl-0.5">
                   ↑ needs a source · Firmo finds it, cites it, files it

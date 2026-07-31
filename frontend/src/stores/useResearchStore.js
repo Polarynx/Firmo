@@ -27,29 +27,47 @@ export function loadHistory() {
 
 let abort = null
 
+// Which search is the current one. A run that has been superseded must not touch
+// shared state on its way out, and without a way to tell, it does: the aborted
+// run's `finally` sets isSearching to false and nulls the controller belonging
+// to the run that replaced it, so the live search streams into a store that has
+// already declared itself finished. Two searches fired close together — which a
+// double-registered key handler does on every press — left the panel stuck on
+// "Reading your topic…" while the server happily answered both, and each
+// abandoned stream held its proxy socket for the full thirty seconds until the
+// tab hit Chrome's six-connection limit and every later request queued forever.
+let runId = 0
+
 export const useResearchStore = create((set, get) => ({
   query: '',
   searchedQuery: '',
   yearFrom: null,
   brief: null,
   inputType: 'topic',
+  // What kind of question this is, which decides what the roles below are
+  // called and what the panel tells the student a good answer looks like.
+  questionShape: 'none',
   results: [],
   provisional: false,
-  stanceCounts: null,
-  stanceFilter: 'all',
+  roleCounts: null,
   hiddenSources: new Set(),
   showRelated: false,
   isSearching: false,
   statusMsg: '',
   // The fan-out arms for the search in flight, each with its own hit count.
   arms: [],
+  // Which stage the search is in, and how many candidates have been gathered so
+  // far. Both are already on the wire; keeping them lets the sift be drawn from
+  // the real numbers rather than from a timer pretending to be one.
+  stage: '',
+  gathered: 0,
+  kept: 0,
   error: '',
   moreLoading: false,
   history: loadHistory(),
 
   setQuery: query => set({ query }),
   setYearFrom: yearFrom => set({ yearFrom }),
-  setStanceFilter: stanceFilter => set({ stanceFilter }),
   setShowRelated: showRelated => set({ showRelated }),
 
   toggleSourceFilter: src => set(s => {
@@ -65,6 +83,7 @@ export const useResearchStore = create((set, get) => ({
   },
 
   cancel: () => {
+    runId += 1          // nothing in flight speaks for the store any more
     abort?.abort()
     abort = null
     set({ isSearching: false })
@@ -76,7 +95,9 @@ export const useResearchStore = create((set, get) => ({
     if (!activeQuery) return
 
     abort?.abort()
-    abort = new AbortController()
+    const controller = new AbortController()
+    const myRun = ++runId
+    abort = controller
 
     set({
       query: activeQuery,
@@ -84,13 +105,16 @@ export const useResearchStore = create((set, get) => ({
       isSearching: true,
       statusMsg: 'Reading your topic…',
       arms: [],
+      stage: '',
+      gathered: 0,
+      kept: 0,
       error: '',
       brief: null,
       inputType: 'topic',
+      questionShape: 'none',
       results: [],
       provisional: false,
-      stanceCounts: null,
-      stanceFilter: 'all',
+      roleCounts: null,
       hiddenSources: new Set(),
       showRelated: false,
     })
@@ -102,13 +126,22 @@ export const useResearchStore = create((set, get) => ({
 
     try {
       await streamNDJSON('/api/research', { query: activeQuery, year_from: get().yearFrom }, {
-        signal: abort.signal,
+        signal: controller.signal,
         onEvent: ev => {
+          // A superseded run may still have buffered lines in flight.
+          if (myRun !== runId) return
           switch (ev.event) {
             case 'status':
               // Arms ride along on the status ticks, so the ledger's counts
               // update at the same rate as the message above them.
-              set(ev.arms ? { statusMsg: ev.message, arms: ev.arms } : { statusMsg: ev.message })
+              set({
+                statusMsg: ev.message,
+                ...(ev.arms ? { arms: ev.arms } : {}),
+                ...(ev.stage ? { stage: ev.stage } : {}),
+                ...(typeof ev.papers === 'number' ? { gathered: ev.papers } : {}),
+                ...(typeof ev.considered === 'number' ? { gathered: ev.considered } : {}),
+                ...(typeof ev.kept === 'number' ? { kept: ev.kept } : {}),
+              })
               break
             case 'arms':
               set({ arms: ev.arms || [] })
@@ -119,6 +152,7 @@ export const useResearchStore = create((set, get) => ({
               set({
                 brief: ev,
                 inputType: ev.input_type || 'topic',
+                questionShape: ev.question_shape || 'none',
                 searchedQuery: corrected,
                 ...(corrected !== activeQuery ? { query: corrected } : {}),
               })
@@ -131,7 +165,11 @@ export const useResearchStore = create((set, get) => ({
               set({
                 results: ev.results || [],
                 provisional: false,
-                stanceCounts: ev.stance_counts || null,
+                roleCounts: ev.stance_counts || null,
+                stage: 'done',
+                gathered: ev.total_considered || 0,
+                kept: (ev.results || []).length,
+                ...(ev.question_shape ? { questionShape: ev.question_shape } : {}),
               })
               // Recorded once the search has actually resolved, not when it was
               // fired: a cancelled or failed search is not work done, and a
@@ -164,25 +202,29 @@ export const useResearchStore = create((set, get) => ({
         set({ history: loadHistory() })
       }
     } catch (e) {
-      if (e.name !== 'AbortError') {
+      if (e.name !== 'AbortError' && myRun === runId) {
         set({ error: e.message || 'Something went wrong. Is the backend running?' })
       }
     } finally {
-      set({ isSearching: false })
-      abort = null
-      if (useWorkspaceStore.getState().activeMode === 'searching') {
-        useWorkspaceStore.getState().setMode('idle')
+      // Only the newest run is allowed to declare the search over.
+      if (myRun === runId) {
+        set({ isSearching: false })
+        abort = null
+        if (useWorkspaceStore.getState().activeMode === 'searching') {
+          useWorkspaceStore.getState().setMode('idle')
+        }
       }
     }
   },
 
   async findMore() {
-    const { results, searchedQuery, yearFrom } = get()
+    const { results, searchedQuery, yearFrom, questionShape } = get()
     set({ moreLoading: true })
     try {
       const data = await postJSON('/api/more-sources', {
         claim: searchedQuery,
         year_from: yearFrom,
+        question_shape: questionShape,
         seen_ids: results.map(paperId).filter(Boolean),
       })
       set(s => ({ results: [...s.results, ...(data.results || [])] }))
@@ -193,10 +235,10 @@ export const useResearchStore = create((set, get) => ({
 
 // ── Selectors ──────────────────────────────────────────────────────────────
 
+// The database filter is the only one left. Role used to filter here too, back
+// when the panel showed one role at a time; the sources view stacks them all
+// now, so the rail scrolls rather than hides and there is nothing to subtract.
 export function selectFiltered(s) {
-  return s.results.filter(p => {
-    if (s.stanceFilter !== 'all' && p.stance !== s.stanceFilter) return false
-    if (s.hiddenSources.size > 0 && s.hiddenSources.has(p.source)) return false
-    return true
-  })
+  if (s.hiddenSources.size === 0) return s.results
+  return s.results.filter(p => !s.hiddenSources.has(p.source))
 }

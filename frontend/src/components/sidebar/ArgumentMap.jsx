@@ -11,6 +11,16 @@ import { EmptyNote, ErrorNote, SkeletonCard, StatusLine } from '../ui/primitives
 // each paragraph earns its place, and whether the other side ever gets an
 // answer. This is what the claim pass cannot see.
 
+// The objection a draft owes depends on what the draft is doing. The backend
+// works out which one applies; these are the words for it.
+const COUNTER_KIND = {
+  opposing_evidence: { label: 'Counterargument', cta: 'For your counterargument section' },
+  null_result:       { label: 'The null result',  cta: 'Studies that found little or no effect' },
+  missing_item:      { label: 'What is missing',  cta: 'The item your list does not cover' },
+  rival_mechanism:   { label: 'The rival pathway', cta: 'The other explanation for the same outcome' },
+  rival_reading:     { label: 'The rival reading', cta: 'The position you have to answer' },
+}
+
 const SERVES = {
   yes:  { dot: 'bg-brand-500 dark:bg-signal', label: 'Serves the thesis' },
   weak: { dot: 'bg-amber-400', label: 'Loosely connected' },
@@ -134,9 +144,15 @@ export default function ArgumentMap() {
         </div>
       )}
 
+      {/* Not every draft owes its reader a counterargument, because not every
+          draft is arguing a side. A paper estimating how large an effect is
+          owes the null result; one enumerating vulnerabilities owes the item it
+          left out. Naming the actual obligation is the difference between
+          useful advice and telling a student to bolt an opposing-views
+          paragraph onto a literature review. */}
       <div className="card p-3.5 flex flex-col gap-2.5">
         <div className="flex items-center justify-between gap-2">
-          <span className="eyebrow">Counterargument</span>
+          <span className="eyebrow">{COUNTER_KIND[data.counterargument?.kind]?.label || 'Counterargument'}</span>
           <FoundChip ok={data.counterargument?.found} yes="Addressed" no="Missing" />
         </div>
         {data.counterargument?.note && (
@@ -148,7 +164,7 @@ export default function ArgumentMap() {
             {/* Retrieval can't guarantee an opposing stance, so this promises a
                 starting point for the section, not proven opposition. */}
             <span className="eyebrow !text-amber-600 dark:!text-amber-400">
-              For your counterargument section
+              {COUNTER_KIND[data.counterargument?.kind]?.cta || 'For your counterargument section'}
             </span>
             {data.counter_sources.map((p, i) => {
               const saved = savedIds.has(paperId(p))

@@ -41,9 +41,34 @@ _S2_KEY = os.getenv("SEMANTIC_SCHOLAR_API_KEY")
 
 # OpenAlex's polite pool wants a real address, and it is the one index Firmo now
 # leans on hardest: keyword search, seed resolution, references and cited-by all
-# go through it, so a search can spend a dozen calls there. A placeholder here
-# earns 429s under load — set OPENALEX_MAILTO in the environment.
-OPENALEX_MAILTO = os.getenv("OPENALEX_MAILTO", "firmo@example.com")
+# go through it, so a search can spend a dozen calls there. Set OPENALEX_MAILTO
+# in the environment to a real address you own.
+#
+# Unset, Firmo sends no mailto at all rather than a placeholder. This used to
+# default to "firmo@example.com", which is worse than sending nothing:
+# example.com is IANA-reserved and can never receive mail, so OpenAlex reads it
+# as junk, drops the request back to the common pool anyway, and Firmo pays the
+# cost of identifying itself for none of the benefit — while also being the kind
+# of caller their abuse tooling is designed to notice.
+#
+# OpenAlex now meters by BUDGET as well as by rate ("Insufficient budget. This
+# request costs $0.001 but you only have $0.0001 remaining"), and the polite
+# pool is the difference between hitting that occasionally and constantly.
+_mailto = (os.getenv("OPENALEX_MAILTO") or "").strip()
+if _mailto.lower().endswith(("@example.com", "@example.org", "@example.net")):
+    _mailto = ""
+OPENALEX_MAILTO = _mailto or None
+
+
+def _polite(params: dict) -> dict:
+    """Query params with the polite-pool contact attached, when there is one.
+
+    httpx renders a None param as an empty `mailto=`, which is its own kind of
+    junk, so the key is omitted entirely rather than sent blank.
+    """
+    if OPENALEX_MAILTO:
+        return {**params, "mailto": OPENALEX_MAILTO}
+    return params
 
 _client: Optional[httpx.AsyncClient] = None
 
@@ -408,14 +433,13 @@ async def search_openalex(query: str, limit: int = 8, year_from: Optional[int] =
     filter_str = "type:article|review|book|book-chapter|dissertation"
     if year_from:
         filter_str += f",publication_year:>{year_from - 1}"
-    params = {
+    params = _polite({
         "search": query,
         "filter": filter_str,
         "per-page": limit,
         "select": OPENALEX_SELECT,
         "sort": "relevance_score:desc",
-        "mailto": OPENALEX_MAILTO,  # polite pool, faster responses
-    }
+    })
     try:
         data = (await _get(OPENALEX_URL, params)).json()
     except Exception:
@@ -1028,12 +1052,11 @@ async def _openalex_by_ids(ids: list[str], year_from: Optional[int] = None) -> l
         if year_from:
             filter_str += f",publication_year:>{year_from - 1}"
         try:
-            data = (await _get(OPENALEX_URL, {
+            data = (await _get(OPENALEX_URL, _polite({
                 "filter": filter_str,
                 "per-page": len(short),
                 "select": OPENALEX_SELECT,
-                "mailto": OPENALEX_MAILTO,
-            }, retries=1)).json()
+            }), retries=1)).json()
         except Exception:
             continue
         out.extend(p for p in (_openalex_paper(w) for w in data.get("results", [])) if p)
@@ -1059,7 +1082,7 @@ async def _seed_work(paper: dict) -> Optional[dict]:
         try:
             return (await _get(
                 f"{OPENALEX_URL}/doi:{doi}",
-                {"select": SEED_SELECT, "mailto": OPENALEX_MAILTO},
+                _polite({"select": SEED_SELECT}),
                 timeout=10.0, retries=1,
             )).json()
         except Exception:
@@ -1069,12 +1092,11 @@ async def _seed_work(paper: dict) -> Optional[dict]:
     if len(title) < 12:
         return None
     try:
-        data = (await _get(OPENALEX_URL, {
+        data = (await _get(OPENALEX_URL, _polite({
             "search": title[:200],
             "per-page": 3,
             "select": SEED_SELECT,
-            "mailto": OPENALEX_MAILTO,
-        }, timeout=10.0, retries=1)).json()
+        }), timeout=10.0, retries=1)).json()
     except Exception:
         return None
 
@@ -1097,13 +1119,12 @@ async def _cited_by(work_id: str, limit: int, year_from: Optional[int] = None) -
     if year_from:
         filter_str += f",publication_year:>{year_from - 1}"
     try:
-        data = (await _get(OPENALEX_URL, {
+        data = (await _get(OPENALEX_URL, _polite({
             "filter": filter_str,
             "per-page": limit,
             "select": OPENALEX_SELECT,
             "sort": "cited_by_count:desc",
-            "mailto": OPENALEX_MAILTO,
-        }, retries=1)).json()
+        }), retries=1)).json()
     except Exception:
         return []
     return [p for p in (_openalex_paper(w) for w in data.get("results", [])) if p]

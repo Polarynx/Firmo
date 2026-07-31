@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { postJSON } from '../../lib/api'
 import { inTextCitationWithPage } from '../../lib/cite'
 import { paperId } from '../../lib/projects'
-import { SOURCE_LABELS, SOURCE_STAMPS, STANCE, SPRING } from '../../lib/constants'
+import { SOURCE_LABELS, SOURCE_STAMPS, roleFor, SPRING } from '../../lib/constants'
 import { renderMarkup, stripMarkup } from '../../lib/richText'
 import { useWorkspaceStore } from '../../stores/useWorkspaceStore'
 import { useSavedIds } from '../../stores/selectors'
@@ -15,7 +15,7 @@ const ABSTRACT_LIMIT = 190
 // A catalogue card. Everything needed to judge a source and act on it, sized
 // for the context sidebar rather than a full-width results page.
 
-export default function SourceCard({ paper, index = 0, query = '', showStance = true, compact = false }) {
+export default function SourceCard({ paper, index = 0, query = '', shape = 'none', showRole = true, compact = false }) {
   const style = useWorkspaceStore(s => s.citationStyle)
   const toggleSource = useWorkspaceStore(s => s.toggleSource)
   const savedIds = useSavedIds()
@@ -33,7 +33,11 @@ export default function SourceCard({ paper, index = 0, query = '', showStance = 
 
   const authors = Array.isArray(paper.authors) ? paper.authors : []
   const abstract = paper.abstract || ''
-  const stance = STANCE[paper.stance]
+  // The shape a paper was judged under is stamped on it, so a source saved from
+  // an "extent" search still reads "Null or reversed" months later in a project
+  // whose current search was something else entirely. The prop only wins when
+  // the paper carries no shape of its own.
+  const role = paper.stance ? roleFor(paper.stance, paper.shape || shape) : null
 
   // The ranker grades relevance out of 10 and that grade is what decides the
   // tier, so it is the honest number to show. Raw embedding cosine is not:
@@ -109,7 +113,7 @@ export default function SourceCard({ paper, index = 0, query = '', showStance = 
       animate={{ opacity: 1, y: 0 }}
       transition={{ ...SPRING, delay: Math.min(index, 6) * 0.03 }}
       whileHover={{ y: -2 }}
-      className={`card card-hover p-3.5 flex flex-col gap-2.5 border-l-2 ${stance?.rail || 'border-l-line'}
+      className={`card card-hover p-3.5 flex flex-col gap-2.5 border-l-2 ${role?.rail || 'border-l-line'}
         hover:shadow-card`}
     >
       {/* Call-number line */}
@@ -197,8 +201,8 @@ export default function SourceCard({ paper, index = 0, query = '', showStance = 
         </a>
       )}
 
-      {/* Stamps: safety first, then stance, then access */}
-      {(paper.retracted || paper.preprint || (showStance && stance) || paper.oa_pdf) && (
+      {/* Stamps: safety first, then role, then access */}
+      {(paper.retracted || paper.preprint || (showRole && role) || paper.oa_pdf) && (
         <div className="flex items-center flex-wrap gap-1.5">
           {paper.retracted && (
             <Chip
@@ -214,7 +218,7 @@ export default function SourceCard({ paper, index = 0, query = '', showStance = 
               title="Not peer-reviewed yet. Ask your instructor before leaning on it."
             />
           )}
-          {showStance && stance && <Chip tone={stance} />}
+          {showRole && role && <Chip tone={role} />}
           {paper.oa_pdf && (
             <a href={paper.oa_pdf} target="_blank" rel="noopener noreferrer"
               title="Open-access PDF, via Unpaywall"
@@ -301,7 +305,7 @@ export default function SourceCard({ paper, index = 0, query = '', showStance = 
               <div key={i} className="border-l-2 border-l-highlight/80 bg-highlight/[0.06] rounded-r px-3 py-2 flex flex-col gap-1.5">
                 <p className="text-[11.5px] text-t1 leading-relaxed">
                   “{q.quote}”
-                  {q.page != null && <span className="record ml-1.5">· p. {q.page}</span>}
+                  {q.page != null && <span className="record ml-1.5">· p.&thinsp;{q.page}</span>}
                 </p>
                 {q.why && <p className="text-[10.5px] text-t3">{q.why}</p>}
                 <button onClick={() => copyQuote(q, i)}

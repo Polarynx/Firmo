@@ -3,7 +3,8 @@ import { AnimatePresence, motion } from 'framer-motion'
 
 import { API } from '../../lib/api'
 import { authToken } from '../../stores/useAuthStore'
-import { SPRING } from '../../lib/constants'
+import { useSavedSources } from '../../stores/selectors'
+import { SPRING, roleFor } from '../../lib/constants'
 
 // ── The evidence drawer ─────────────────────────────────────────────────────
 //
@@ -23,6 +24,21 @@ import { SPRING } from '../../lib/constants'
 export default function EvidenceDrawer({ claim, projectId }) {
   const [state, setState] = useState({ status: 'idle', passages: [], corpusSize: 0 })
   const [open, setOpen] = useState(null)
+  const savedSources = useSavedSources()
+
+  // The corpus keys passages by DOI (or a hash of the title), which is not the
+  // id the saved-source list uses, so the role is recovered by matching the two
+  // the way a librarian would: same DOI, or failing that the same title.
+  const roleOf = passage => {
+    const doi = (passage.source_key || '').toLowerCase()
+    const title = (passage.title || '').trim().toLowerCase()
+    const hit = savedSources.find(s => {
+      const sDoi = (s.doi || '').trim().toLowerCase()
+      if (sDoi && doi && sDoi === doi) return true
+      return !!title && (s.title || '').trim().toLowerCase() === title
+    })
+    return hit?.stance ? roleFor(hit.stance, hit.shape) : null
+  }
 
   const text = (claim?.claim || claim?.quote || '').trim()
   const signedIn = !!authToken()
@@ -64,6 +80,7 @@ export default function EvidenceDrawer({ claim, projectId }) {
 
       {state.passages.map((p, i) => {
         const isOpen = open === i
+        const role = roleOf(p)
         return (
           <motion.div
             key={`${p.source_key}-${p.page}-${i}`}
@@ -77,7 +94,17 @@ export default function EvidenceDrawer({ claim, projectId }) {
               className="w-full text-left px-3 py-2 flex items-baseline justify-between gap-3
                 bg-hair/[0.03] hover:bg-hair/[0.06] transition-colors"
             >
-              <span className="text-[11.5px] text-t1 truncate">{p.title || 'Saved paper'}</span>
+              <span className="flex items-baseline gap-1.5 min-w-0">
+                {/* Which way this paper cuts, carried over from the search that
+                    found it. A passage that backs the claim and one that
+                    complicates it look identical otherwise, and the difference
+                    is the whole reason to read the second one. */}
+                {role && (
+                  <span title={role.label}
+                    className={`w-1.5 h-1.5 rounded-full shrink-0 self-center ${role.dot}`} />
+                )}
+                <span className="text-[11.5px] text-t1 truncate">{p.title || 'Saved paper'}</span>
+              </span>
               <span className="record shrink-0">page {p.page}</span>
             </button>
 
@@ -98,7 +125,7 @@ export default function EvidenceDrawer({ claim, projectId }) {
                     style={{ background: '#F7F5F0', color: '#1A1613' }}>
                     <span className="font-mono text-[9px] uppercase tracking-[0.12em]
                       pt-[5px] text-right" style={{ color: '#8C8379' }}>
-                      p.{p.page}
+                      p.&thinsp;{p.page}
                     </span>
                     <p className="font-display text-[13px] leading-relaxed">
                       {p.text}

@@ -5,7 +5,7 @@ import { useAnnotationStore } from '../../stores/useAnnotationStore'
 import { useResearchStore } from '../../stores/useResearchStore'
 import { useWorkspaceStore } from '../../stores/useWorkspaceStore'
 import { useSavedSources } from '../../stores/selectors'
-import { SPRING } from '../../lib/constants'
+import { SPRING, roleFor } from '../../lib/constants'
 import { EmptyNote, ErrorNote, SkeletonCard, StatusLine } from '../ui/primitives'
 
 // View 5: the bridge between "Firmo found forty sources" and "I don't know how
@@ -23,6 +23,14 @@ export default function OutlineView() {
   const executeSearch = useResearchStore(s => s.executeSearch)
 
   const [thesis, setThesis] = useState('')
+
+  // The outline names its sources by title, so that is what the role is looked
+  // up by. Cheap enough at saved-source scale to do inline.
+  const roleOfTitle = title => {
+    const t = (title || '').trim().toLowerCase()
+    const hit = t && sources.find(s => (s.title || '').trim().toLowerCase() === t)
+    return hit?.stance ? roleFor(hit.stance, hit.shape) : null
+  }
 
   if (sources.length === 0) {
     return (
@@ -88,13 +96,20 @@ export default function OutlineView() {
               <p className="text-[12px] text-t1 leading-relaxed">{pt.point}</p>
               {pt.sources?.length > 0 && (
                 <div className="flex flex-wrap gap-1">
-                  {pt.sources.map((s, i) => (
-                    <span key={i} title={s.title}
-                      className="font-mono text-[9px] uppercase tracking-[0.1em] px-1.5 py-0.5 rounded
-                        border border-brand-500/40 text-brand-600 dark:text-signal">
-                      {s.label}
-                    </span>
-                  ))}
+                  {/* Coloured by what the source does, not uniformly cobalt.
+                      A point whose only backing is orange is a point argued
+                      from the papers that disagree with it, and the student
+                      should be able to see that from across the panel. */}
+                  {pt.sources.map((s, i) => {
+                    const role = roleOfTitle(s.title)
+                    return (
+                      <span key={i} title={role ? `${s.title} — ${role.label}` : s.title}
+                        className={`font-mono text-[9px] uppercase tracking-[0.1em] px-1.5 py-0.5
+                          rounded border ${role ? role.chip : 'border-brand-500/40 text-brand-600 dark:text-signal'}`}>
+                        {s.label}
+                      </span>
+                    )
+                  })}
                 </div>
               )}
               {pt.gap_query && (

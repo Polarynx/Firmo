@@ -76,6 +76,10 @@ class MoreSourcesRequest(BaseModel):
     claim: str
     year_from: Optional[int] = None
     seen_ids: list[str] = []
+    # The shape the original search was judged under. Without it these papers are
+    # scored against the generic role hints and land in the same stacks reading
+    # "Supports" while everything around them reads "Effect estimate".
+    question_shape: Optional[str] = None
 
 
 class AskSourcesRequest(BaseModel):

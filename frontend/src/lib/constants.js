@@ -72,31 +72,112 @@ export const CITATION_STYLES = [
 // Add a status here rather than hard-coding classes in a component, or the
 // rule stops being checkable.
 
-export const STANCE = {
-  supports: {
-    label: 'Supports',
+// ── What a source will do in the paper ─────────────────────────────────────
+//
+// Not "is it for or against". Firmo used to tag every source Supports /
+// Counterpoint / Mixed / Background, which is the right vocabulary for exactly
+// one kind of question — an arguable causal thesis — and quietly wrong for most
+// of what students actually bring. "What are the primary vulnerabilities of
+// DAOs" has no opposing side; a paper naming a fourth vulnerability is not a
+// counterpoint to one naming the first three. "To what extent does trauma
+// framing subvert Western redemption arcs" has no evidence to disagree with;
+// there are readings, and calling one of them a counterpoint tells the student
+// to stage a debate the field is not having.
+//
+// So the roles below are defined by FUNCTION — what the source lets the student
+// do — which holds across empirical, interpretive, and enumerative work alike.
+// The colour is fixed to the function, and only the wording changes per
+// question shape, so the palette keeps meaning one thing everywhere.
+export const ROLE = {
+  finding: {
+    label: 'Finding',
     chip: 'text-brand-500 border-brand-500/50 dark:text-signal dark:border-signal/40',
     dot: 'bg-brand-500 dark:bg-signal',
     rail: 'border-l-brand-500 dark:border-l-signal',
   },
-  counters: {
-    label: 'Counterpoint',
+  tension: {
+    label: 'Tension',
     chip: 'text-orange-600 border-orange-400/50 dark:text-orange-300 dark:border-orange-500/40',
     dot: 'bg-orange-500',
     rail: 'border-l-orange-500',
   },
-  mixed: {
-    label: 'Mixed evidence',
+  conditional: {
+    label: 'Depends',
     chip: 'text-amber-600 border-amber-400/50 dark:text-amber-300 dark:border-amber-500/40',
     dot: 'bg-amber-400',
     rail: 'border-l-amber-400',
   },
-  background: {
-    label: 'Background',
+  // Framework and context are both graphite, because neither is evidence and
+  // the palette rule says only evidence earns colour. They are told apart by
+  // the dot instead: framework is a ring, context is a solid. An apparatus you
+  // argue *with* and material you argue *about* are different jobs, and a
+  // student assembling a methods section needs to see which is which without
+  // reading every card.
+  framework: {
+    label: 'Framework',
     chip: 'text-unverified border-unverified/30',
-    dot: 'bg-unverified',
+    dot: 'border border-unverified bg-transparent',
     rail: 'border-l-unverified/50',
   },
+  context: {
+    label: 'Context',
+    chip: 'text-unverified border-unverified/20',
+    dot: 'bg-unverified/60',
+    rail: 'border-l-unverified/30',
+  },
+}
+
+export const ROLE_ORDER = ['finding', 'tension', 'conditional', 'framework', 'context']
+
+// The same five roles, said in the language the question is asking in. A
+// magnitude question wants "Effect estimate", not "Finding"; a reading of a
+// novel wants "Reading", not "Evidence". Only the label moves — the colour and
+// the meaning stay put.
+const ROLE_LABELS = {
+  extent: {
+    finding: 'Effect estimate', tension: 'Null or reversed', conditional: 'Moderator',
+    framework: 'Method', context: 'Context',
+  },
+  mechanism: {
+    finding: 'Pathway', tension: 'Rival pathway', conditional: 'Boundary condition',
+    framework: 'Theory', context: 'Context',
+  },
+  comparison: {
+    finding: 'For this side', tension: 'For the other', conditional: 'Both / neither',
+    framework: 'Method', context: 'Context',
+  },
+  enumeration: {
+    finding: 'Names an item', tension: 'Disputes an item', conditional: 'Case-dependent',
+    framework: 'Taxonomy', context: 'Case material',
+  },
+  interpretive: {
+    finding: 'Reading', tension: 'Counter-reading', conditional: 'Qualified',
+    framework: 'Theory', context: 'Primary source',
+  },
+  causal: {
+    finding: 'Supports', tension: 'Counterpoint', conditional: 'Mixed evidence',
+    framework: 'Framework', context: 'Background',
+  },
+}
+
+/** The role's config, worded for this question's shape. */
+export function roleFor(key, shape) {
+  const base = ROLE[key] || ROLE.context
+  const label = ROLE_LABELS[shape]?.[key]
+  return label ? { ...base, label } : base
+}
+
+// What the panel calls the question, and the one line under it that says what a
+// good answer to this kind of question looks like. Shown once, above the roles,
+// because a student who has never been told that "to what extent" is not a
+// yes/no question is the student Firmo exists for.
+export const SHAPE = {
+  extent: { label: 'How much', note: 'The answer is a size and what it depends on, not a yes or no.' },
+  mechanism: { label: 'How it works', note: 'The answer is the pathways, named — usually two or three that carry the weight.' },
+  comparison: { label: 'This or that', note: 'Two real explanations. The weaker one still has to be accounted for, not dismissed.' },
+  enumeration: { label: 'What are the', note: 'The answer is a list, and it is judged on coverage. A missed item is the flaw.' },
+  interpretive: { label: 'A reading', note: 'Positions are argued, not tested. Take one, and know what the strongest rival is.' },
+  causal: { label: 'An argument', note: 'A claim with a real opposing case. Answer it in the paper rather than around it.' },
 }
 
 // ── Claim statuses ─────────────────────────────────────────────────────────

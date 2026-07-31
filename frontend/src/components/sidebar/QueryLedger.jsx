@@ -1,6 +1,7 @@
-import { motion } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
 
 import { useResearchStore } from '../../stores/useResearchStore'
+import SiftField from '../ui/SiftField'
 
 // ── The query ledger ────────────────────────────────────────────────────────
 //
@@ -17,14 +18,53 @@ import { useResearchStore } from '../../stores/useResearchStore'
 // It also sets up the honest version of the pitch: these are the queries Firmo
 // wrote on your behalf, and this is what each one found.
 
+// Ranking is where the candidates get cut, and enrichment runs after it, so by
+// the time PDFs are being looked up the decision has already been made.
+const CULLING = new Set(['rank', 'enrich', 'done'])
+
 export default function QueryLedger() {
   const arms = useResearchStore(s => s.arms)
   const statusMsg = useResearchStore(s => s.statusMsg)
+  const stage = useResearchStore(s => s.stage)
+  const gathered = useResearchStore(s => s.gathered)
+  const kept = useResearchStore(s => s.kept)
 
   if (!arms?.length) return null
 
+  // Not while ranking is still running: nothing has been cut yet, and drawing
+  // the cull before the decision exists would be a loading animation dressed up
+  // as a result. The counts arrive with the enrich tick, which is when it is true.
+  const culling = CULLING.has(stage) && kept > 0
+
   return (
     <div className="flex flex-col gap-2">
+      {/* The field goes above the arms, because the arms explain it: this many
+          marks, gathered by these queries, cut to that many. */}
+      {gathered > 0 && (
+        <div className="flex flex-col gap-1.5 pb-1">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="eyebrow">
+              {culling ? 'Judging every candidate' : 'Gathering candidates'}
+            </span>
+            <span className="record tabular-nums">
+              <AnimatePresence mode="popLayout" initial={false}>
+                <motion.span
+                  key={culling ? 'kept' : 'gathered'}
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.18 }}
+                  className="inline-block"
+                >
+                  {culling && kept ? `${kept} of ${gathered} kept` : gathered}
+                </motion.span>
+              </AnimatePresence>
+            </span>
+          </div>
+          <SiftField gathered={gathered} kept={kept} culling={culling} />
+        </div>
+      )}
+
       <span className="eyebrow">Queries run</span>
 
       <ol className="flex flex-col">

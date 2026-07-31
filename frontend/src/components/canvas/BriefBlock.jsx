@@ -4,6 +4,18 @@ import { SPRING } from '../../lib/constants'
 import { SkeletonLines } from '../ui/primitives'
 import StreamingText from '../ui/StreamingText'
 
+// What kind of question this is, said in the corner of the brief. It is the
+// first thing that tells a student their "to what extent" question is not
+// asking them to pick a side.
+const SHAPE_LABELS = {
+  extent: 'A question of degree',
+  mechanism: 'A question of mechanism',
+  comparison: 'A question of which explanation',
+  enumeration: 'A question of coverage',
+  interpretive: 'A question of interpretation',
+  causal: 'An arguable claim',
+}
+
 const TYPE_LABELS = {
   topic: 'Topic',
   thesis: 'Thesis',
@@ -51,15 +63,36 @@ export default function BriefBlock() {
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between gap-2">
               <span className="eyebrow !text-brand-500 dark:!text-signal">Research brief</span>
-              {TYPE_LABELS[brief.input_type] && (
-                <span className="eyebrow">{TYPE_LABELS[brief.input_type]}</span>
-              )}
+              <span className="eyebrow">
+                {SHAPE_LABELS[brief.question_shape] || TYPE_LABELS[brief.input_type] || ''}
+              </span>
             </div>
-            <StreamingText
-              text={brief.brief || ''}
-              caret
-              className="font-display text-[15px] leading-relaxed text-t1"
-            />
+            {/* Answer in the shape the question was asked in. "What are the
+                primary vulnerabilities of DAOs" has a list for an answer, and
+                setting that list as a paragraph loses the one property the
+                student is being graded on — whether the list is complete. */}
+            {brief.brief_items?.length > 1 ? (
+              <ol className="flex flex-col gap-1.5">
+                {brief.brief_items.map((item, i) => (
+                  <motion.li
+                    key={i}
+                    initial={{ opacity: 0, x: -6 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ ...SPRING, delay: i * 0.06 }}
+                    className="grid grid-cols-[1.5rem_1fr] gap-1 font-display text-[15px] leading-relaxed text-t1"
+                  >
+                    <span className="record pt-1 tabular-nums">{String(i + 1).padStart(2, '0')}</span>
+                    <span>{item}</span>
+                  </motion.li>
+                ))}
+              </ol>
+            ) : (
+              <StreamingText
+                text={brief.brief || ''}
+                caret
+                className="font-display text-[15px] leading-relaxed text-t1"
+              />
+            )}
           </div>
 
           {Array.isArray(brief.angles) && brief.angles.filter(a => a?.title).length > 0 && (

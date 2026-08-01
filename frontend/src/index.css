@@ -577,6 +577,7 @@
   transition: background-color 0.2s ease, box-shadow 0.2s ease;
 }
 .mark-amber   { background-color: rgba(245, 158, 11, 0.15); box-shadow: inset 0 -2px 0 #FBBF24; }
+
 .mark-red     { background-color: rgba(239, 68, 68, 0.15);  box-shadow: inset 0 -2px 0 #F87171; }
 .mark-green   { background-color: rgba(74, 222, 128, 0.15); box-shadow: inset 0 -2px 0 #4ADE80; }
 .mark-dotted  { box-shadow: inset 0 -1px 0 rgba(148, 163, 184, 0.45); }

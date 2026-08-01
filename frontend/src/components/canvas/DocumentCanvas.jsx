@@ -67,13 +67,6 @@ const FADE_UP = {
 // words left to right — the direction the reader is already travelling — so the
 // mark reads as something moving through the sentence rather than appearing on
 // top of it. Delayed past the rest of the stagger: it is the closing beat.
-const SWEEP = {
-  rest: { clipPath: 'inset(0 100% 0 0)' },
-  run: {
-    clipPath: 'inset(0 0% 0 0)',
-    transition: { duration: 0.85, ease: EASE, delay: 0.35 },
-  },
-}
 
 // One example, drawn fresh. Not the same one twice in a row within a session,
 // because a "try another" that returns what you just saw reads as broken.
@@ -118,10 +111,15 @@ export default function DocumentCanvas() {
   const scrollRef = useRef(null)
   const sectionRef = useRef(null)
   const pasteGuard = useRef(false)
-  // A different example on every visit, and on demand. Seeded from the pool at
-  // mount rather than cycled on a timer: a line that moves while you are reading
-  // it is a line you stop reading.
+  // A different example every few seconds, unasked.
+  //
+  // The pool exists to seed ideas while the student is still deciding what to
+  // type, and an example behind a button is one most people never see. So it
+  // rotates on its own — slowly, and only while nobody is looking at it. The
+  // one real hazard is a line that changes mid-read, which the hover pause
+  // handles: point at it and it holds still until you leave.
   const [example, setExample] = useState(pickExample)
+  const [paused, setPaused] = useState(false)
 
   const [scrolled, setScrolled] = useState(false)
   const [hoveredMark, setHoveredMark] = useState(null)
@@ -138,6 +136,16 @@ export default function DocumentCanvas() {
     readTimer.current = setTimeout(() => setReading(false), 12000)
   }
   useEffect(() => () => clearTimeout(readTimer.current), [])
+
+  // Only while the canvas is empty — once there is a draft the hero is gone and
+  // the timer would be waking a component nobody can see. Reduced motion stops
+  // it outright rather than slowing it: the objection there is movement itself.
+  const heroVisible = !doc.trim() && !brief
+  useEffect(() => {
+    if (!heroVisible || paused || reduceMotion) return
+    const id = setInterval(() => setExample(pickExample), 7000)
+    return () => clearInterval(id)
+  }, [heroVisible, paused, reduceMotion])
 
   const busy = activeMode !== 'idle'
   const intent = detectIntent(doc)
@@ -346,15 +354,19 @@ export default function DocumentCanvas() {
         onMouseDown={focusDocument}
         className="relative z-10 flex-1 overflow-y-auto scroll-quiet"
       >
-        {/* pb-32 is the clearance the floating omni-bar needs: the last line of
-            a draft has to be able to scroll clear of the glass. */}
+        {/* Clearance for the floating dock AND the desk-edge scrim above it.
+            pb-32 was sized for the dock alone; once the page started falling
+            into shadow before reaching it, the bottom 210px became a gradient
+            and anything ending inside it — the rotating prompt did — was washed
+            out to nothing. Content has to finish above the scrim, not just
+            above the glass. */}
         {/* The page. Its own stock, a lit top edge and a shadow beneath, so the
             document reads as paper lying on the desk rather than as the desk
             with words on it. The empty state and the brief sit outside it —
             they are Firmo talking, not the student's page. */}
         <div
           onMouseDown={focusDocument}
-          className="mx-auto w-full max-w-3xl px-8 pt-12 pb-32 flex flex-col gap-7"
+          className="mx-auto w-full max-w-3xl px-8 pt-12 pb-56 flex flex-col gap-7"
         >
 
           {/* Empty state: the whole product, asked as one question.
@@ -362,7 +374,7 @@ export default function DocumentCanvas() {
               holding its ~250px of layout while it faded, which shoves the sheet
               down the page — and if the tab is backgrounded mid-fade the browser
               stops the animation and it never lets go at all. */}
-          {!doc.trim() && !brief && (
+          {heroVisible && (
             <motion.div
               variants={HERO}
               // Reduced motion gets the finished frame, not a faster take: the
@@ -407,34 +419,6 @@ export default function DocumentCanvas() {
                 </span>
               </h1>
 
-              {/* The product's central object, shown before a word is typed: a
-                  sentence of prose with the claim layer already on it. */}
-              <motion.div variants={FADE_UP} className="flex flex-col gap-2 py-1">
-                <p className="canvas-type !text-[17px] text-t1 max-w-[52ch]">
-                  Remote work raised productivity,{' '}
-                  {/* The wash and rule sweep left to right under the words,
-                      because that is the direction a reader is already moving.
-                      A fade would land the mark everywhere at once and lose the
-                      sense that something is reading the sentence. */}
-                  {/* The full stop lives inside the mark, and has to. Outside
-                      it, the period is not part of the sweep, so it is painted
-                      from the first frame while the clause it belongs to is
-                      still clipped to nothing — a dot floating alone for the
-                      1.2s the reveal takes, and stranded on its own line
-                      whenever the clause wraps. Inside, it arrives with its
-                      sentence and can never be orphaned from "year". */}
-                  <motion.mark
-                    variants={SWEEP}
-                    className="mark-claim mark-amber cursor-default"
-                  >
-                    though the effect faded after the first year.
-                  </motion.mark>
-                </p>
-                <motion.span variants={FADE_UP} className="record pl-0.5">
-                  ↑ needs a source · Firmo finds it, cites it, files it
-                </motion.span>
-              </motion.div>
-
               <motion.p variants={FADE_UP}
                 className="text-[14.5px] text-t2 leading-relaxed max-w-[48ch]">
                 Type a topic and Firmo searches sixteen databases. Paste a draft and it
@@ -442,24 +426,19 @@ export default function DocumentCanvas() {
                 checks each entry against the publisher's record.
               </motion.p>
 
-              {/* One way in, not three.
+              {/* One way in, not three, and it changes on its own.
                   A row of three fixed examples reads as a menu of the things
-                  Firmo can do; a single line that is different on every visit
-                  reads as an example of the kind of thing you can ask. The pool
-                  spans every discipline and every question shape, so pressing
-                  "another" a few times teaches the range faster than any list
-                  of features would. */}
+                  Firmo can do; a single line that keeps changing reads as an
+                  invitation to ask something of your own. It rotates without
+                  being asked because the point is to seed ideas while the
+                  student is still deciding — a button they have to press is a
+                  button most people never press. */}
               <motion.div variants={FADE_UP}
-                className="flex flex-col gap-2 pt-2 border-t border-hair/10">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="record">Try</span>
-                  <button
-                    onClick={() => setExample(pickExample)}
-                    className="record hover:text-t1 transition-colors"
-                  >
-                    another ↻
-                  </button>
-                </div>
+                className="flex flex-col gap-2 pt-2 border-t border-hair/10"
+                onMouseEnter={() => setPaused(true)}
+                onMouseLeave={() => setPaused(false)}
+              >
+                <span className="record">Try</span>
                 <AnimatePresence mode="wait">
                   <motion.button
                     key={example}

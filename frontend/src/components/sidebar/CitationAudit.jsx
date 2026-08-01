@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { motion } from 'framer-motion'
 
 import { useAnnotationStore } from '../../stores/useAnnotationStore'
@@ -70,39 +71,104 @@ export default function CitationAudit() {
         </div>
       )}
 
-      {items.map((it, i) => {
-        const tone = VERDICT[it.verdict] || VERDICT.checking
-        return (
-          <motion.div
-            key={i}
-            layout
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ ...SPRING, delay: Math.min(i, 8) * 0.03 }}
-            className={`card p-3.5 flex flex-col gap-2 border-l-2 ${tone.rail}`}
-          >
-            <div className="flex items-start justify-between gap-2">
-              <p className="font-mono text-[10.5px] text-t2 leading-relaxed break-words min-w-0">
-                {it.raw}
-              </p>
-              {/* The verdict lands as a stamp. This is the one place in the
-                  workspace where a machine has just finished judging something
-                  the student wrote, and it should read that way. Still
-                  checking? Then nothing has been decided, so nothing lands. */}
-              <span className="shrink-0">
-                <Chip tone={tone} land={it.verdict !== 'checking'} />
-              </span>
-            </div>
-            {it.note && <p className="text-[11px] text-t2 leading-relaxed">{it.note}</p>}
-            {it.matched?.url && (
-              <a href={it.matched.url} target="_blank" rel="noopener noreferrer"
-                className="self-start text-[11px] font-medium text-brand-500 dark:text-signal hover:opacity-75 transition-opacity">
-                View the published record ↗
-              </a>
-            )}
-          </motion.div>
-        )
-      })}
+      {items.map((it, i) => (
+        <AuditCard key={i} entry={it} index={i} />
+      ))}
+
     </div>
+  )
+}
+
+// One entry, with the publisher's record on its back.
+//
+// A catalogue card has two faces: what was written down, and what the register
+// says. Firmo has both — the student's line and the matched record — and used
+// to stack them, which buries the comparison that is the entire point of the
+// check. So the card turns. It is the only flip in the workspace, spent on the
+// one place where two versions of the same thing have to be held against each
+// other.
+function AuditCard({ entry, index }) {
+  const [back, setBack] = useState(false)
+  const tone = VERDICT[entry.verdict] || VERDICT.checking
+  const rec = entry.matched
+  const turnable = !!rec
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ ...SPRING, delay: Math.min(index, 8) * 0.03 }}
+      style={{ perspective: '1200px' }}
+    >
+      <motion.div
+        animate={{ rotateY: back ? 180 : 0 }}
+        transition={{ type: 'spring', stiffness: 260, damping: 30 }}
+        style={{ transformStyle: 'preserve-3d', position: 'relative' }}
+      >
+        {/* Front: what the student wrote */}
+        <div
+          style={{ backfaceVisibility: 'hidden' }}
+          className={`card p-3.5 flex flex-col gap-2 border-l-2 ${tone.rail}`}
+        >
+          <div className="flex items-start justify-between gap-2">
+            <p className="font-mono text-[10.5px] text-t2 leading-relaxed break-words min-w-0">
+              {entry.raw}
+            </p>
+            {/* The verdict lands as a stamp. This is the one place in the
+                workspace where a machine has just finished judging something
+                the student wrote, and it should read that way. Still
+                checking? Then nothing has been decided, so nothing lands. */}
+            <span className="shrink-0">
+              <Chip tone={tone} land={entry.verdict !== 'checking'} />
+            </span>
+          </div>
+          {entry.note && <p className="text-[11px] text-t2 leading-relaxed">{entry.note}</p>}
+          {turnable && (
+            <button
+              onClick={() => setBack(true)}
+              className="self-start text-[11px] font-medium text-brand-500 dark:text-signal
+                hover:opacity-75 transition-opacity"
+            >
+              Turn over ↻
+            </button>
+          )}
+        </div>
+
+        {/* Back: what the register says. Absolutely placed over the front so the
+            two faces share one box and the card keeps its height mid-turn. */}
+        {turnable && (
+          <div
+            style={{
+              backfaceVisibility: 'hidden',
+              transform: 'rotateY(180deg)',
+              position: 'absolute',
+              inset: 0,
+            }}
+            className={`card p-3.5 flex flex-col gap-1.5 border-l-2 ${tone.rail}`}
+          >
+            <span className="eyebrow">On the publisher's record</span>
+            <p className="font-display text-[12.5px] text-t1 leading-snug">{rec.title}</p>
+            <span className="record">
+              {[rec.year, rec.doi].filter(Boolean).join(' · ')}
+            </span>
+            <div className="mt-auto flex items-center gap-3 pt-1">
+              <button
+                onClick={() => setBack(false)}
+                className="text-[11px] font-medium text-t2 hover:text-t1 transition-colors"
+              >
+                ↺ Back
+              </button>
+              {rec.url && (
+                <a href={rec.url} target="_blank" rel="noopener noreferrer"
+                  className="text-[11px] font-medium text-brand-500 dark:text-signal hover:opacity-75 transition-opacity">
+                  Open ↗
+                </a>
+              )}
+            </div>
+          </div>
+        )}
+      </motion.div>
+    </motion.div>
   )
 }

@@ -111,14 +111,19 @@ export default function TopBar() {
 
         <span className="text-t3/40 select-none text-sm">/</span>
 
-        {/* Project switcher */}
+        {/* Project switcher.
+            With no project it read "No paper yet ▾", which is a status wearing a
+            control's clothing — nothing about it says you may press it to start
+            one, and starting a paper was otherwise only possible as a side
+            effect of running a search. It names the action now. */}
         <div className="relative min-w-0">
           <button
             onClick={() => setShowProjects(!showProjects)}
-            className="pill max-w-full"
+            title={active ? 'Switch or start a paper' : 'Start a paper'}
+            className={`pill max-w-full ${active ? '' : '!text-brand-600 dark:!text-signal !border-brand-500/40'}`}
           >
             <span className="truncate max-w-[34vw] sm:max-w-[220px]">
-              {active ? active.name : 'No paper yet'}
+              {active ? active.name : '+ Start a paper'}
             </span>
             {active && (
               <span className="font-mono text-[10px] text-t3 tabular-nums shrink-0">

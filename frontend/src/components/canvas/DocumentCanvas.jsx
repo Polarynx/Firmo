@@ -1,16 +1,17 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 
 import { useWorkspaceStore } from '../../stores/useWorkspaceStore'
 import { useAnnotationStore } from '../../stores/useAnnotationStore'
 import { useResearchStore } from '../../stores/useResearchStore'
 import { useUIStore } from '../../stores/useUIStore'
-import { detectIntent, escapeRe, placeClaims, INTENT_COPY, MARK_CLASS } from '../../lib/claims'
+import { detectIntent, escapeRe, guessShape, placeClaims, INTENT_COPY, MARK_CLASS } from '../../lib/claims'
 import { runIntent, cancelActive } from '../../lib/runIntent'
 import { SPRING, CLAIM_STATUS, CLAIM_ORDER, EXAMPLE_TOPICS } from '../../lib/constants'
 import { Chip, EdgeProgress, StatusLine } from '../ui/primitives'
 
 import BriefBlock from './BriefBlock'
+import NextMove from '../workspace/NextMove'
 import BibliographyBlock from './BibliographyBlock'
 
 // ── Zone A ─────────────────────────────────────────────────────────────────
@@ -74,6 +75,18 @@ const SWEEP = {
   },
 }
 
+// One example, drawn fresh. Not the same one twice in a row within a session,
+// because a "try another" that returns what you just saw reads as broken.
+let lastExample = null
+function pickExample() {
+  if (EXAMPLE_TOPICS.length < 2) return EXAMPLE_TOPICS[0]
+  let next
+  do { next = EXAMPLE_TOPICS[Math.floor(Math.random() * EXAMPLE_TOPICS.length)] }
+  while (next === lastExample)
+  lastExample = next
+  return next
+}
+
 export default function DocumentCanvas() {
   const reduceMotion = useReducedMotion()
   const doc = useWorkspaceStore(s => s.doc)
@@ -105,11 +118,30 @@ export default function DocumentCanvas() {
   const scrollRef = useRef(null)
   const sectionRef = useRef(null)
   const pasteGuard = useRef(false)
+  // A different example on every visit, and on demand. Seeded from the pool at
+  // mount rather than cycled on a timer: a line that moves while you are reading
+  // it is a line you stop reading.
+  const [example, setExample] = useState(pickExample)
+
   const [scrolled, setScrolled] = useState(false)
   const [hoveredMark, setHoveredMark] = useState(null)
 
+  // Focus dimming. While the student is actually writing, the lamp tightens and
+  // the room falls back; it comes up again once they stop. The delay is long on
+  // purpose — a light that reacts to every keystroke is a light that flickers,
+  // and the effect only means anything if it settles.
+  const [reading, setReading] = useState(false)
+  const readTimer = useRef(null)
+  const noteTyping = () => {
+    setReading(true)
+    clearTimeout(readTimer.current)
+    readTimer.current = setTimeout(() => setReading(false), 12000)
+  }
+  useEffect(() => () => clearTimeout(readTimer.current), [])
+
   const busy = activeMode !== 'idle'
   const intent = detectIntent(doc)
+  const shapeHint = useMemo(() => guessShape(doc), [doc])
   const placed = useMemo(() => (claims ? placeClaims(doc, claims) : []), [doc, claims])
   const annotated = placed.length > 0
 
@@ -156,6 +188,7 @@ export default function DocumentCanvas() {
 
   function handleChange(e) {
     setDoc(e.target.value)
+    noteTyping()
   }
 
   // Clicking dead space anywhere on the canvas drops the caret at the end of
@@ -255,7 +288,14 @@ export default function DocumentCanvas() {
               A topic, a draft, or a bibliography. Firmo reads which.
             </span>
           ) : (
-            <span className="text-[11px] text-t2 truncate">{INTENT_COPY[intent]?.hint}</span>
+            <span className="text-[11px] text-t2 truncate">
+              {/* The shape reading wins when there is one. It is the more
+                  specific and more useful of the two: "reads like a topic" tells
+                  a student nothing they did not know, while "the answer is an
+                  effect size, not a yes" is the thing that changes what they
+                  write. */}
+              {(intent === 'search' && shapeHint?.hint) || INTENT_COPY[intent]?.hint}
+            </span>
           )}
         </div>
 
@@ -286,6 +326,17 @@ export default function DocumentCanvas() {
         </div>
       </div>
 
+      {/* The room. Both layers sit behind the scrolling page and neither takes
+          a pointer event: a pool of warm light over the writing surface, and
+          corners that fall away from it. This is what gives the widened ink
+          ramp something to be a ramp towards. */}
+      <div className="vignette" aria-hidden="true" />
+      <div
+        className="lamp"
+        aria-hidden="true"
+        style={{ '--lamp-power': busy ? 0.15 : reading ? 0.06 : 0.10 }}
+      />
+
       <div
         ref={scrollRef}
         onScroll={e => {
@@ -293,10 +344,14 @@ export default function DocumentCanvas() {
           if (hoveredMark) setHoveredMark(null) // its measured rect just went stale
         }}
         onMouseDown={focusDocument}
-        className="flex-1 overflow-y-auto scroll-quiet"
+        className="relative z-10 flex-1 overflow-y-auto scroll-quiet"
       >
         {/* pb-32 is the clearance the floating omni-bar needs: the last line of
             a draft has to be able to scroll clear of the glass. */}
+        {/* The page. Its own stock, a lit top edge and a shadow beneath, so the
+            document reads as paper lying on the desk rather than as the desk
+            with words on it. The empty state and the brief sit outside it —
+            they are Firmo talking, not the student's page. */}
         <div
           onMouseDown={focusDocument}
           className="mx-auto w-full max-w-3xl px-8 pt-12 pb-32 flex flex-col gap-7"
@@ -387,30 +442,41 @@ export default function DocumentCanvas() {
                 checks each entry against the publisher's record.
               </motion.p>
 
-              {/* Three ways in, each a real query. Reading about the tool is
-                  slower than watching it run once. Set as catalogue rows rather
-                  than as chips: they are records you pull, not tags — so they
-                  slide out of the drawer on hover instead of lighting up. */}
+              {/* One way in, not three.
+                  A row of three fixed examples reads as a menu of the things
+                  Firmo can do; a single line that is different on every visit
+                  reads as an example of the kind of thing you can ask. The pool
+                  spans every discipline and every question shape, so pressing
+                  "another" a few times teaches the range faster than any list
+                  of features would. */}
               <motion.div variants={FADE_UP}
-                className="flex flex-col pt-2 border-t border-hair/10">
-                {EXAMPLE_TOPICS.map(topic => (
-                  <motion.button
-                    key={topic}
-                    onClick={() => { setDoc(topic); runIntent(topic, 'search') }}
-                    whileHover={{ x: 6 }}
-                    whileTap={{ x: 2 }}
-                    transition={SPRING}
-                    className="group flex items-baseline gap-3 py-2.5 text-left
-                      border-b border-hair/[0.06] hover:border-hair/20 transition-colors"
+                className="flex flex-col gap-2 pt-2 border-t border-hair/10">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="record">Try</span>
+                  <button
+                    onClick={() => setExample(pickExample)}
+                    className="record hover:text-t1 transition-colors"
                   >
-                    <span className="record shrink-0 group-hover:text-brand-600
-                      dark:group-hover:text-signal transition-colors">search</span>
-                    <span className="font-narrow text-[15px] text-t2 group-hover:text-t1
-                      transition-colors">{topic}</span>
+                    another ↻
+                  </button>
+                </div>
+                <AnimatePresence mode="wait">
+                  <motion.button
+                    key={example}
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                    onClick={() => { setDoc(example); runIntent(example, 'search') }}
+                    whileHover={{ x: 5 }}
+                    className="group flex items-baseline gap-3 py-2 text-left"
+                  >
+                    <span className="font-display text-[17px] text-t2 group-hover:text-t1
+                      transition-colors leading-snug">{example}</span>
                     <span className="ml-auto shrink-0 record opacity-0 group-hover:opacity-100
                       transition-opacity">↵</span>
                   </motion.button>
-                ))}
+                </AnimatePresence>
               </motion.div>
             </motion.div>
           )}
@@ -418,8 +484,17 @@ export default function DocumentCanvas() {
           {/* The research brief streams in above the document. */}
           <BriefBlock />
 
-          {/* ── The writing surface: no box, no card, just the page ── */}
-          <div className="relative">
+          {/* One line naming the most useful thing to do next, when there is
+              one. Above the page rather than beside it, because it is about the
+              paper as a whole and not about whatever panel is open. */}
+          <NextMove />
+
+          {/* ── The writing surface ──
+              It is a page now, not an open field: its own stock, a lit top
+              edge, a shadow under it, and a grain fine enough to read as paper
+              rather than as noise. The padding is generous because a sheet with
+              type running to its edge looks like a div again. */}
+          <div className="sheet relative px-7 sm:px-9 py-8">
             <textarea
               ref={taRef}
               value={doc}

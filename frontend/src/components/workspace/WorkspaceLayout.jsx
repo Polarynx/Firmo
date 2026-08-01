@@ -5,6 +5,7 @@ import { useUIStore } from '../../stores/useUIStore'
 import { useWorkspaceStore } from '../../stores/useWorkspaceStore'
 import { useResearchStore } from '../../stores/useResearchStore'
 import { SPRING } from '../../lib/constants'
+import { isLab } from '../../lib/lab'
 
 import TopBar from './TopBar'
 import Spine from './Spine'
@@ -34,6 +35,22 @@ export default function WorkspaceLayout() {
   const setShowAuth = useUIStore(s => s.setShowAuth)
   const showRecord = useUIStore(s => s.showRecord)
   const setShowRecord = useUIStore(s => s.setShowRecord)
+
+  // Firmo shipped a walkthrough and then hid it behind a "?" icon nobody
+  // presses, so the one explanation of how the workspace fits together was
+  // never seen by the people who needed it. It opens itself once, for a genuine
+  // first run — no project, nothing written — and records that it has, so it
+  // never interrupts anyone twice.
+  useEffect(() => {
+    if (isLab) return
+    try {
+      if (localStorage.getItem('firmo_seen_intro')) return
+      const store = JSON.parse(localStorage.getItem('firmo_projects_v1') || '{}')
+      if (Array.isArray(store.projects) && store.projects.length > 0) return
+      localStorage.setItem('firmo_seen_intro', '1')
+      setShowWalkthrough(true)
+    } catch {}
+  }, [setShowWalkthrough])
 
   const setDoc = useWorkspaceStore(s => s.setDoc)
   const executeSearch = useResearchStore(s => s.executeSearch)
@@ -73,6 +90,10 @@ export default function WorkspaceLayout() {
             document rather than over the whole window. */}
         <div id="zone-a" className="relative flex-1 min-w-0 flex">
           <DocumentCanvas />
+          {/* The desk falls into shadow before it reaches the command bar. The
+              bar floats over a scrolling page, so without this the last
+              paragraph reads straight through the glass. */}
+          <div className="desk-edge" aria-hidden="true" />
           <OmniBar />
         </div>
 

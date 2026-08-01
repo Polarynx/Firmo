@@ -7,6 +7,7 @@ import { useSavedSources, useSavedIds } from '../../stores/selectors'
 import { paperId } from '../../lib/projects'
 import { SOURCE_LABELS, ROLE_ORDER, SHAPE, roleFor, SPRING } from '../../lib/constants'
 import { EmptyNote, StatusLine } from '../ui/primitives'
+import Shelf from '../ui/Shelf'
 import QueryLedger from './QueryLedger'
 import SourceCard from './SourceCard'
 
@@ -143,6 +144,10 @@ export default function SourcesView() {
               <span className="record">{savedSources.length}</span>
             </div>
           </div>
+          {/* The collection, before the list of it. A dozen cards tell you what
+              you have one at a time; the shelf tells you at a glance. */}
+          <Shelf sources={savedSources} shape={questionShape} />
+
           {savedSources.map((p, i) => (
             <SourceCard key={paperId(p) || i} paper={p} index={i} compact />
           ))}
@@ -203,10 +208,16 @@ export default function SourcesView() {
                     transition-opacity ${g.cfg.chip} ${isActive ? '' : 'opacity-55 hover:opacity-100'}`}
                 >
                   {isActive && (
+                    // The alpha is baked into the colour rather than set with
+                    // `opacity-[0.14]`. Framer writes `opacity` inline while it
+                    // drives a layoutId transition, which beats the utility
+                    // class outright — the wash rendered at full strength and
+                    // painted a solid block over the label it was meant to sit
+                    // behind.
                     <motion.span
                       layoutId="role-pill"
                       transition={SPRING}
-                      className="absolute inset-0 rounded bg-current opacity-[0.14]"
+                      className="absolute inset-0 rounded bg-current/[0.14]"
                     />
                   )}
                   <span className={`relative w-1.5 h-1.5 rounded-full shrink-0 ${g.cfg.dot}`} />
@@ -231,6 +242,11 @@ export default function SourcesView() {
           <span className="eyebrow">{shape.label}</span>
           <p className="text-[11px] text-t2 leading-relaxed">{shape.note}</p>
         </motion.div>
+      )}
+
+      {/* What is already in the paper, above what is merely on offer. */}
+      {!provisional && savedSources.length >= 3 && (
+        <Shelf sources={savedSources} shape={questionShape} className="pb-1" />
       )}
 
       {/* Database filter */}
@@ -294,8 +310,8 @@ export default function SourcesView() {
               ref={el => { headRefs.current[g.key] = el }}
               onClick={() => toggle(g.key)}
               style={{ scrollMarginTop: SPY_OFFSET }}
-              className="sticky top-[52px] z-10 -mx-3 px-3 py-1.5 bg-panel/95 backdrop-blur-sm
-                flex items-center gap-2 text-left group/head"
+              className={`sticky top-[52px] z-10 -mx-3 px-3 py-1.5 bg-panel/95 backdrop-blur-sm
+                flex items-center gap-2 text-left group/head ${isShut ? 'deck' : ''}`}
             >
               <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${g.cfg.dot}`} />
               <span className="eyebrow !text-t1">{g.cfg.label}</span>

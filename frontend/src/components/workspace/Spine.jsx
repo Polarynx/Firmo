@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import { useRecordStore } from '../../stores/useRecordStore'
 import { useWorkspaceStore } from '../../stores/useWorkspaceStore'
 import { useUIStore } from '../../stores/useUIStore'
+import StageRail from './StageRail'
 
 // ── The spine ───────────────────────────────────────────────────────────────
 //
@@ -67,16 +68,23 @@ export default function Spine() {
 
   return (
     <div
-      className="hidden md:flex shrink-0 w-[34px] flex-col items-center
+      className="hidden md:flex shrink-0 w-[52px] flex-col items-center
         border-r border-hair/[0.07] bg-panel/30 select-none"
       onMouseLeave={() => setHovered(null)}
     >
-      <span
-        className="record mt-3 mb-2 tracking-[0.2em]"
-        style={{ writingMode: 'vertical-rl' }}
-      >
-        RECORD
-      </span>
+      {/* Where you are in the paper, above what you have done to it. Two halves
+          of one column: the spine of a book is the outside of the thing,
+          printed with what is inside. */}
+      <StageRail />
+
+      <div className="w-full mt-2 pt-2 border-t border-hair/[0.07] flex flex-col items-center">
+        <span
+          className="record mb-1.5 tracking-[0.2em]"
+          style={{ writingMode: 'vertical-rl' }}
+        >
+          RECORD
+        </span>
+      </div>
 
       <div className="flex-1 min-h-0 w-full overflow-y-auto no-scrollbar
         flex flex-col items-center gap-[3px] py-1">

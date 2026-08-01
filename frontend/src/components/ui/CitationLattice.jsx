@@ -19,6 +19,30 @@ import { useUIStore } from '../../stores/useUIStore'
 // Everything here follows the workspace's one colour rule: the satellites are
 // graphite, because nothing has been found yet, and the single cobalt node is
 // the student's own topic — the one thing on the panel they already hold.
+//
+// ── Why this stays abstract ─────────────────────────────────────────────────
+//
+// The obvious next move is to feed it the project's real sources and call it a
+// live citation graph. It is the wrong move, and this note is here so it does
+// not get made later by accident.
+//
+// A citation graph's meaning is entirely in its EDGES — which of your papers
+// cite which. Firmo does not have that client side. It has titles, years,
+// counts and roles, and none of those imply a link between two papers. Drawing
+// edges from what is on hand would mean inventing relationships and rendering
+// them in the same cobalt the workspace reserves for things that have been
+// verified, which is the same class of lie as telling a student their invented
+// citation was "found, but check the title".
+//
+// So it stays what it honestly is: a mark on an empty panel that claims
+// nothing. The job people expected a graph to do — "show me my collection at a
+// glance" — is done properly by the shelf in ui/Shelf.jsx, which is built from
+// data Firmo actually holds: real citation counts, real roles, real years.
+//
+// Promote this only alongside a backend that returns genuine reference overlap
+// between saved sources. Until then, edges here are decoration and are drawn
+// between fictional nodes, which is fine precisely because there is no data in
+// the panel yet for anyone to mistake them for.
 
 const NODES = 42
 // Tuned so the cloud fills the panel strip: at this focal length and camera

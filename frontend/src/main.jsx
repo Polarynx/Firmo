@@ -5,6 +5,19 @@ import { MotionConfig } from 'framer-motion'
 import App from './App'
 import './index.css'
 
+// `?lab` boots into a paper already in progress, so the workspace can be looked
+// at without spending a live search to reach a populated state. Dev only; the
+// import is static because the tree-shake drops it from production builds where
+// `import.meta.env.DEV` is statically false.
+import { isLab, seedLab } from './lib/lab'
+import { useWorkspaceStore } from './stores/useWorkspaceStore'
+import { useResearchStore } from './stores/useResearchStore'
+import { useAnnotationStore } from './stores/useAnnotationStore'
+
+if (isLab) {
+  seedLab({ useWorkspaceStore, useResearchStore, useAnnotationStore })
+}
+
 // `reducedMotion="user"` makes every Framer Motion animation in the workspace
 // honour the operating system's reduce-motion setting, rather than each
 // component having to remember to check. The CSS side is handled by the

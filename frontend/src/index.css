@@ -37,25 +37,45 @@
   /* The hueless "not backed yet" state. Never used as a brand colour. */
   --unverified: 140 131 121;
   --glow: rgba(41, 70, 200, 0.08);
+
+  /* Daylight rather than a lamp: the light theme is the same room with the
+     shutters open, so the pool is cooler and much weaker. */
+  --c-lift:     232 228 219;
+  --lamp:       255 236 190;
+  --lamp-power: 0.5;
 }
 
 .dark {
-  --c-app:     16  14  12;   /* #100E0C — warm ink, deepest layer             */
-  --c-panel:   25  21  18;   /* #191512 — side panels, elevation 1            */
-  --c-raised:  34  28  24;   /* #221C18 — floating cards, elevation 2         */
-  --c-sheet:   25  21  18;
-  --c-line:    46  39  33;   /* reads as white/8 composited on the panel      */
-  --c-edge:    74  64  55;   /* reads as white/16                             */
-  --c-t1:     240 236 230;
-  --c-t2:     165 155 145;
-  --c-t3:     120 110 101;
+  /* The ink ramp, widened.
+     It used to run 16 → 25 → 34 → 43 at a fixed hue: four steps nine units
+     apart, which is below the threshold where an edge reads as an edge. The
+     room was one flat brown with borders drawn on it, and no amount of shadow
+     fixes a ground that has nowhere to go.
+     Now the floor drops and the ramp climbs further, and — the part that
+     matters — the hue warms as it rises. A raised surface is not just lighter
+     than the panel behind it, it is nearer the lamp. */
+  --c-app:     13  11  10;   /* #0D0B0A — the floor, below everything        */
+  --c-panel:   24  20  18;   /* #181412 — side panels, elevation 1           */
+  --c-raised:  38  31  26;   /* #261F1A — floating cards, elevation 2        */
+  --c-lift:    52  42  35;   /* #342A23 — hover, the nearest surface         */
+  --c-sheet:   28  23  20;   /* #1C1714 — the page itself, lit               */
+  --c-line:    52  44  37;
+  --c-edge:    84  72  61;
+  --c-t1:     243 239 233;
+  --c-t2:     170 159 148;
+  --c-t3:     124 113 103;
 
   --hair: 255 255 255;
 
   --accent:     122 158 255; /* #7A9EFF cobalt, cold against the warm ground */
   --accent-soft: 77 124 254; /* #4D7CFE */
-  --unverified: 120 110 101;
+  --unverified: 124 113 103;
   --glow: rgba(122, 158, 255, 0.09);
+
+  /* The lamp. A warm light source that exists so elevation has something to be
+     nearer to; nothing is coloured by it directly. */
+  --lamp:       245 200 108;
+  --lamp-power: 0.10;        /* raised by work, lowered while reading */
 }
 
 @layer base {
@@ -282,6 +302,159 @@
     @apply inline-flex items-center justify-center h-[18px] min-w-[18px] px-1
       rounded-record font-mono text-[9px] font-semibold uppercase tracking-[0.06em]
       bg-hair/[0.06] text-t2 border border-hair/[0.08];
+  }
+
+  /* ── The lamp ──────────────────────────────────────────────────────────
+     One warm pool over the writing surface, and the only light in the room.
+     It is what the widened ink ramp is a ramp *towards*: without a source, a
+     lighter surface is just a lighter grey, and elevation carries no meaning.
+
+     Deliberately not a decoration. Its strength is bound to --lamp-power,
+     which the workspace raises while Firmo is working and lowers once the
+     student settles into reading, so the room answers the work rather than
+     glowing at a fixed brightness forever. */
+  .lamp {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background:
+      radial-gradient(58% 42% at 50% 30%,
+        rgb(var(--lamp) / var(--lamp-power)) 0%,
+        rgb(var(--lamp) / calc(var(--lamp-power) * 0.35)) 42%,
+        transparent 72%);
+    transition: opacity 900ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  /* The corners fall away from it. Two layers rather than one, because a pool
+     of light and a darkened edge are different gradients and compositing them
+     separately keeps the centre from washing out. */
+  .vignette {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background: radial-gradient(120% 90% at 50% 34%, transparent 45%, rgb(0 0 0 / 0.34) 100%);
+  }
+  :root:not(.dark) .vignette {
+    background: radial-gradient(120% 90% at 50% 34%, transparent 55%, rgb(120 106 88 / 0.10) 100%);
+  }
+
+  /* ── The sheet ─────────────────────────────────────────────────────────
+     The document had no edge, so it was not a page — it was the same surface
+     as the room, with text on it. Now it is paper lying on a desk: its own
+     stock, a lit top edge, a shadow underneath, and a grain fine enough to
+     register as texture rather than as noise. */
+  .sheet {
+    position: relative;
+    /* Not a flat fill. The lamp is above and slightly forward, so the head of
+       the page catches it and the foot falls away — the same reason a real
+       sheet on a desk is never one value top to bottom. */
+    background:
+      linear-gradient(to bottom,
+        rgb(var(--lamp) / 0.045) 0%,
+        transparent 38%),
+      rgb(var(--c-sheet));
+    border-radius: 3px;
+    box-shadow:
+      0 0 0 1px rgb(var(--hair) / 0.05),
+      0 1px 0 0 rgb(var(--lamp) / 0.05) inset,
+      0 18px 48px -24px rgb(0 0 0 / 0.55),
+      0 3px 10px -6px rgb(0 0 0 / 0.35);
+  }
+  .sheet::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    border-radius: inherit;
+    opacity: 0.5;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml;utf8,\
+<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'>\
+<filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/>\
+<feColorMatrix type='saturate' values='0'/></filter>\
+<rect width='140' height='140' filter='url(%23g)' opacity='0.32'/></svg>");
+  }
+  :root:not(.dark) .sheet {
+    box-shadow:
+      0 0 0 1px rgb(var(--hair) / 0.06),
+      0 14px 40px -26px rgb(90 76 58 / 0.40),
+      0 2px 6px -4px rgb(90 76 58 / 0.18);
+  }
+
+  /* ── Depth ─────────────────────────────────────────────────────────────
+     The panels used to sit at the same optical distance as the page, which is
+     why the workspace read as three rectangles rather than as a room. They are
+     pushed back now: a shade darker at the far edge, and a hairline of light
+     down the side facing the desk, so the page you are writing on is plainly
+     the nearest thing. */
+  .panel-recess {
+    box-shadow:
+      inset 1px 0 0 0 rgb(var(--lamp) / 0.05),
+      inset 22px 0 34px -26px rgb(0 0 0 / 0.75);
+  }
+
+  /* ── A folded stack looks like a stack ────────────────────────────────
+     Collapsed sections were an empty gap with a heading over it, which reads
+     as "nothing here" rather than "eleven papers, put away". Two card edges
+     behind the header do the whole job. */
+  .deck {
+    position: relative;
+  }
+  .deck::before,
+  .deck::after {
+    content: '';
+    position: absolute;
+    left: 6px;
+    right: 6px;
+    height: 6px;
+    border-radius: 3px;
+    border: 1px solid rgb(var(--hair) / 0.07);
+    background: rgb(var(--c-raised));
+    pointer-events: none;
+  }
+  .deck::before { bottom: -4px; }
+  .deck::after  { bottom: -8px; left: 11px; right: 11px; opacity: 0.6; }
+
+  /* ── Marginalia ────────────────────────────────────────────────────────
+     A pencil note in the margin, tied to its sentence by a leader rule. The
+     claim layer already marks the prose itself; this is the second half of a
+     marked-up manuscript — the bit that says what the mark was for without
+     covering the words it is about. */
+  .margin-note {
+    position: relative;
+    padding-left: 0.85rem;
+  }
+  .margin-note::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.55em;
+    width: 0.55rem;
+    height: 1px;
+    background: currentColor;
+    opacity: 0.4;
+  }
+
+  /* The desk edge. The command bar floats over a scrolling page, so without
+     this the last paragraph reads straight through it. The page does not stop
+     at the bar — it falls into shadow before reaching it, which is what a desk
+     lit by one lamp actually does. */
+  .desk-edge {
+    position: absolute;
+    inset: auto 0 0 0;
+    /* Tall enough to clear the dock, and opaque well before it: the dock's top
+       edge sits about 80px up, so anything below that has to be gone rather
+       than merely dimmed. */
+    height: 210px;
+    pointer-events: none;
+    z-index: 20;
+    background: linear-gradient(to top,
+      rgb(var(--c-app)) 0%,
+      rgb(var(--c-app)) 44%,
+      rgb(var(--c-app) / 0.82) 62%,
+      rgb(var(--c-app) / 0.40) 80%,
+      transparent 100%);
   }
 }
 

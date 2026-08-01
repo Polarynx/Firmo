@@ -1,12 +1,12 @@
-import { AnimatePresence, motion } from 'framer-motion'
+import { motion } from 'framer-motion'
 
 import { useUIStore } from '../../stores/useUIStore'
-import { useAnnotationStore } from '../../stores/useAnnotationStore'
 import { useResearchStore } from '../../stores/useResearchStore'
 import { useWorkspaceStore } from '../../stores/useWorkspaceStore'
 import { SPRING } from '../../lib/constants'
 import { EdgeProgress } from '../ui/primitives'
 
+import BriefView from './BriefView'
 import SourcesView from './SourcesView'
 import ClaimInspector from './ClaimInspector'
 import ArgumentMap from './ArgumentMap'
@@ -18,11 +18,15 @@ import OutlineView from './OutlineView'
 // whatever the student just did in the document decides which one is showing,
 // and the row of names is there for when they want to look somewhere else.
 
+// The stage rail decides which of these is showing. There is no switcher here
+// any more: a second row of tabs beside a rail that already names the same
+// places is how a workspace ends up with two navigations and no map.
 const VIEWS = [
+  { key: 'brief',           label: 'Question',  Component: BriefView },
   { key: 'sources',         label: 'Sources',   Component: SourcesView },
   { key: 'claim_inspector', label: 'Claim',     Component: ClaimInspector },
-  { key: 'argument_map',    label: 'Argument',  Component: ArgumentMap },
-  { key: 'citation_audit',  label: 'Audit',     Component: CitationAudit },
+  { key: 'argument_map',    label: 'Claims',    Component: ArgumentMap },
+  { key: 'citation_audit',  label: 'References',Component: CitationAudit },
   { key: 'outline',         label: 'Outline',   Component: OutlineView },
 ]
 
@@ -30,82 +34,47 @@ export default function ContextSidebar() {
   const view = useUIStore(s => s.sidebarView)
   const setView = useUIStore(s => s.setSidebarView)
 
-  const results = useResearchStore(s => s.results.length)
   const isSearching = useResearchStore(s => s.isSearching)
-  const claims = useAnnotationStore(s => s.claims)
-  const selectedClaimId = useAnnotationStore(s => s.selectedClaimId)
-  const citations = useAnnotationStore(s => s.citations)
-  const outline = useAnnotationStore(s => s.outline)
   const busy = useWorkspaceStore(s => s.activeMode !== 'idle')
 
-  const badges = {
-    sources: results || null,
-    claim_inspector: null,
-    argument_map: claims?.length || null,
-    citation_audit: citations?.length || null,
-    outline: outline?.length || null,
-  }
-
-  // A face is offered when it has something to say, or is the one in view.
-  const available = VIEWS.filter(v => {
-    if (v.key === view) return true
-    if (v.key === 'sources') return true
-    if (v.key === 'claim_inspector') return !!selectedClaimId
-    if (v.key === 'argument_map') return !!claims
-    if (v.key === 'citation_audit') return !!citations
-    if (v.key === 'outline') return !!outline
-    return false
-  })
-
   const Active = VIEWS.find(v => v.key === view)?.Component || SourcesView
+  const title = VIEWS.find(v => v.key === view)?.label || 'Sources'
 
   return (
-    <aside className="relative h-full flex flex-col bg-panel border-l border-line overflow-hidden">
+    <aside className="panel-recess relative h-full flex flex-col bg-panel border-l border-line overflow-hidden">
       <EdgeProgress active={busy || isSearching} />
 
-      {/* Face switcher */}
-      <div className="shrink-0 flex items-center gap-1 px-3 py-2.5 border-b border-line overflow-x-auto no-scrollbar">
-        {available.map(v => {
-          const active = v.key === view
-          return (
-            <button
-              key={v.key}
-              onClick={() => setView(v.key)}
-              className={`relative px-2.5 py-1.5 rounded-md text-[11px] font-medium whitespace-nowrap
-                transition-colors ${active ? 'text-t1' : 'text-t3 hover:text-t2'}`}
-            >
-              {active && (
-                <motion.span
-                  layoutId="sidebar-face"
-                  transition={SPRING}
-                  className="absolute inset-0 rounded-md bg-raised border border-line"
-                />
-              )}
-              <span className="relative flex items-center gap-1.5">
-                {v.label}
-                {badges[v.key] != null && (
-                  <span className="font-mono text-[9px] text-t3 tabular-nums">{badges[v.key]}</span>
-                )}
-              </span>
-            </button>
-          )
-        })}
+      {/* A heading, not a switcher. Which panel is showing is decided by the
+          stage rail on the far side of the window; this only has to say which
+          one arrived, so the student can connect the two. */}
+      <div className="shrink-0 flex items-baseline gap-2 px-3 py-2.5 border-b border-line">
+        <span className="eyebrow !text-t2">{title}</span>
       </div>
 
       {/* The face itself */}
-      <div className="flex-1 overflow-y-auto scroll-quiet px-3 py-3.5">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={view}
-            initial={{ opacity: 0, x: 16 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -12, transition: { duration: 0.12 } }}
-            transition={SPRING}
-            className="pb-8"
-          >
-            <Active />
-          </motion.div>
-        </AnimatePresence>
+      <div className="flex-1 overflow-y-auto scroll-quiet px-3 py-3.5" style={{ perspective: '1400px' }}>
+        {/* A leaf turning, not a slide.
+            The panel is one face of a book that has several, so it arrives by
+            rotating in about its binding edge on the right. Slight, and about a
+            third of a second — enough to read as paper, not enough to wait for.
+
+            Deliberately a keyed remount rather than an AnimatePresence with
+            `mode="wait"`. That version made the incoming panel wait for the
+            outgoing one's exit to report finished, and when the panel being
+            torn down owned a `layoutId` — the sources rail does — the exit
+            could simply never resolve. The heading changed, the body did not,
+            and navigation was stuck until reload. Nothing about moving between
+            stages should be able to hang on an animation completing. */}
+        <motion.div
+          key={view}
+          initial={{ opacity: 0, rotateY: -7, x: 12 }}
+          animate={{ opacity: 1, rotateY: 0, x: 0 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+          style={{ transformOrigin: 'right center' }}
+          className="pb-8"
+        >
+          <Active />
+        </motion.div>
       </div>
     </aside>
   )

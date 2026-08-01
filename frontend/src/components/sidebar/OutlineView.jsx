@@ -7,6 +7,7 @@ import { useWorkspaceStore } from '../../stores/useWorkspaceStore'
 import { useSavedSources } from '../../stores/selectors'
 import { SPRING, roleFor } from '../../lib/constants'
 import { EmptyNote, ErrorNote, SkeletonCard, StatusLine } from '../ui/primitives'
+import StageBlocked from './StageBlocked'
 
 // View 5: the bridge between "Firmo found forty sources" and "I don't know how
 // to start". Every point names the sources that back it; points with no
@@ -32,12 +33,20 @@ export default function OutlineView() {
     return hit?.stance ? roleFor(hit.stance, hit.shape) : null
   }
 
-  if (sources.length === 0) {
+  // Refuse out loud, and point at the thing that fixes it. Four is the floor
+  // rather than one: an outline planned from two papers is Firmo guessing at a
+  // structure, which is worse than no outline because it looks authoritative.
+  if (sources.length < 4) {
+    const short = 4 - sources.length
     return (
-      <EmptyNote title="Save some sources first">
-        The outline is built from the sources in your project. Bookmark four or five and Firmo
-        will plan the paper around them.
-      </EmptyNote>
+      <StageBlocked
+        title={sources.length === 0 ? 'Nothing to plan from yet' : 'A few more sources first'}
+        goto="sources"
+        action="Open sources"
+        reason={sources.length === 0
+          ? 'The outline is built from the sources saved to this paper. Search for your topic, bookmark four or five, and Firmo will plan the argument around them.'
+          : `You have ${sources.length}. Save ${short} more — an outline built from ${sources.length} paper${sources.length !== 1 ? 's' : ''} is a guess with a structure drawn on it.`}
+      />
     )
   }
 

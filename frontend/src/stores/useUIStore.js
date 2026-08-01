@@ -35,6 +35,7 @@ export const useUIStore = create((set, get) => ({
 
   setSidebarView: sidebarView => set({ sidebarView }),
   toggleSidebar: () => set(s => ({ sidebarOpen: !s.sidebarOpen })),
+  setSidebarOpen: sidebarOpen => set({ sidebarOpen }),
   setMobileSidebar: mobileSidebarOpen => set({ mobileSidebarOpen }),
 
   setOmniValue: omniValue => set({ omniValue }),

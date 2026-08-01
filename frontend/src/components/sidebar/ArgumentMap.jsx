@@ -75,17 +75,26 @@ export default function ArgumentMap() {
   }
 
   if (!data) {
+    const words = doc.trim() ? doc.trim().split(/\s+/).length : 0
+    // Too little prose to read is a different problem from prose that has not
+    // been read yet, and saying so is the difference between a panel that looks
+    // broken and one that tells you where you are.
+    if (words < 40) {
+      return (
+        <EmptyNote title={words === 0 ? 'Nothing written yet' : 'Not enough to read yet'}>
+          {words === 0
+            ? 'Write or paste a draft into the page. Firmo maps the thesis, checks that every paragraph earns its place, and names the objection this particular draft owes its reader.'
+            : `There are ${words} words on the page. Firmo needs a paragraph or two before a structural read means anything.`}
+        </EmptyNote>
+      )
+    }
     return (
       <EmptyNote
-        title="No draft reviewed yet"
-        action={
-          claims === null && doc.trim().length > 200 ? (
-            <button onClick={() => review(doc)} className="btn-ghost mt-1">Review this draft</button>
-          ) : null
-        }
+        title="Draft not reviewed yet"
+        action={<button onClick={() => review(doc)} className="btn-ghost mt-1">Review this draft</button>}
       >
-        Paste a draft into the document. Firmo maps the thesis, checks that every paragraph
-        serves it, and tells you whether you answered the other side.
+        {words.toLocaleString()} words on the page. Firmo maps the thesis, checks that every
+        paragraph serves it, and tells you what the draft still has to answer.
       </EmptyNote>
     )
   }
@@ -136,7 +145,13 @@ export default function ArgumentMap() {
                 <span title={serve.label} className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${serve.dot}`} />
                 <div className="flex flex-col gap-0.5 min-w-0">
                   <p className="text-[12.5px] text-t1 leading-snug">{p.summary}</p>
-                  {p.note && <p className="text-[11px] text-t2 leading-relaxed">{p.note}</p>}
+                  {/* Set as a note in the margin, with a leader rule back to
+                      the line it is about. What Firmo says about a paragraph is
+                      an annotation on the draft, not more prose, and it should
+                      not be able to be mistaken for the student's own words. */}
+                  {p.note && (
+                    <p className="margin-note text-[11px] text-t2 leading-relaxed">{p.note}</p>
+                  )}
                 </div>
               </motion.div>
             )

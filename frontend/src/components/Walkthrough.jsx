@@ -6,19 +6,19 @@ const STEPS = [
   {
     icon: '⌘',
     title: 'One page, not five tools',
-    body: 'Firmo is a single workspace. The document is in the middle, everything Firmo has to say about it is on the right, and the bar at the bottom is for asking. Nothing here navigates away.',
+    body: 'Firmo is a single workspace. The document is in the middle, everything Firmo has to say about it is on the right, and the rail on the left is the paper itself — Question, Sources, Outline, Draft, Claims, References, Export. Press any stage to go there. Nothing is locked, so you can go back to Sources from halfway through a draft and return.',
     tip: 'Press ⌘K from anywhere to jump to the bar. ⌘↵ in the document runs whatever Firmo thinks you want.',
   },
   {
     icon: '✍️',
     title: 'The document reads your intent',
-    body: 'Type a topic and press ⌘↵ and Firmo searches fifteen academic databases. Paste a draft and it starts marking claims. Paste a reference list and it starts verifying entries. You never pick a mode.',
+    body: 'Type a topic and press ⌘↵ and Firmo searches sixteen academic databases. Paste a draft and it starts marking claims. Paste a reference list and it starts verifying entries. You never pick a mode.',
     tip: 'Being specific pays off. "Sleep deprivation and memory in college students" beats "sleep".',
   },
   {
     icon: '🎯',
     title: 'Sources, ranked by meaning',
-    body: 'Firmo ranks by what your topic means, not which keywords match. Sources squarely on subject come first; broader context waits behind a button. Each one is tagged Supports, Counterpoint, Mixed, or Background, and retracted papers get a red do-not-cite stamp.',
+    body: 'Firmo ranks by what your topic means, not which keywords match, and files every source by what it will do in your paper — the finding, the one that cuts against it, the one saying it depends, the method behind both. The words change with your question: ask how effective something is and you get Effect estimate and Null or reversed. Retracted papers get a red do-not-cite stamp.',
     tip: 'Grab a Counterpoint source and answer it. Addressing the other side is what makes an essay strong.',
   },
   {
@@ -36,7 +36,7 @@ const STEPS = [
   {
     icon: '🧭',
     title: 'The argument, read like a tutor would',
-    body: 'The Argument panel maps your thesis, marks whether each paragraph earns its place, and tells you if you left the counterargument unanswered, then hands you sources for the section you are missing.',
+    body: 'The Claims stage maps your thesis, marks whether each paragraph earns its place, and names the objection your particular draft owes its reader — the opposing evidence for an argument, the null result for a question of degree, the item left out of a list — then hands you sources for it.',
     tip: 'The Outline panel turns your saved sources into a point-by-point plan, and flags every point with no evidence yet.',
   },
   {

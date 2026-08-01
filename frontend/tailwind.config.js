@@ -21,6 +21,7 @@ export default {
         app: themed('app'),        // base canvas
         panel: themed('panel'),    // side panels
         raised: themed('raised'),  // floating cards, hover states
+        lift:   themed('lift'),    // the nearest surface: hover, a pulled spine
         sheet: themed('sheet'),    // the document page itself
         line: themed('line'),      // hairline borders
         edge: themed('edge'),      // stronger dividers

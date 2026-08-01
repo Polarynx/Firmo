@@ -39,13 +39,45 @@ export const SOURCE_STAMPS = {
   doab: 'DOAB',
 }
 
-// Offered on the empty canvas. Each one exercises a different corner of the
-// index — health, humanities, policy — so the first search a student runs
-// shows the breadth rather than one discipline.
+// Offered on the empty canvas, one at a time.
+//
+// Three fixed rows used to sit here, which read as a menu — as though Firmo did
+// those three things and the student had to pick one. A single line that
+// changes on every visit reads as an example instead, and thirty of them show
+// the range without a list: every discipline the index covers, and every shape
+// of question Firmo classifies, so a student sees that "to what extent" and
+// "what are the" are different kinds of ask before they type their own.
 export const EXAMPLE_TOPICS = [
   'does remote work reduce productivity',
   'microplastics in drinking water',
   'how did the printing press change literacy',
+  'to what extent do carbon offsets halt deforestation',
+  'what are the ethical limits of predictive policing',
+  'how did the East India Company reshape indigenous law',
+  'is intermittent fasting better than calorie restriction',
+  'what caused the late Bronze Age collapse',
+  'how does algorithmic curation affect the public sphere',
+  'does class size actually affect attainment',
+  'what are the main failure modes of large language models',
+  'how did antibiotics change childbirth mortality',
+  'to what extent is gentrification driven by transit',
+  'why did the Roman census records survive',
+  'does bilingualism delay dementia',
+  'what are the primary vulnerabilities of smart contracts',
+  'how do coral reefs recover after bleaching',
+  'to what extent did print culture cause the Reformation',
+  'what explains the productivity slowdown since 2005',
+  'how reliable is eyewitness testimony',
+  'does urban green space reduce heat mortality',
+  'what are the arguments against open borders',
+  'how did the Black Death change European wages',
+  'to what extent does social media polarise voters',
+  'what is the evidence on four-day working weeks',
+  'how did Ottoman archives record land tenure',
+  'does microfinance actually raise incomes',
+  'what are the limits of machine translation for low-resource languages',
+  'how does sleep deprivation affect memory consolidation',
+  'to what extent is obesity heritable',
 ]
 
 export const CITATION_STYLES = [

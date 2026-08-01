@@ -112,3 +112,53 @@ export const INTENT_COPY = {
     hint: 'Reads like a reference list. Firmo will check every entry against publisher records.',
   },
 }
+
+// ── What kind of question this looks like ───────────────────────────────────
+//
+// The server classifies the question properly — it has the whole prompt and a
+// model — but that answer only arrives after the search has run, which is far
+// too late to be useful to someone still deciding what to type. This is the
+// cheap client-side read of the same thing, shown while they type.
+//
+// It is deliberately conservative and deliberately hedged in the copy ("reads
+// like"). Guessing wrong is survivable when the line is phrased as an
+// impression; it would not be if this claimed to be the verdict. The order
+// matters: a comparison wearing "to what extent" is still a comparison, and an
+// interpretive question about a text is not a measurement no matter how it
+// opens.
+const SHAPE_HINTS = [
+  {
+    shape: 'comparison',
+    test: t => /\b(rather than|versus|vs\.?|as opposed to|compared with|compared to)\b/.test(t)
+      || /\bprimarily\b.*\bthan\b/.test(t),
+    hint: 'Reads like a question of which explanation. Firmo will look for the case on both sides.',
+  },
+  {
+    shape: 'interpretive',
+    test: t => /\b(ethical|moral|justice|ought|legitimac|normative|narrative|fiction|novel|poem|rhetoric|discourse|historiograph|philosoph)\w*/.test(t),
+    hint: 'Reads like a question of interpretation. Firmo will look for readings and the theory behind them.',
+  },
+  {
+    shape: 'enumeration',
+    test: t => /^\s*(what are|what were|which are)\b/.test(t)
+      || /\b(factors|limits|implications|vulnerabilit|barriers|causes of|arguments (for|against))\b/.test(t),
+    hint: 'Reads like a question of coverage. The answer is a list, and Firmo will hunt for what a keyword search would miss.',
+  },
+  {
+    shape: 'mechanism',
+    test: t => /^\s*(how did|how do|how does|in what ways)\b/.test(t),
+    hint: 'Reads like a question of mechanism. Firmo will look for the pathways, not a verdict.',
+  },
+  {
+    shape: 'extent',
+    test: t => /\b(to what extent|how much|how effective|how far|how strongly)\b/.test(t),
+    hint: 'Reads like a question of degree. Firmo will look for effect sizes and null results, not a yes or no.',
+  },
+]
+
+/** A guess at the question's shape, or null when nothing fits confidently. */
+export function guessShape(text) {
+  const t = (text || '').trim().toLowerCase()
+  if (t.length < 12 || t.split(/\s+/).length < 4) return null
+  return SHAPE_HINTS.find(h => h.test(t)) || null
+}

@@ -117,20 +117,20 @@ function coldStart() {
 
 export const SCRIPT = [
   {
-    say: 'Firmo starts with a question, not a keyword.',
+    say: 'Firmo starts with a question, not a keyword — and it reads the shape of that question before searching. This one wants a size, not a yes or no.',
     at: 'question-field',
     type: { text: QUESTION, set: v => rs().setQuery(v) },
     hold: 250,
   },
   {
-    say: 'It reads the shape of the question before it searches. This one wants a size, not a yes or no — so Firmo will go looking for effect estimates and null results.',
+    
     hold: 761,
   },
   {
     // The alternate entrance, shown rather than listed. Most students arriving
     // at Firmo already have three paragraphs somewhere, and a demo that only
     // ever shows the blank-page path quietly tells them this is not for them.
-    say: 'Already started writing? A Word file works too — and Google Docs exports to Word, so that is the same door.',
+    say: 'Already started writing? Drop in a Word file instead. Google Docs exports to Word, so that is the same door.',
     at: 'import-docx',
     hold: 761,
   },
@@ -163,25 +163,25 @@ export const SCRIPT = [
     hold: 263,
   },
   {
-    say: 'Every paper is filed by what it will do in your argument. The estimate, the one that cuts against it, the method behind both.',
+    say: 'Everything that comes back is filed by what it will do in your argument. The estimate, the one that cuts against it, the method behind both.',
     hold: 937,
   },
   {
     // "Why it matters" is the single most useful button in the product and the
     // one nobody presses, because its label promises a summary and it actually
     // answers a harder question: what is this paper for, in YOUR argument.
-    say: 'You do not have to read forty abstracts to find out. Ask any paper why it matters, and Firmo answers against your question, not in general.',
+    say: 'You do not have to read forty abstracts. Ask any paper why it matters, and Firmo answers against your question, not in general.',
     at: 'why-matters',
     press: true,
     hold: 1200,
   },
-  { say: 'Keep the ones you will actually use.',
+  { 
     at: 'save-nth-0', run: () => save(SOURCES[0]), hold: 900 },
   { at: 'save-nth-1', run: () => save(SOURCES[1]), hold: 550 },
   { at: 'save-nth-2', run: () => save(SOURCES[2]), hold: 550 },
   { at: 'save-nth-3', run: () => save(SOURCES[3]), hold: 900 },
   {
-    say: 'Four is enough for Firmo to plan the argument around them.',
+    say: 'Keep four, and Firmo can plan the argument around them.',
     at: 'tab-outline',
     run: async () => {
       ui().setStage('outline')
@@ -195,13 +195,13 @@ export const SCRIPT = [
     // The chat is the least discoverable thing in the workspace and the most
     // asked-for capability in the category, so it gets a beat of its own — and
     // the refusal gets said out loud, because it is the whole positioning.
-    say: 'Or just ask them. Grounded in the papers you kept, not the open internet — and it will explain and plan, but never write your paragraphs.',
+    say: 'Or just ask them — grounded in the papers you kept, not the open internet.',
     at: 'ask-box',
     type: { text: 'where do these papers actually disagree?', set: v => ui().setOmniValue(v), speed: 26 },
     hold: 585,
   },
   {
-    say: 'The page is yours. Firmo does not write it.',
+    say: 'The page is yours. Firmo will not write it — but it will read what you wrote and mark every sentence a reader expects a source for.',
     at: 'tab-draft',
     run: () => ui().setStage('draft'),
     hold: 250,
@@ -212,7 +212,7 @@ export const SCRIPT = [
     hold: 250,
   },
   {
-    say: 'Now it reads what you wrote and marks every sentence a reader will expect a source for.',
+    
     at: 'check-draft',
     run: async () => {
       useAnnotationStore.setState({ draftLoading: true, draftStatus: 'Reading your draft…' })
@@ -223,15 +223,21 @@ export const SCRIPT = [
     hold: 468,
   },
   {
-    say: 'Red means the evidence you saved disagrees with what you wrote. Amber is softer: true enough, but a marker will stop at it.',
+    say: 'Red means the evidence disagrees with you. Amber is softer: true enough, but a marker will stop at it.',
     at: 'claim-open',
     run: () => an().selectClaim(CLAIMS[0].id),
     hold: 878,
   },
   {
-    say: 'Amber is the softer one: true enough, but a marker will stop at it.',
+    
     run: () => an().selectClaim(CLAIMS[2].id),
     hold: 564,
+  },
+  {
+    // Nothing said, nothing moved. Every beat so far has had a line over it, so
+    // two seconds of quiet is the loudest thing available — and it buys the
+    // viewer a moment to notice the amber sentence before it changes.
+    hold: 1600,
   },
   {
     // Pressed for real. This is the one step in the script that does not call a
@@ -239,7 +245,7 @@ export const SCRIPT = [
     // and the citation, the saved source, the green highlight and the new line
     // in the works-cited page all follow from the product's own code. It is the
     // most important beat in the demo and the one least worth faking.
-    say: 'One press: the citation goes into your sentence, the source joins the paper, and the works-cited page updates itself.',
+    say: 'One press. The citation goes into your sentence, the source joins the paper, and the works-cited page writes itself.',
     at: 'cite',
     press: true,
     hold: 878,
@@ -249,7 +255,7 @@ export const SCRIPT = [
     hold: 527,
   },
   {
-    say: 'And the last pass before hand-in: every entry in your reference list, against the publisher record.',
+    say: 'Last pass before hand-in — every reference checked against the publisher record.',
     at: 'tab-references',
     run: async () => {
       ui().setStage('references')
@@ -265,11 +271,11 @@ export const SCRIPT = [
     hold: 702,
   },
   {
-    say: 'That last one does not exist. This is the pass that catches invented citations before a professor does.',
+    say: 'That one does not exist. This is what catches invented citations before a professor does.',
     hold: 878,
   },
   {
-    say: 'Then the whole thing leaves as one Word file — your prose and its works-cited page, in the style the assignment asked for.',
+    
     at: 'tab-export',
     run: () => ui().setStage('export'),
     hold: 761,

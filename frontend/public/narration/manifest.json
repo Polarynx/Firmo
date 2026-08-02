@@ -1,23 +1,18 @@
 {
- "voice": "en-GB-RyanNeural",
+ "voice": "en-US-AndrewMultilingualNeural",
  "rate": "+6%",
  "lines": {
-  "Firmo starts with a question, not a keyword.": "4e049e8e05777414.mp3",
-  "It reads the shape of the question before it searches. This one wants a size, not a yes or no — so Firmo will go looking for effect estimates and null results.": "d71f5401e0011408.mp3",
-  "Already started writing? A Word file works too — and Google Docs exports to Word, so that is the same door.": "7bedecf9ad7a766a.mp3",
+  "Firmo starts with a question, not a keyword — and it reads the shape of that question before searching. This one wants a size, not a yes or no.": "f73043998162fc9b.mp3",
+  "Already started writing? Drop in a Word file instead. Google Docs exports to Word, so that is the same door.": "2e658b2ea5e35428.mp3",
   "One search, sixteen databases.": "c6712555a76284f6.mp3",
-  "Every paper is filed by what it will do in your argument. The estimate, the one that cuts against it, the method behind both.": "688e42abadaf9d8a.mp3",
-  "You do not have to read forty abstracts to find out. Ask any paper why it matters, and Firmo answers against your question, not in general.": "86cc8741edd8eb66.mp3",
-  "Keep the ones you will actually use.": "ef800a8fce0bd225.mp3",
-  "Four is enough for Firmo to plan the argument around them.": "2cc63b5ef25968d0.mp3",
-  "Or just ask them. Grounded in the papers you kept, not the open internet — and it will explain and plan, but never write your paragraphs.": "79a2e367766c0b74.mp3",
-  "The page is yours. Firmo does not write it.": "0fb9d0b9634e682e.mp3",
-  "Now it reads what you wrote and marks every sentence a reader will expect a source for.": "651fec24bfb70510.mp3",
-  "Red means the evidence you saved disagrees with what you wrote. Amber is softer: true enough, but a marker will stop at it.": "b870d2b350b79ffb.mp3",
-  "Amber is the softer one: true enough, but a marker will stop at it.": "ef69733237454553.mp3",
-  "One press: the citation goes into your sentence, the source joins the paper, and the works-cited page updates itself.": "a11051ba23027d46.mp3",
-  "And the last pass before hand-in: every entry in your reference list, against the publisher record.": "bafbdf3b7e6722a7.mp3",
-  "That last one does not exist. This is the pass that catches invented citations before a professor does.": "ff2bdc6364f14738.mp3",
-  "Then the whole thing leaves as one Word file — your prose and its works-cited page, in the style the assignment asked for.": "a7fe5d814777bbe3.mp3"
+  "Everything that comes back is filed by what it will do in your argument. The estimate, the one that cuts against it, the method behind both.": "cc01cd223bf2ce73.mp3",
+  "You do not have to read forty abstracts. Ask any paper why it matters, and Firmo answers against your question, not in general.": "0ca61e4473f46a33.mp3",
+  "Keep four, and Firmo can plan the argument around them.": "aca30dccdbe23283.mp3",
+  "Or just ask them — grounded in the papers you kept, not the open internet.": "e0f940d94754b951.mp3",
+  "The page is yours. Firmo will not write it — but it will read what you wrote and mark every sentence a reader expects a source for.": "985ef157380af783.mp3",
+  "Red means the evidence disagrees with you. Amber is softer: true enough, but a marker will stop at it.": "83fa66e57d98540d.mp3",
+  "One press. The citation goes into your sentence, the source joins the paper, and the works-cited page writes itself.": "4cb01e5fa0df7c2f.mp3",
+  "Last pass before hand-in — every reference checked against the publisher record.": "48c700b27a504745.mp3",
+  "That one does not exist. This is what catches invented citations before a professor does.": "706f55af8328f1b8.mp3"
  }
 }

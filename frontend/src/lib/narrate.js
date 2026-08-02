@@ -164,12 +164,73 @@ async function recordedUrl(text) {
 
 let audioEl = null
 
-function player() {
+// ── Softening the seams ─────────────────────────────────────────────────────
+//
+// Each line is its own MP3, and an MP3 starts and stops at full volume. Played
+// back to back that is audible as a click at every join, and across a dozen
+// lines it is the difference between a recording and a sequence of files. A
+// short ramp at each end costs nothing and removes it.
+//
+// Done with WebAudio rather than by animating `el.volume`, because volume steps
+// in discrete jumps and a fade built from setTimeouts is its own kind of
+// stutter. The graph is built once and reused; browsers cap how many
+// AudioContexts a page may open, and a demo that creates one per line will
+// eventually get none.
+const FADE = 0.11   // seconds at each end
+
+let ctx = null
+let gain = null
+
+function graph() {
   if (!audioEl) {
     audioEl = new Audio()
     audioEl.preload = 'auto'
+    audioEl.crossOrigin = 'anonymous'
   }
-  return audioEl
+  if (!ctx) {
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext
+      if (!AC) return null
+      ctx = new AC()
+      gain = ctx.createGain()
+      ctx.createMediaElementSource(audioEl).connect(gain)
+      gain.connect(ctx.destination)
+    } catch {
+      // No WebAudio, or the element is already routed through a graph. Playing
+      // unfaded is a worse demo, not a broken one.
+      ctx = false
+    }
+  }
+  return ctx || null
+}
+
+function player() {
+  graph()
+  return audioEl || (audioEl = Object.assign(new Audio(), { preload: 'auto' }))
+}
+
+/** Ramp in from silence, and schedule the ramp out to land on the last frame. */
+function fade(el) {
+  if (!ctx || !gain) return
+  try {
+    if (ctx.state === 'suspended') ctx.resume()
+    const now = ctx.currentTime
+    gain.gain.cancelScheduledValues(now)
+    gain.gain.setValueAtTime(0.0001, now)
+    gain.gain.linearRampToValueAtTime(1, now + FADE)
+
+    // The duration is only known once metadata has loaded, which for a cached
+    // file is usually already true and occasionally is not.
+    const scheduleOut = () => {
+      const d = el.duration
+      if (!isFinite(d) || d <= FADE * 2) return
+      const end = ctx.currentTime + (d - el.currentTime)
+      gain.gain.setValueAtTime(1, end - FADE)
+      gain.gain.linearRampToValueAtTime(0.0001, end)
+    }
+    if (isFinite(el.duration)) scheduleOut()
+    else el.addEventListener('loadedmetadata', scheduleOut, { once: true })
+  } catch {}
 }
 
 /** Play one line from a URL. Resolves false if it cannot. */
@@ -193,7 +254,7 @@ function playUrl(url, { recorded = false } = {}) {
 
     el.src = url
     el.play().then(
-      () => { if (!recorded) serverVoice = true },
+      () => { fade(el); if (!recorded) serverVoice = true },
       // Autoplay refusal, not a server problem — the demo is opened by a click,
       // so this is rare, and falling through to Web Speech is the right answer
       // either way.

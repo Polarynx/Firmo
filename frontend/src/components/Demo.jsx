@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 
 import {
-  CHAPTERS, SCRIPT, chapterFor, claimRun, coldStart, holdsRun, restore, snapshot, sleep,
+  SCRIPT, claimRun, coldStart, holdsRun, restore, snapshot, sleep,
 } from '../lib/demo'
 import {
   listVoices, pickVoice, prefetchLine, say, setVoice, stopSpeaking,
@@ -93,7 +93,6 @@ export default function Demo({ onClose }) {
   // where to look BEFORE the thing happens, not after.
   const [spot, setSpot] = useState(null)
   const [opening, setOpening] = useState(true)
-  const [chapter, setChapter] = useState('')
   // Sound is opt-out, not opt-in: a demo nobody unmutes is a demo with captions
   // and a mute button. The control is visible throughout so it is never a
   // surprise, and the captions stay on screen either way — for people with the
@@ -164,7 +163,6 @@ export default function Demo({ onClose }) {
         if (!alive()) return
         const step = SCRIPT[i]
         setProgress((i + 1) / SCRIPT.length)
-        setChapter(chapterFor(i))
         if (step.say) setCaption(step.say)
 
         // The voice starts NOW, next to the visuals, not after them.
@@ -459,11 +457,14 @@ export default function Demo({ onClose }) {
         </button>
       </div>
 
-      {/* How far through, as one hairline across the top — with a tick at each
-          chapter boundary, so the bar says how much is left in *parts* rather
-          than as a fraction nobody can size. A viewer deciding whether to sit
-          through the rest is asking "how many more of these", and seven ticks
-          answers it where 0.62 does not. */}
+      {/* How far through, as one hairline across the top.
+          The chapter ticks that used to sit on it are gone with the chapter
+          labels: they were scaffolding for a demo that did not flow, telling
+          the viewer which section they were in because the run itself did not
+          make that obvious. It does now, and a table of contents over a
+          ninety-second film is one more thing competing with the screen. The
+          bar stays — "how much longer" is a fair question — as one quiet rule
+          rather than a structure. */}
       <div className="fixed inset-x-0 top-0 z-[64] h-[3px] pointer-events-none">
         <motion.div
           className="h-full bg-brand-500 dark:bg-signal origin-left"
@@ -471,32 +472,8 @@ export default function Demo({ onClose }) {
           transition={{ duration: 0.4, ease: 'easeOut' }}
           style={{ width: '100%' }}
         />
-        {CHAPTERS.map(c => (
-          <span
-            key={c.at}
-            aria-hidden="true"
-            className="absolute top-0 h-full w-px bg-app/70"
-            style={{ left: `${c.at * 100}%` }}
-          />
-        ))}
       </div>
 
-      {/* Which chapter, named. The captions describe the individual action; this
-          says which part of making a paper the action belongs to, which is the
-          thing a viewer is actually trying to learn. */}
-      {!opening && !done && chapter && (
-        <motion.div
-          key={chapter}
-          initial={{ opacity: 0, y: -6 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-          className="fixed top-4 left-1/2 -translate-x-1/2 z-[64] pointer-events-none
-            record !text-[9px] tracking-[0.22em] px-3 py-1 rounded-full
-            bg-app/80 backdrop-blur-sm border border-hair/10"
-        >
-          {chapter}
-        </motion.div>
-      )}
 
       {/* The title card. Two and a half seconds of nothing but the promise,
           before a single thing moves. A demo that opens mid-gesture spends its

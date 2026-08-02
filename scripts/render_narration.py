@@ -50,7 +50,12 @@ SCRIPT_FILE = ROOT / "frontend" / "src" / "lib" / "demo.js"
 OUT_DIR = ROOT / "frontend" / "public" / "narration"
 MANIFEST = OUT_DIR / "manifest.json"
 
-DEFAULT_VOICE = "en-GB-RyanNeural"   # young, British, male
+DEFAULT_VOICE = "en-US-AndrewMultilingualNeural"   # warm, confident, authentic
+# Chosen by ear over the en-GB set. Azure's Multilingual voices are a newer
+# generation than the standard *Neural ones and audibly less synthetic; there is
+# no en-GB Multilingual, so this trades the accent for the naturalness. British
+# alternatives if that trade stops being worth it: en-GB-RyanNeural,
+# en-GB-ThomasNeural. Non-American newer generation: en-AU-WilliamMultilingualNeural.
 DEFAULT_RATE = "+6%"                 # neural voices carry a quicker read
 
 

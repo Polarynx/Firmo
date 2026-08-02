@@ -21,3 +21,5 @@ backend/eval/runs/
 
 # Misc
 .DS_Store
+
+backend/.narration/

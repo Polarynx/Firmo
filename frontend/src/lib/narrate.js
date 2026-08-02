@@ -1,3 +1,5 @@
+import { API } from './api'
+
 // ── The voice ───────────────────────────────────────────────────────────────
 //
 // Captions ask the viewer to read the screen and watch the screen at once, and
@@ -123,7 +125,78 @@ export function warmVoices(timeout = 2500) {
  * unavailable — callers await this to pace against the voice, so it must never
  * hang.
  */
+// ── The good voice, when the server has one ─────────────────────────────────
+//
+// Web Speech is the fallback now, not the plan. `/api/narrate` returns the same
+// line read by Azure's en-GB-RyanNeural — the young British male the script was
+// written for — so every visitor hears the identical take instead of whatever
+// their machine happens to have installed.
+//
+// Probed once. If narration is not configured the endpoint answers 503, this
+// flips to false for the session, and nothing tries again: a demo that pauses
+// on a doomed request before every line is worse than one that never had a
+// server voice at all.
+let serverVoice = null   // null = untested, true/false = known
+
+let audioEl = null
+
+function player() {
+  if (!audioEl) {
+    audioEl = new Audio()
+    audioEl.preload = 'auto'
+  }
+  return audioEl
+}
+
+/** Fetch and play one line from the server. Resolves false if it cannot. */
+function sayViaServer(text) {
+  return new Promise(resolve => {
+    if (serverVoice === false) return resolve(false)
+    const el = player()
+    const url = `${API}/api/narrate?text=${encodeURIComponent(text)}`
+
+    let settled = false
+    const done = ok => {
+      if (settled) return
+      settled = true
+      el.onended = el.onerror = el.oncanplaythrough = null
+      resolve(ok)
+    }
+
+    el.onended = () => done(true)
+    el.onerror = () => { serverVoice = false; done(false) }
+    // A line is a few seconds; anything past this is a stall, and the caller
+    // still has the browser voice to fall back to.
+    setTimeout(() => done(serverVoice === true), 20000)
+
+    el.src = url
+    el.play().then(
+      () => { serverVoice = true },
+      // Autoplay refusal, not a server problem — the demo is opened by a click,
+      // so this is rare, and falling through to Web Speech is the right answer
+      // either way.
+      () => done(false),
+    )
+  })
+}
+
+/** Warm the first line so the demo does not open on a network round trip. */
+export function prefetchLine(text) {
+  if (!text || serverVoice === false) return
+  try { fetch(`${API}/api/narrate?text=${encodeURIComponent(text)}`).catch(() => {}) } catch {}
+}
+
 export function say(text, { muted = false, rate = 1.06 } = {}) {
+  return sayInternal(text, { muted, rate })
+}
+
+async function sayInternal(text, { muted, rate }) {
+  if (muted || !text) return
+  if (serverVoice !== false && await sayViaServer(text)) return
+  return sayViaBrowser(text, { muted, rate })
+}
+
+function sayViaBrowser(text, { muted = false, rate = 1.06 } = {}) {
   return new Promise(resolve => {
     if (muted || !window.speechSynthesis || !text) return resolve()
 
@@ -163,4 +236,12 @@ export function say(text, { muted = false, rate = 1.06 } = {}) {
 
 export function stopSpeaking() {
   try { window.speechSynthesis?.cancel() } catch {}
+  try {
+    if (audioEl) { audioEl.pause(); audioEl.currentTime = 0 }
+  } catch {}
+}
+
+/** True once the server voice has answered at least one line. Drives the UI. */
+export function usingServerVoice() {
+  return serverVoice === true
 }

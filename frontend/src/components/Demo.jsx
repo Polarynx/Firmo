@@ -4,7 +4,10 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import {
   CHAPTERS, SCRIPT, chapterFor, claimRun, coldStart, holdsRun, restore, snapshot, sleep,
 } from '../lib/demo'
-import { listVoices, pickVoice, say, setVoice, stopSpeaking, warmVoices } from '../lib/narrate'
+import {
+  listVoices, pickVoice, prefetchLine, say, setVoice, stopSpeaking,
+  usingServerVoice, warmVoices,
+} from '../lib/narrate'
 
 // ── The demo player ─────────────────────────────────────────────────────────
 //
@@ -141,6 +144,10 @@ export default function Demo({ onClose }) {
       // they were about to watch.
       // Voices load asynchronously in Chrome, so this is done under the title
       // card where the wait is free rather than mid-sentence where it is not.
+      // Fire the first line at the server while the title card is up, so the
+      // opening beat plays from cache instead of waiting on a round trip.
+      prefetchLine(SCRIPT.find(x => x.say)?.say)
+
       const v = await warmVoices()
       if (alive()) {
         setVoices(listVoices())
@@ -387,7 +394,7 @@ export default function Demo({ onClose }) {
       {/* Bottom right, not top right: the masthead already has five controls in
           that corner and the skip button landed on top of them. */}
       <div className="fixed bottom-5 right-5 z-[64] flex items-center gap-2">
-        {!done && voices.length > 1 && (
+        {!done && !usingServerVoice() && voices.length > 1 && (
           // A picker, not a setting. Windows ships two generations of voice at
           // once and the good ones are network-backed, so which of them a given
           // machine has is unknowable from here — this shows the actual list and

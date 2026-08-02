@@ -239,6 +239,9 @@ export const useWorkspaceStore = create((set, get) => ({
     set({ activeProjectId: id, doc: next?.doc || '' })
     saveStore({ projects: get().projects, activeId: id })
     get().refreshBibliography()
+    // Land where this paper was left, not where the last one was. Imported
+    // lazily because the UI store imports this one.
+    import('./useUIStore').then(m => m.useUIStore.getState().recallStage(id))
   },
 
   renameProject: (id, name) => {

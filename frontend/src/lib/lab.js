@@ -156,6 +156,10 @@ const CLAIMS = [
     claim: 'Minimum wage employment effects are larger where enforcement is weak.',
     status: 'needs_citation',
     note: 'Plausible and supported, but a reader will expect a source here.',
+    explanation: 'The cross-country evidence supports this, and it is the kind of sentence a marker will stop at without a reference.',
+    // A real candidate attached, so the fixture can reach the one interaction
+    // the whole product is built around: a citation going into the sentence.
+    sources: [SOURCES[4]],
   },
 ]
 
@@ -177,6 +181,12 @@ const CITATIONS = [
     matched: null,
   },
 ]
+
+// The same fixture drives the demo on the front page. Deliberately one body of
+// data rather than two: a demo with its own private happy-path corpus is a demo
+// that keeps working after the product stops, which is the entire failure mode
+// of recorded product tours.
+export const FIXTURE = { SOURCES, BRIEF, OUTLINE, DOC, CLAIMS, CITATIONS }
 
 /**
  * Fill the stores with a paper already in progress. Called once at boot, after

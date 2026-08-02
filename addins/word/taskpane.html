@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Firmo</title>
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <link rel="stylesheet" href="taskpane.css" />
+</head>
+<body>
+  <!--
+    The pane is deliberately narrow in what it offers. Firmo's web workspace has
+    seven stages; five of them are about finding and organising sources, and a
+    300px column beside a document is the wrong place to do any of that. What
+    belongs here is the two passes that can only run against a finished draft,
+    and that are worthless anywhere else: what needs a source, and whether the
+    references are real.
+  -->
+  <header class="bar">
+    <span class="mark">F</span>
+    <span class="name">Firmo</span>
+    <span class="spacer"></span>
+    <span id="status" class="status" role="status" aria-live="polite"></span>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button id="tab-claims" class="tab is-on" role="tab" aria-selected="true">Claims</button>
+    <button id="tab-refs" class="tab" role="tab" aria-selected="false">References</button>
+  </nav>
+
+  <main>
+    <section id="pane-claims" class="pane">
+      <p class="lede">
+        Firmo reads your document and marks every sentence a reader would expect a source for.
+        Nothing is changed until you ask for it.
+      </p>
+      <button id="run-claims" class="primary">Check this draft</button>
+      <div class="opts">
+        <label><input type="checkbox" id="opt-highlight" checked /> Highlight the sentences in the document</label>
+      </div>
+      <div id="claims-out" class="out"></div>
+    </section>
+
+    <section id="pane-refs" class="pane is-hidden">
+      <p class="lede">
+        Every entry in your reference list goes to CrossRef and OpenAlex. If a source came out of
+        a chatbot, this is the pass that catches the invented ones.
+      </p>
+      <button id="run-refs" class="primary">Verify my references</button>
+      <div id="refs-out" class="out"></div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <span id="host-note"></span>
+    <a href="https://firmo.app" target="_blank" rel="noopener">Open the full workspace ↗</a>
+  </footer>
+
+  <script src="taskpane.js"></script>
+</body>
+</html>

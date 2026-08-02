@@ -40,6 +40,9 @@ export const useAnnotationStore = create((set, get) => ({
 
   selectClaim: id => {
     set({ selectedClaimId: id })
+    // Selecting is an inspection, not a move: it fills the panel on the right
+    // and leaves the centre where it is, so the sentence the student just
+    // clicked stays under their eyes while the evidence for it arrives.
     if (id) useUIStore.getState().setSidebarView('claim_inspector')
   },
 
@@ -72,7 +75,7 @@ export const useAnnotationStore = create((set, get) => ({
       draftStatus: 'Reading your draft…',
     })
     useWorkspaceStore.getState().setMode('draft_checking')
-    useUIStore.getState().setSidebarView('argument_map')
+    useUIStore.getState().setStage('claims')
 
     try {
       await streamNDJSON('/api/draft-check', { text, saved_papers: savedPapers }, {
@@ -168,7 +171,7 @@ export const useAnnotationStore = create((set, get) => ({
       citeStatus: 'Reading your reference list…',
     })
     useWorkspaceStore.getState().setMode('citation_auditing')
-    useUIStore.getState().setSidebarView('citation_audit')
+    useUIStore.getState().setStage('references')
 
     try {
       await streamNDJSON('/api/check-citations', { text }, {
@@ -210,7 +213,7 @@ export const useAnnotationStore = create((set, get) => ({
   async buildOutline(papers, thesis = '') {
     if (!papers?.length) return
     set({ outlineLoading: true, outlineError: '', outlineThesis: thesis })
-    useUIStore.getState().setSidebarView('outline')
+    useUIStore.getState().setStage('outline')
     try {
       const data = await postJSON('/api/outline', { papers, thesis })
       set({ outline: data.sections || [] })

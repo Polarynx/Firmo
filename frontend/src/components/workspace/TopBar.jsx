@@ -37,6 +37,7 @@ export default function TopBar() {
   const theme = useUIStore(s => s.theme)
   const toggleTheme = useUIStore(s => s.toggleTheme)
   const setShowWalkthrough = useUIStore(s => s.setShowWalkthrough)
+  const setStage = useUIStore(s => s.setStage)
   const showHistory = useUIStore(s => s.showHistory)
   const setShowHistory = useUIStore(s => s.setShowHistory)
   const showProjects = useUIStore(s => s.showProjects)
@@ -92,12 +93,14 @@ export default function TopBar() {
   }
 
   return (
-    <header className="relative z-30 shrink-0 h-[52px] flex items-center justify-between gap-3
+    // 44px rather than 52: the stage tabs cost the centre a strip of its own,
+    // and the masthead is the least load-bearing chrome on the screen.
+    <header className="relative z-30 shrink-0 h-11 flex items-center justify-between gap-3
       px-3 sm:px-4 border-b border-hair/[0.07] bg-panel/70 backdrop-blur-2xl">
 
       <div className="flex items-center gap-2.5 min-w-0">
         <button
-          onClick={() => { setDoc(''); clearDraft() }}
+          onClick={() => { setDoc(''); clearDraft(); setStage('question') }}
           title="New document"
           className="group flex items-center gap-2 shrink-0 hover:opacity-80 transition-opacity"
         >
@@ -358,9 +361,13 @@ export default function TopBar() {
           </AnimatePresence>
         </div>
 
-        <IconButton label="How Firmo works" onClick={() => setShowWalkthrough(true)}>
+        {/* A play triangle, not a question mark. "?" is where help goes to die;
+            this is a sixty-second showing of the product working, and it should
+            look like something you press to watch. */}
+        <IconButton label="Watch the demo" onClick={() => setShowWalkthrough(true)}>
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M10 8.5l6 3.5-6 3.5v-7z" />
           </svg>
         </IconButton>
 

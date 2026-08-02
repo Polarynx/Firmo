@@ -155,6 +155,7 @@ export default function SourceCard({ paper, index = 0, query = '', shape = 'none
               appearing on the spine, one click reads as one event in three
               places — which is the product's argument in miniature. */}
           <motion.button
+            data-demo={`save-${index}`}
             onClick={() => toggleSource(paper, query)}
             title={isSaved ? 'Remove from project' : 'Save to project'}
             whileTap={{ scale: 0.82 }}

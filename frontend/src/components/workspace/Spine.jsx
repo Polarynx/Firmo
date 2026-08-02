@@ -4,13 +4,18 @@ import { motion } from 'framer-motion'
 import { useRecordStore } from '../../stores/useRecordStore'
 import { useWorkspaceStore } from '../../stores/useWorkspaceStore'
 import { useUIStore } from '../../stores/useUIStore'
-import StageRail from './StageRail'
 
 // ── The spine ───────────────────────────────────────────────────────────────
 //
 // A ledger rail down the left edge of the document: one tick per thing that
 // happened while this paper was written, oldest at the top, accreting as the
 // student works.
+//
+// It used to carry the stage navigation on top of the ticks, which made one
+// 52px column answer two unrelated questions — where am I in the paper, and what
+// have I done to it — in the same glance, with the navigation half set in 8.5px
+// type rotated on its side. The stages are tabs above the centre now. This rail
+// does one thing: the record.
 //
 // It is here because it is the product's argument made visible. Firmo's claim
 // is that it can show *how* a paper was made; a claim like that cannot live
@@ -72,12 +77,7 @@ export default function Spine() {
         border-r border-hair/[0.07] bg-panel/30 select-none"
       onMouseLeave={() => setHovered(null)}
     >
-      {/* Where you are in the paper, above what you have done to it. Two halves
-          of one column: the spine of a book is the outside of the thing,
-          printed with what is inside. */}
-      <StageRail />
-
-      <div className="w-full mt-2 pt-2 border-t border-hair/[0.07] flex flex-col items-center">
+      <div className="w-full pt-3 flex flex-col items-center">
         <span
           className="record mb-1.5 tracking-[0.2em]"
           style={{ writingMode: 'vertical-rl' }}

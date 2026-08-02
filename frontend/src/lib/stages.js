@@ -14,7 +14,7 @@ import { useWorkspaceStore } from '../stores/useWorkspaceStore'
 // order a paper actually gets made in, each reporting real state from the
 // stores rather than a step counter someone has to remember to advance.
 //
-// Two rules hold it together.
+// Three rules hold it together.
 //
 // Nothing is locked. A student who has drafted three paragraphs and realises
 // they need another source has to be able to go straight back to Sources and
@@ -24,51 +24,64 @@ import { useWorkspaceStore } from '../stores/useWorkspaceStore'
 // A stage that cannot run yet says what it needs. `blocked` carries the reason
 // in the student's words, which is the difference between a command that does
 // nothing when pressed and one that explains itself.
+//
+// Every stage owns the centre of the screen. This is the rule the workspace was
+// missing: the rail used to change only the panel on the right, so the middle
+// stayed one long column with the hero, the brief, the editor, the claim counts
+// and the bibliography all stacked on it at once, and pressing "Sources" moved
+// something in the corner of your eye. `surface` names what the middle becomes.
+// Draft, Claims and Export are three readings of the same page rather than
+// three places, so they share one surface and differ by mode.
 
 export const STAGES = [
   {
     key: 'question',
     label: 'Question',
-    view: 'brief',
+    surface: 'question',
     hint: 'What you are asking, and what kind of answer it wants',
   },
   {
     key: 'sources',
     label: 'Sources',
-    view: 'sources',
+    surface: 'sources',
     hint: 'What Firmo found, filed by what each one does',
   },
   {
     key: 'outline',
     label: 'Outline',
-    view: 'outline',
+    surface: 'outline',
     hint: 'The shape of the argument, built from what you saved',
   },
   {
     key: 'draft',
     label: 'Draft',
-    view: 'sources',
+    surface: 'document',
     hint: 'The page itself',
   },
   {
     key: 'claims',
     label: 'Claims',
-    view: 'argument_map',
+    surface: 'document',
     hint: 'Every sentence that needs backing, and whether it has any',
   },
   {
     key: 'references',
     label: 'References',
-    view: 'citation_audit',
+    surface: 'references',
     hint: 'Every entry checked against the publisher record',
   },
   {
     key: 'export',
     label: 'Export',
-    view: 'sources',
+    surface: 'document',
     hint: 'The document and its works-cited page, out of Firmo',
   },
 ]
+
+/** The stage record for a key, or the first stage. */
+export function stageMeta(key) {
+  return STAGES.find(s => s.key === key) || STAGES[0]
+}
 
 /**
  * Where the paper stands, computed from the stores rather than tracked.

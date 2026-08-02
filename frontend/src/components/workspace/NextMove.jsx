@@ -24,8 +24,9 @@ import { SPRING } from '../../lib/constants'
 // so a student who has decided they are not outlining yet is not asked again.
 
 export default function NextMove() {
-  const setView = useUIStore(s => s.setSidebarView)
-  const setSidebarOpen = useUIStore(s => s.setSidebarOpen)
+  const stage = useUIStore(s => s.stage)
+  const setStage = useUIStore(s => s.setStage)
+  const demo = useUIStore(s => s.showWalkthrough)
   const [dismissed, setDismissed] = useState(() => new Set())
 
   // Subscriptions, so the suggestion re-reads whenever the paper changes.
@@ -40,12 +41,15 @@ export default function NextMove() {
 
   const stages = readStages()
   const move = busy ? null : nextMove(stages)
-  const show = move && !dismissed.has(move.stage)
+  // Never point at the room you are standing in. Before the stages owned the
+  // centre this line was always somewhere else by definition; now "2 still
+  // unbacked — open claims" can appear directly above the open claims.
+  // Silent while the demo is playing. The script is already narrating, and a
+  // second voice telling the viewer to bookmark something is Firmo talking over
+  // itself.
+  const show = move && move.stage !== stage && !dismissed.has(move.stage) && !demo
 
-  const go = () => {
-    const stage = STAGES.find(s => s.key === move.stage)
-    if (stage) { setView(stage.view); setSidebarOpen(true) }
-  }
+  const go = () => setStage(move.stage)
 
   return (
     <AnimatePresence initial={false}>

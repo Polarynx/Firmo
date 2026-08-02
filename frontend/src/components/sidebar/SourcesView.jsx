@@ -7,7 +7,6 @@ import { useSavedSources, useSavedIds } from '../../stores/selectors'
 import { paperId } from '../../lib/projects'
 import { SOURCE_LABELS, ROLE_ORDER, SHAPE, roleFor, SPRING } from '../../lib/constants'
 import { EmptyNote, StatusLine } from '../ui/primitives'
-import Shelf from '../ui/Shelf'
 import QueryLedger from './QueryLedger'
 import SourceCard from './SourceCard'
 
@@ -44,6 +43,7 @@ export default function SourcesView() {
   const savedSources = useSavedSources()
   const savedIds = useSavedIds()
   const setShowImport = useUIStore(s => s.setShowImport)
+  const setStage = useUIStore(s => s.setStage)
 
   const shape = SHAPE[questionShape]
   const [collapsed, setCollapsed] = useState(() => new Set())
@@ -127,45 +127,28 @@ export default function SourcesView() {
     return acc
   }, {})
 
-  // Nothing searched yet: show what is already in the project instead of a void.
+  // Nothing searched yet. What is already saved lives in the panel on the right
+  // now, at every stage, so repeating it here would be the same list twice on
+  // one screen; this says the one thing the surface is missing instead.
   if (results.length === 0 && !isSearching) {
-    if (savedSources.length > 0) {
-      return (
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <span className="eyebrow">Saved to this paper</span>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setShowImport(true)}
-                className="text-[11px] font-medium text-brand-600 dark:text-signal hover:opacity-75 transition-opacity"
-              >
-                Import
-              </button>
-              <span className="record">{savedSources.length}</span>
-            </div>
-          </div>
-          {/* The collection, before the list of it. A dozen cards tell you what
-              you have one at a time; the shelf tells you at a glance. */}
-          <Shelf sources={savedSources} shape={questionShape} />
-
-          {savedSources.map((p, i) => (
-            <SourceCard key={paperId(p) || i} paper={p} index={i} compact />
-          ))}
-        </div>
-      )
-    }
     return (
       <EmptyNote
-        title="Nothing found yet"
+        title={savedSources.length > 0 ? 'No search running' : 'Nothing found yet'}
         graphic
         action={
-          <button onClick={() => setShowImport(true)} className="btn-ghost mt-1">
-            Import what you already have
-          </button>
+          <div className="flex items-center gap-2 mt-1">
+            <button onClick={() => setStage('question')} className="btn-primary text-xs">
+              Ask a question
+            </button>
+            <button onClick={() => setShowImport(true)} className="btn-ghost">
+              Import what you already have
+            </button>
+          </div>
         }
       >
-        Type a topic into the document and press ⌘↵. Firmo searches sixteen databases at
-        once; every source you bookmark joins your works-cited page.
+        {savedSources.length > 0
+          ? `You have ${savedSources.length} source${savedSources.length === 1 ? '' : 's'} on the shelf beside you. Search again to add to them.`
+          : 'Firmo searches sixteen databases at once and files what comes back by what each paper will do in your argument.'}
       </EmptyNote>
     )
   }
@@ -181,7 +164,7 @@ export default function SourcesView() {
           jumps, not filters: nothing is hidden by pressing one, which is why
           the counts on them can be trusted as a picture of the whole search. */}
       {groups.length > 0 && !provisional && (
-        <div className="sticky -top-3.5 z-20 -mx-3 px-3 pt-3.5 pb-2 bg-panel/95 backdrop-blur-sm
+        <div className="sticky top-0 z-20 -mx-8 px-8 pt-3 pb-2.5 bg-app/95 backdrop-blur-sm
           border-b border-line flex flex-col gap-2">
           <div className="flex items-baseline justify-between gap-2">
             <span className="eyebrow">
@@ -244,11 +227,6 @@ export default function SourcesView() {
         </motion.div>
       )}
 
-      {/* What is already in the paper, above what is merely on offer. */}
-      {!provisional && savedSources.length >= 3 && (
-        <Shelf sources={savedSources} shape={questionShape} className="pb-1" />
-      )}
-
       {/* Database filter */}
       {Object.keys(sourceCounts).length > 1 && !provisional && (
         <details className="group">
@@ -291,9 +269,13 @@ export default function SourcesView() {
 
       {/* Provisional results have not been judged yet, so they have no roles to
           stack. Shown flat, and restacked when the ranker lands. */}
-      {provisional && core.map((paper, i) => (
-        <SourceCard key={paperId(paper) || i} paper={paper} index={i} query={searchedQuery} />
-      ))}
+      {provisional && (
+        <div className="grid gap-3 grid-cols-1 xl:grid-cols-2 items-start">
+          {core.map((paper, i) => (
+            <SourceCard key={paperId(paper) || i} paper={paper} index={i} query={searchedQuery} />
+          ))}
+        </div>
+      )}
 
       {!provisional && core.length === 0 && related.length > 0 && (
         <p className="text-[11px] text-t2 leading-relaxed">
@@ -310,7 +292,7 @@ export default function SourcesView() {
               ref={el => { headRefs.current[g.key] = el }}
               onClick={() => toggle(g.key)}
               style={{ scrollMarginTop: SPY_OFFSET }}
-              className={`sticky top-[52px] z-10 -mx-3 px-3 py-1.5 bg-panel/95 backdrop-blur-sm
+              className={`sticky top-[54px] z-10 -mx-8 px-8 py-2 bg-app/95 backdrop-blur-sm
                 flex items-center gap-2 text-left group/head ${isShut ? 'deck' : ''}`}
             >
               <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${g.cfg.dot}`} />
@@ -332,7 +314,7 @@ export default function SourcesView() {
                 layout animation already gives the fold a smooth reflow, and it
                 is the one that cannot fight itself. */}
             {!isShut && (
-              <div className="flex flex-col gap-3">
+              <div className="grid gap-3 grid-cols-1 xl:grid-cols-2 items-start">
                 {g.papers.map((paper, i) => (
                   <SourceCard
                     key={paperId(paper) || `${g.key}-${i}`}

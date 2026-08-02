@@ -25,7 +25,13 @@ load_dotenv()
 import auth
 import db
 
-from llm import REASONING_MODEL, chat, chat_json, chat_stream, embed_texts
+from llm import (REASONING_MODEL, RERANK_CONCURRENCY, RERANK_MODEL,
+                 chat, chat_json, chat_stream, embed_texts)
+
+# One gate for the whole process, not one per search: the quota being protected
+# belongs to the API key, so two concurrent searches must share it rather than
+# each politely limiting itself to two and sending four.
+_RERANK_GATE = asyncio.Semaphore(RERANK_CONCURRENCY)
 from schemas import (
     AnnotatedBibRequest,
     ArgumentReviewRequest,
@@ -171,7 +177,15 @@ _allowed_origins = [
 # server side, so no browser origin is involved.)
 _allowed_origin_regex = os.getenv(
     "ALLOWED_ORIGIN_REGEX",
-    r"^(chrome-extension|moz-extension|safari-web-extension)://[a-z0-9-]+$",
+    # Browser extensions, plus the hosts an Office task pane can be served from.
+    # Word for the web runs the pane inside an officeapps.live.com frame and
+    # sends *that* as the Origin, not the add-in's own domain, so allowing only
+    # firmo.app would let the desktop add-in work and silently break the web one
+    # — the version most students have.
+    r"^((chrome|moz|safari-web)-extension://[a-z0-9-]+"
+    r"|https://[a-z0-9-]+\.officeapps\.live\.com"
+    r"|https://[a-z0-9-]+\.office\.com"
+    r"|https://[a-z0-9-]+\.microsoft365\.com)$",
 )
 
 app.add_middleware(
@@ -490,6 +504,32 @@ def _coerce_shape(s) -> str:
     return s if s in SHAPE_HINTS else "none"
 
 
+def _coerce_score(value) -> float:
+    """The model's relevance score, as a number, whatever it actually sent.
+
+    Taken straight from the parsed JSON this was a live crash: a model is under
+    no obligation to honour "score": 8 rather than "score": "8", and one string
+    among four hundred papers took down the entire search at
+
+        core = [p for p in scored if p["relevanceScore"] >= CORE_KEEP]
+
+    with a TypeError, several seconds after the student had already been shown
+    provisional results. Every other field coming out of that JSON is coerced;
+    this one was trusted because it is usually a number, which is the weakest
+    reason there is.
+    """
+    try:
+        n = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    # The prompt asks for 0-10. A model that returns 95 means 9.5 far more often
+    # than it means "ninety-five", and either way an out-of-range value must not
+    # outrank every honest one.
+    if n != n or n in (float("inf"), float("-inf")):
+        return 0.0
+    return max(0.0, min(10.0, n))
+
+
 def _coerce_stance(s) -> str:
     if s in VALID_STANCES:
         return s
@@ -581,6 +621,13 @@ async def rerank_and_tag(
     # sooner, which is the only axis here that is close to free.
     chunks = [candidates[i:i + 15] for i in range(0, len(candidates), 15)]
 
+    # Counted so the failure can be reported instead of inferred. A chunk that
+    # cannot be judged still returns its papers, scored by cosine alone — which
+    # is a reasonable degradation and an unreasonable secret. Before this, a
+    # rate-limited key produced a search that looked completely normal and
+    # ranked twenty times worse.
+    _chunk_failures = 0
+
     async def score_chunk(chunk: list[dict]) -> list[dict]:
         lines = []
         for i, p in enumerate(chunk):
@@ -596,11 +643,18 @@ async def rerank_and_tag(
             finding_hint=finding_hint, tension_hint=tension_hint,
         )
         try:
-            parsed = await chat_json(prompt, max_tokens=1200)
+            # Gated rather than free-running. See RERANK_CONCURRENCY in llm.py:
+            # eight simultaneous calls to the judging model is an instant 429 on
+            # every one of them, and the fallback below is silent, so the whole
+            # search degrades to cosine ranking with nothing on screen to say so.
+            async with _RERANK_GATE:
+                parsed = await chat_json(prompt, max_tokens=1200, model=RERANK_MODEL)
             entries = {e["index"]: e for e in parsed.get("papers", []) if isinstance(e.get("index"), int)}
         except Exception:
             print("[rerank chunk ERROR]")
             traceback.print_exc()
+            nonlocal _chunk_failures
+            _chunk_failures += 1
             entries = {}
         out = []
         for i, p in enumerate(chunk):
@@ -611,12 +665,19 @@ async def rerank_and_tag(
                 out.append({**p, "relevanceScore": sem_fallback_score(p),
                             "stance": "context", "shape": shape})
                 continue
-            out.append({**p, "relevanceScore": e.get("score", 0),
+            out.append({**p, "relevanceScore": _coerce_score(e.get("score")),
                         "stance": _coerce_stance(e.get("stance")), "shape": shape})
         return out
 
     scored_chunks = await asyncio.gather(*(score_chunk(c) for c in chunks))
     scored = [p for chunk in scored_chunks for p in chunk]
+
+    if _chunk_failures:
+        share = _chunk_failures / max(1, len(chunks))
+        print(f"[rerank] DEGRADED: {_chunk_failures}/{len(chunks)} chunks could not be "
+              f"judged ({share:.0%}). Those papers are ranked by embedding similarity "
+              f"only. If this is persistent, the judging model is rate limited — lower "
+              f"FIRMO_RERANK_CONCURRENCY or set FIRMO_RERANK_MODEL to the small model.")
 
     # Rank within a tier on all three signals at once, weighted.
     #
@@ -784,6 +845,22 @@ async def research(req: ResearchRequest, request: Request):
             # from the best few and let the neighbourhood name its own.
             yield _ev("status", stage="expand",
                       message="Following citations from the best matches…")
+            # Seeded from the closest papers, and NOT from the most-cited.
+            #
+            # Tried and measured: adding the six most-cited papers of the pool
+            # as extra seeds made retrieval strictly worse — 5 cases lost, 0
+            # gained, recall_total 0.219 -> 0.109 on the 32-case benchmark. The
+            # mechanism explains it. This walk ranks references by CO-CITATION
+            # across the seeds, so the landmark is whatever several independent
+            # on-topic papers all cite. Seeding with papers chosen for citation
+            # count alone admits work that is famous but unrelated — a methods
+            # paper, a blockbuster from a neighbouring field — whose references
+            # share nothing with the rest, and the shared-reference signal that
+            # does the actual work gets diluted.
+            #
+            # Left as a comment rather than deleted because it is the obvious
+            # idea, and the next person to have it should get the measurement
+            # rather than the ten minutes.
             try:
                 extra = await expand_by_citations(preview[:12], year_from=req.year_from)
             except Exception:
@@ -814,7 +891,14 @@ async def research(req: ResearchRequest, request: Request):
             # has the true numbers while there is still time to watch it.
             yield _ev("status", stage="enrich", message="Checking for free PDF versions…",
                       kept=len(ranked), considered=len(papers))
-            await enrich_unpaywall(ranked, top_n=25)
+
+            # Started, not awaited. Unpaywall is a per-paper HTTP lookup over the
+            # top 25, and it used to sit between the ranking being finished and
+            # the results being sent — several seconds during which the decision
+            # had already been made and the student was watching a status line
+            # for a field that only adds a download link. The results go out
+            # first; the links follow as a patch.
+            pdf_task = asyncio.create_task(enrich_unpaywall(ranked, top_n=25))
 
             # The roles are not sides in a debate, so nothing is flattened here any
             # more. Even a bare topic separates the papers that report something
@@ -832,6 +916,18 @@ async def research(req: ResearchRequest, request: Request):
                       question_shape=shape,
                       core_count=core_count, related_count=related_count,
                       total_considered=len(papers))
+
+            # Now collect the free-PDF links and send only what changed. A
+            # failure here costs an "open PDF" button, never the search.
+            try:
+                await pdf_task
+                pdfs = [{"id": paper_id(p), "oa_pdf": p["oa_pdf"]}
+                        for p in ranked if p.get("oa_pdf")]
+                if pdfs:
+                    yield _ev("pdfs", items=pdfs)
+            except Exception:
+                traceback.print_exc()
+
             yield _ev("done")
         except Exception:
             print("[research ERROR]")
@@ -1947,12 +2043,39 @@ async def corpus_stats(project_id: str,
 # See record.py for what this is for and what it does and does not prove.
 
 
-def _event_out(ev: db.Event) -> dict:
+# Payload fields that are the student's own writing rather than a fact about
+# the work. Safe on the owner's own view of their record; not safe on a link
+# anyone can open.
+_PRIVATE_FIELDS = ("claim", "quote", "query", "text", "excerpt", "asked", "citation")
+
+
+def _event_out(ev: db.Event, private: bool = True) -> dict:
+    """One event, for the owner (`private=True`) or for a public link.
+
+    The redaction is not cosmetic. Firmo's record is a provenance log, and the
+    honest version of that log quotes what was claimed and what was searched for
+    — so `citation.insert` carries 240 characters of the student's own sentence
+    and `search.run` carries the query verbatim. On the owner's screen that is
+    exactly right. On a URL anyone can open, a ten-citation paper was publishing
+    roughly 2,400 characters of an unpublished draft, and the student minting the
+    link had no way to know.
+
+    What survives redaction is what the record is actually *for*: that a claim
+    was made, when, that a source was attached to it, and the hash chain proving
+    the sequence has not been edited. A reader can still verify the process. They
+    just cannot read the paper.
+    """
+    payload = ev.payload or {}
+    if not private:
+        payload = {
+            k: ("[redacted]" if isinstance(v, str) and v else v) if k in _PRIVATE_FIELDS else v
+            for k, v in payload.items()
+        }
     return {
         "seq": ev.seq,
         "at": _ms(ev.at),
         "kind": ev.kind,
-        "payload": ev.payload or {},
+        "payload": payload,
         "hash": ev.hash,
         "prev_hash": ev.prev_hash,
     }
@@ -2028,7 +2151,7 @@ async def record_append(req: RecordAppendRequest,
     return {"appended": appended, "seq": seq, "head": prev_hash}
 
 
-async def _record_body(session: AsyncSession, project_id: str) -> dict:
+async def _record_body(session: AsyncSession, project_id: str, private: bool = True) -> dict:
     events = (await session.execute(
         select(db.Event)
         .where(db.Event.project_id == project_id)
@@ -2040,7 +2163,7 @@ async def _record_body(session: AsyncSession, project_id: str) -> dict:
         counts[ev.kind] = counts.get(ev.kind, 0) + 1
 
     return {
-        "events": [_event_out(e) for e in events],
+        "events": [_event_out(e, private=private) for e in events],
         "counts": counts,
         "head": events[-1].hash if events else record.GENESIS,
         "verification": record.verify(events),
@@ -2126,16 +2249,26 @@ async def record_unshare(req: ShareRequest,
 async def record_public(token: str, session: AsyncSession = Depends(auth.get_session)):
     """The read-only record behind a shared link.
 
-    No authentication: the token is the capability. It returns the log and the
-    verification result and nothing else — not the draft, not the sources, and
-    not the owner's email.
+    No authentication: the token is the capability.
+
+    Redacted, and the redaction is the point. This used to return event payloads
+    whole, which meant the log of a ten-citation paper carried about 2,400
+    characters of the student's unpublished draft — every claim they cited, in
+    their own words, on a URL anyone could open. The docstring here said it
+    returned "not the draft", which was true of the document and false of its
+    contents, and that gap is exactly the kind nobody notices until it matters.
+
+    Verification is unaffected: the hash chain is computed over the stored
+    payloads before this runs, so a reader can still confirm the sequence has not
+    been edited. They can see that a claim was made and backed, and when. They
+    cannot read the sentence.
     """
     share = (await session.execute(
         select(db.Share).where(db.Share.token == token, db.Share.revoked_at.is_(None))
     )).scalar_one_or_none()
     if share is None:
         raise HTTPException(status_code=404, detail="this link is not active")
-    body = await _record_body(session, share.project_id)
+    body = await _record_body(session, share.project_id, private=False)
     return {**body, "title": share.title, "author": share.author,
             "shared_at": _ms(share.created_at)}
 

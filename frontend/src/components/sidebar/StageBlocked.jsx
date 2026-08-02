@@ -12,14 +12,14 @@ import { EmptyNote } from '../ui/primitives'
 // declines to call a source fake.
 
 export default function StageBlocked({ title, reason, goto, action = 'Go there' }) {
-  const setView = useUIStore(s => s.setSidebarView)
+  const setStage = useUIStore(s => s.setStage)
   const target = STAGES.find(s => s.key === goto)
 
   return (
     <EmptyNote
       title={title}
       action={target && (
-        <button onClick={() => setView(target.view)} className="btn-ghost mt-1">
+        <button onClick={() => setStage(target.key)} className="btn-ghost mt-1">
           {action}
         </button>
       )}

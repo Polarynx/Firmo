@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    /* Google's sidebar is 300px of white beside a white page. Same reasoning as
+       the Word pane: borrow the host's surface and spend colour only on the
+       states that carry meaning. */
+    :root { --ink:#202124; --ink2:#5f6368; --ink3:#9aa0a6; --line:#e0e0e0;
+            --accent:#2f6f4e; --amber:#b45309; --red:#b42318; --green:#2f6f4e; }
+    * { box-sizing:border-box; }
+    body { margin:0; font:13px/1.5 Roboto,Arial,sans-serif; color:var(--ink); }
+    .tabs { display:flex; border-bottom:1px solid var(--line); }
+    .tab { flex:1; padding:9px 4px; border:0; background:none; cursor:pointer;
+           font:inherit; font-size:12.5px; color:var(--ink3); border-bottom:2px solid transparent; }
+    .tab.on { color:var(--ink); font-weight:600; border-bottom-color:var(--accent); }
+    main { padding:12px; display:flex; flex-direction:column; gap:10px; }
+    .hide { display:none; }
+    p.lede { margin:0; font-size:12.5px; color:var(--ink2); }
+    button.primary { padding:8px 12px; border:0; border-radius:4px; cursor:pointer;
+                     background:var(--accent); color:#fff; font:inherit; font-weight:600; font-size:12.5px; }
+    button.primary:disabled { opacity:.5; cursor:default; }
+    button.ghost { padding:4px 8px; border:1px solid var(--line); border-radius:4px;
+                   background:#fff; cursor:pointer; font:inherit; font-size:11.5px; align-self:flex-start; }
+    label.opt { font-size:11.5px; color:var(--ink2); display:flex; gap:6px; align-items:center; }
+    .status { font-size:11px; color:var(--ink3); min-height:14px; }
+    .out { display:flex; flex-direction:column; gap:8px; }
+    .item { padding:9px 10px; border:1px solid var(--line); border-left-width:3px;
+            border-radius:5px; background:#fafafa; display:flex; flex-direction:column; gap:5px; }
+    .tag { font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--ink3); }
+    .quote { margin:0; font-size:12.5px; }
+    .raw { margin:0; font-family:'Roboto Mono',monospace; font-size:10.5px; color:var(--ink2); word-break:break-word; }
+    .note { margin:0; font-size:11.5px; color:var(--ink2); }
+    .alarm { margin:0; padding:8px 10px; border-radius:4px; border-left:3px solid var(--red);
+             background:#fdf2f2; color:var(--red); font-size:12px; }
+    .err { color:var(--red); font-size:12px; }
+    .src { padding:7px 8px; border:1px solid var(--line); border-radius:4px; background:#fff;
+           display:flex; flex-direction:column; gap:3px; }
+    .src .t { font-size:11.5px; font-weight:600; }
+    .src .m { font-size:10.5px; color:var(--ink3); }
+    .s-needs_citation { border-left-color:var(--amber); } .s-needs_citation .tag { color:var(--amber); }
+    .s-shaky { border-left-color:var(--red); }            .s-shaky .tag { color:var(--red); }
+    .s-backed,.s-cited { border-left-color:var(--green); } .s-backed .tag,.s-cited .tag { color:var(--green); }
+    .v-ok { border-left-color:var(--green); }  .v-ok .tag { color:var(--green); }
+    .v-warn { border-left-color:var(--amber); }.v-warn .tag { color:var(--amber); }
+    .v-bad { border-left-color:var(--red); }   .v-bad .tag { color:var(--red); }
+  </style>
+</head>
+<body>
+  <div class="tabs">
+    <button class="tab on" id="t1" onclick="showPane(true)">Claims</button>
+    <button class="tab" id="t2" onclick="showPane(false)">References</button>
+  </div>
+
+  <main>
+    <div id="p1">
+      <p class="lede">Firmo reads your document and marks every sentence a reader would expect a
+        source for. Nothing changes until you ask.</p>
+      <label class="opt"><input type="checkbox" id="hl" checked> Highlight them in the document</label>
+      <button class="primary" id="b1" onclick="runClaims()">Check this draft</button>
+    </div>
+
+    <div id="p2" class="hide">
+      <p class="lede">Every entry in your reference list, checked against CrossRef and OpenAlex.
+        If a source came out of a chatbot, this is the pass that catches it.</p>
+      <button class="primary" id="b2" onclick="runRefs()">Verify my references</button>
+    </div>
+
+    <div class="status" id="status"></div>
+    <div class="out" id="out"></div>
+  </main>
+
+<script>
+  // No streaming here, by necessity: Apps Script's UrlFetchApp has no
+  // incremental reader, so the server call returns whole. Rather than fake a
+  // progress bar, the sidebar says plainly that it is working and how long the
+  // pass usually takes.
+  var LABEL = { needs_citation:'Needs a source', shaky:'Evidence disagrees',
+                backed:'Already covered', cited:'Cited', fine:'No source needed' };
+  var VERDICT = { verified:['ok','Matches the record'], mismatch:['warn','Check the details'],
+                  retracted:['bad','Retracted'], not_found:['bad','Not found'],
+                  unchecked:['muted','Not checked'] };
+  var claims = [];
+
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function $(id){ return document.getElementById(id); }
+  function status(t){ $('status').textContent = t || ''; }
+
+  function showPane(first){
+    $('t1').className = 'tab' + (first ? ' on' : '');
+    $('t2').className = 'tab' + (first ? '' : ' on');
+    $('p1').className = first ? '' : 'hide';
+    $('p2').className = first ? 'hide' : '';
+    $('out').innerHTML = '';
+    status('');
+  }
+
+  function runClaims(){
+    $('b1').disabled = true;
+    status('Reading your draft — this usually takes about twenty seconds.');
+    google.script.run
+      .withSuccessHandler(function(res){
+        $('b1').disabled = false; status('');
+        if (res.short) { $('out').innerHTML = '<p class="note">Write a paragraph or two first.</p>'; return; }
+        claims = res.claims || [];
+        renderClaims();
+      })
+      .withFailureHandler(function(e){
+        $('b1').disabled = false; status('');
+        $('out').innerHTML = '<p class="err">' + esc(e.message) + '</p>';
+      })
+      .checkDraft($('hl').checked);
+  }
+
+  function renderClaims(){
+    if (!claims.length) {
+      $('out').innerHTML = '<p class="note">Nothing here needs backing up. Firmo checks factual claims, not opinion or style.</p>';
+      return;
+    }
+    var open = claims.filter(function(c){ return c.status==='needs_citation'||c.status==='shaky'; }).length;
+    $('out').innerHTML = '<p class="note"><b>'+open+'</b> of '+claims.length+' still need something.</p>' +
+      claims.map(function(c,i){
+        return '<div class="item s-'+esc(c.status)+'">' +
+          '<span class="tag">'+esc(LABEL[c.status]||c.status)+'</span>' +
+          '<p class="quote">'+esc(c.claim||c.quote)+'</p>' +
+          (c.note ? '<p class="note">'+esc(c.note)+'</p>' : '') +
+          (c.sources||[]).slice(0,2).map(function(p,j){
+            return '<div class="src"><span class="t">'+esc(p.title)+'</span>' +
+              '<span class="m">'+esc([(p.authors||[])[0],p.year,p.journal].filter(Boolean).join(' · '))+'</span>' +
+              '<button class="ghost" onclick="cite('+i+','+j+',this)">Insert citation</button></div>';
+          }).join('') + '</div>';
+      }).join('');
+  }
+
+  function cite(i,j,btn){
+    btn.disabled = true;
+    status('Inserting…');
+    google.script.run
+      .withSuccessHandler(function(){ status(''); claims[i].status='cited'; renderClaims(); })
+      .withFailureHandler(function(e){ btn.disabled=false; status(''); alert(e.message); })
+      .insertCitation(claims[i], claims[i].sources[j], 'apa');
+  }
+
+  function runRefs(){
+    $('b2').disabled = true;
+    status('Checking every entry against the publisher record…');
+    google.script.run
+      .withSuccessHandler(function(res){
+        $('b2').disabled = false; status('');
+        if (res.empty) { $('out').innerHTML = '<p class="note">No reference list found in this document.</p>'; return; }
+        var items = res.items || [];
+        var suspect = items.filter(function(i){ return i.verdict==='not_found'||i.verdict==='retracted'; }).length;
+        $('out').innerHTML =
+          (suspect ? '<p class="alarm">'+suspect+' could not be matched to a real published record, or has been retracted. Fix these before you submit.</p>' : '') +
+          '<p class="note">'+items.length+' entries checked</p>' +
+          items.map(function(it){
+            var v = VERDICT[it.verdict] || ['muted','Checking'];
+            return '<div class="item v-'+v[0]+'"><span class="tag">'+esc(v[1])+'</span>' +
+              '<p class="raw">'+esc(it.raw)+'</p>' +
+              (it.note ? '<p class="note">'+esc(it.note)+'</p>' : '') + '</div>';
+          }).join('');
+      })
+      .withFailureHandler(function(e){
+        $('b2').disabled = false; status('');
+        $('out').innerHTML = '<p class="err">'+esc(e.message)+'</p>';
+      })
+      .checkCitations();
+  }
+</script>
+</body>
+</html>

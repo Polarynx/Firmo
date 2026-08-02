@@ -1,0 +1,22 @@
+{
+  "timeZone": "Etc/UTC",
+  "exceptionLogging": "STACKDRIVER",
+  "runtimeVersion": "V8",
+  "oauthScopes": [
+    "https://www.googleapis.com/auth/documents.currentonly",
+    "https://www.googleapis.com/auth/script.container.ui",
+    "https://www.googleapis.com/auth/script.external_request"
+  ],
+  "addOns": {
+    "common": {
+      "name": "Firmo",
+      "logoUrl": "https://firmo.app/icon-80.png",
+      "useLocaleFromApp": true
+    },
+    "docs": {
+      "homepageTrigger": {
+        "runFunction": "showSidebar"
+      }
+    }
+  }
+}

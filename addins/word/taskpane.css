@@ -1,0 +1,150 @@
+/* Firmo for Word — task pane styling.
+ *
+ * Not the workspace's charcoal reading room. This pane lives two inches from a
+ * white page in a grey Office chrome, and a dark panel bolted to that edge reads
+ * as a foreign object rather than as part of the document. So it borrows Word's
+ * own surface and spends its colour only where the workspace does: on the four
+ * states a claim can be in, and the four verdicts a reference can come back
+ * with. Those greens and ambers are the product; everything else is quiet.
+ */
+
+:root {
+  --ink: #1b1a19;
+  --ink-2: #57534e;
+  --ink-3: #8a8886;
+  --line: #e6e4e2;
+  --panel: #faf9f8;
+  --accent: #2f6f4e;
+  --amber: #b45309;
+  --red: #b42318;
+  --green: #2f6f4e;
+  font-size: 14px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  color: var(--ink);
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+/* ── chrome ── */
+
+.bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px; border-bottom: 1px solid var(--line);
+}
+.mark {
+  width: 20px; height: 20px; border-radius: 4px;
+  background: var(--accent); color: #fff;
+  font-family: Georgia, 'Times New Roman', serif; font-weight: 700;
+  font-size: 13px; line-height: 20px; text-align: center;
+}
+.name { font-weight: 600; letter-spacing: -0.01em; }
+.spacer { flex: 1; }
+.status { font-size: 11px; color: var(--ink-3); }
+
+.tabs { display: flex; border-bottom: 1px solid var(--line); }
+.tab {
+  flex: 1; padding: 9px 8px; border: 0; background: none; cursor: pointer;
+  font: inherit; font-size: 12.5px; color: var(--ink-3);
+  border-bottom: 2px solid transparent;
+}
+.tab:hover { color: var(--ink-2); }
+.tab.is-on { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
+
+main { flex: 1; overflow-y: auto; padding: 12px; }
+.pane { display: flex; flex-direction: column; gap: 10px; }
+.is-hidden { display: none; }
+
+.foot {
+  border-top: 1px solid var(--line); padding: 8px 12px;
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 11px; color: var(--ink-3);
+}
+.foot a { color: var(--accent); text-decoration: none; }
+.foot a:hover { text-decoration: underline; }
+
+/* ── controls ── */
+
+.lede { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--ink-2); }
+
+button.primary {
+  padding: 8px 12px; border: 0; border-radius: 4px; cursor: pointer;
+  background: var(--accent); color: #fff; font: inherit; font-size: 12.5px; font-weight: 600;
+}
+button.primary:hover { filter: brightness(1.08); }
+button.primary:disabled { opacity: 0.5; cursor: default; filter: none; }
+
+button.ghost {
+  padding: 4px 8px; border: 1px solid var(--line); border-radius: 4px; cursor: pointer;
+  background: #fff; font: inherit; font-size: 11.5px; color: var(--ink);
+  align-self: flex-start;
+}
+button.ghost:hover { border-color: var(--accent); color: var(--accent); }
+button.ghost:disabled { opacity: 0.45; cursor: default; }
+
+.opts { font-size: 11.5px; color: var(--ink-2); }
+.opts label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+
+/* ── results ── */
+
+.out { display: flex; flex-direction: column; gap: 8px; }
+.count { margin: 4px 0 0; font-size: 11.5px; color: var(--ink-2); }
+.note { margin: 0; font-size: 11.5px; line-height: 1.5; color: var(--ink-2); }
+.err { margin: 0; font-size: 12px; color: var(--red); }
+
+.alarm {
+  margin: 0; padding: 8px 10px; border-radius: 4px;
+  border-left: 3px solid var(--red); background: #fdf2f2;
+  font-size: 12px; line-height: 1.5; color: var(--red);
+}
+
+.claim, .ref {
+  display: flex; flex-direction: column; gap: 5px;
+  padding: 9px 10px; border: 1px solid var(--line); border-radius: 5px;
+  border-left-width: 3px; background: var(--panel);
+}
+
+.tag {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.quote { margin: 0; font-size: 12.5px; line-height: 1.5; }
+.raw { margin: 0; font-family: Consolas, 'SF Mono', monospace; font-size: 10.5px;
+       line-height: 1.5; color: var(--ink-2); word-break: break-word; }
+
+/* The one place colour is spent: what state this claim is in. Carried on the
+   left edge and the tag together, so it survives being read at a glance and
+   does not depend on colour alone. */
+.s-needs_citation { border-left-color: var(--amber); }
+.s-needs_citation .tag { color: var(--amber); }
+.s-shaky { border-left-color: var(--red); }
+.s-shaky .tag { color: var(--red); }
+.s-backed, .s-cited { border-left-color: var(--green); }
+.s-backed .tag, .s-cited .tag { color: var(--green); }
+.s-fine, .s-checking { border-left-color: var(--line); }
+
+.v-ok { border-left-color: var(--green); }
+.v-ok .tag { color: var(--green); }
+.v-warn { border-left-color: var(--amber); }
+.v-warn .tag { color: var(--amber); }
+.v-bad { border-left-color: var(--red); }
+.v-bad .tag { color: var(--red); }
+.v-muted { border-left-color: var(--line); }
+
+.src {
+  display: flex; flex-direction: column; gap: 3px;
+  padding: 7px 8px; border: 1px solid var(--line); border-radius: 4px; background: #fff;
+}
+.src .t { font-size: 11.5px; font-weight: 600; line-height: 1.4; }
+.src .m { font-size: 10.5px; color: var(--ink-3); }
+
+.link { font-size: 11.5px; color: var(--accent); text-decoration: none; }
+.link:hover { text-decoration: underline; }

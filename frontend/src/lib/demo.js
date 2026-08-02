@@ -127,14 +127,10 @@ export const readingTime = text =>
 
 export const SCRIPT = [
   {
-    say: 'Start with a question, not keywords. Firmo reads the shape of it first — this one wants a size, not a yes or no.',
+    say: 'This is Firmo. You start with a question, not keywords, and it reads the shape of that question before it searches. This one wants a size, not a yes or no.',
     at: 'question-field',
     type: { text: QUESTION, set: v => rs().setQuery(v) },
     hold: 250,
-  },
-  {
-    
-    hold: 761,
   },
   {
     // The alternate entrance, shown rather than listed. Most students arriving
@@ -211,7 +207,7 @@ export const SCRIPT = [
     hold: 585,
   },
   {
-    say: 'The page is yours. Firmo will not write it — but it will read it, and mark every sentence that needs backing.',
+    say: 'The page is yours. Firmo will not write it. But it will read it, and mark every sentence that needs backing.',
     at: 'tab-draft',
     run: () => ui().setStage('draft'),
     hold: 250,
@@ -265,7 +261,7 @@ export const SCRIPT = [
     hold: 527,
   },
   {
-    say: 'Last pass — every reference against the publisher record.',
+    say: 'Last pass. Every reference against the publisher record.',
     at: 'tab-references',
     run: async () => {
       ui().setStage('references')
@@ -300,7 +296,7 @@ export const SCRIPT = [
     // The closing line. Not a summary of features — a statement of what the
     // last ninety seconds were actually about, which is the only thing worth
     // saying at the end of a demo.
-    say: 'Not a chatbot that writes your essay. A workspace that can prove you wrote it.',
+    say: 'That is Firmo. Not a chatbot that writes your essay, but a workspace that can prove you wrote it.',
     hold: 1400,
   },
 ]
@@ -323,33 +319,59 @@ export const SCRIPT = [
 // whatever is on screen, seeding the fixture only when the stage is empty and
 // there would otherwise be nothing to point at.
 
-const seedIfEmpty = () => {
-  if (useResearchStore.getState().results.length) return
-  const id = ws().activeProjectId || 'demo-project'
+/**
+ * Put the demo's own example paper on screen, always.
+ *
+ * This used to seed only when the stage was empty, so a tour opened by someone
+ * with real work ran against THEIR paper — which is why half the controls did
+ * nothing useful. "Why it matters" needs a query and an abstract and a live
+ * model, and returned "couldn't analyze that" when any of them was missing;
+ * "Build outline" refused below four sources; the claim beats had no claims to
+ * click. The walkthrough was demonstrating whatever state the viewer happened to
+ * be in, which for a new user is nothing at all.
+ *
+ * So every tour now brings its own world: one question, six results, a draft,
+ * three claims, a reference list. The student's own work is snapshotted before
+ * any of this and restored when the tour ends, so nothing is lost by watching.
+ */
+const seedDemo = () => {
   useWorkspaceStore.setState({
     projects: [{
-      id,
-      name: ws().activeProject()?.name || 'Minimum wage & employment',
+      id: 'demo-project',
+      name: 'Minimum wage & employment',
       createdAt: Date.now(),
       sources: SOURCES.slice(0, 5),
       doc: DOC,
     }],
-    activeProjectId: id,
+    activeProjectId: 'demo-project',
     doc: DOC,
+    activeMode: 'idle',
   })
   useResearchStore.setState({
     query: QUESTION, searchedQuery: QUESTION, brief: BRIEF, results: SOURCES,
     questionShape: 'extent', inputType: 'question', isSearching: false,
+    provisional: false, error: '', statusMsg: '',
     roleCounts: SOURCES.reduce((a, p) => ({ ...a, [p.stance]: (a[p.stance] || 0) + 1 }), {}),
+    arms: [
+      { query: 'minimum wage employment effects', found: 96 },
+      { query: 'wage floor low skilled labour', found: 71 },
+      { query: 'minimum wage meta-analysis', found: 54 },
+      { query: 'monopsony wage setting', found: 43 },
+    ],
+    gathered: 428, kept: SOURCES.length, stage: 'done',
   })
-  useAnnotationStore.setState({ claims: CLAIMS, outline: OUTLINE, citations: CITATIONS })
+  useAnnotationStore.setState({
+    claims: CLAIMS, outline: OUTLINE, citations: CITATIONS,
+    selectedClaimId: null, typos: null, meta: null,
+    draftLoading: false, outlineLoading: false, citeLoading: false,
+  })
 }
 
 export const TOURS = {
   sources: [
-    { run: () => { seedIfEmpty(); ui().setStage('sources') },
+    { run: () => { seedDemo(); ui().setStage('sources') },
       say: 'Sixty papers came back. The useful question is never which one is most relevant.' },
-    { say: 'It is what have I got, and what am I missing. So they are stacked by what each one does — estimates, the ones that cut against them, the methods behind both.' },
+    { say: 'It is what have I got, and what am I missing. So they are stacked by what each one does. Estimates, the ones that cut against them, the methods behind both.' },
     { say: 'These are jumps, not filters. Nothing gets hidden, so the counts tell you the truth about the whole search.' },
     { at: 'why-matters', press: true,
       say: 'Not sure about one? Ask why it matters. It answers against your question, not in general.' },
@@ -362,7 +384,7 @@ export const TOURS = {
   ],
 
   outline: [
-    { run: () => { seedIfEmpty(); ui().setStage('outline') },
+    { run: () => { seedDemo(); ui().setStage('outline') },
       say: 'This plans from the sources you kept, not from your topic. That is the difference between a plan and a template.' },
     { at: 'build-outline', press: true,
       say: 'Add your thesis if you have one, and it argues that.' },
@@ -373,8 +395,8 @@ export const TOURS = {
   ],
 
   draft: [
-    { run: () => { seedIfEmpty(); ui().setStage('draft') },
-      say: 'This is just the page. No marks while you write — a paragraph covered in amber is a paragraph being argued with before it is finished.' },
+    { run: () => { seedDemo(); ui().setStage('draft') },
+      say: 'This is just the page. No marks while you write. A paragraph covered in amber is a paragraph being argued with before it is finished.' },
     { say: 'Got something already? The Question tab opens a Word file straight into here, paragraphs intact. Google Docs exports to Word, so same door.' },
     { say: 'The works-cited page builds itself underneath as you save sources.' },
     { at: 'export-menu',
@@ -384,7 +406,7 @@ export const TOURS = {
   ],
 
   claims: [
-    { run: () => { seedIfEmpty(); ui().setStage('claims') },
+    { run: () => { seedDemo(); ui().setStage('claims') },
       say: 'Same page, read instead of written. Every sentence a marker would want a source for is marked where you wrote it.' },
     { say: 'Amber wants a citation. Red means the evidence you saved actually disagrees with you.' },
     { at: 'claim-open', run: () => an().selectClaim(CLAIMS[0].id),
@@ -394,11 +416,11 @@ export const TOURS = {
     { at: 'cite', press: true,
       say: 'One press. Citation into the sentence, source onto the shelf, entry into the works-cited page.' },
     { run: () => an().selectClaim(null),
-      say: 'The bar tracks what is settled. Pure opinion counts as done — Firmo checks facts, not style.' },
+      say: 'The bar tracks what is settled. Pure opinion counts as done. Firmo checks facts, not style.' },
   ],
 
   references: [
-    { run: () => { seedIfEmpty(); ui().setStage('references') },
+    { run: () => { seedDemo(); ui().setStage('references') },
       say: 'Paste your reference list and every entry goes to CrossRef and OpenAlex.' },
     { say: 'Four answers: matches, wrong in the details, retracted, or no such paper.' },
     { say: 'Turn a card over to see what the publisher actually has on file.' },
@@ -407,13 +429,13 @@ export const TOURS = {
   ],
 
   export: [
-    { run: () => { seedIfEmpty(); ui().setStage('export') },
+    { run: () => { seedDemo(); ui().setStage('export') },
       say: 'Last screen. Its job is to say not yet as often as it says here you go.' },
     { say: 'Unbacked claims and missing references are up top, before the download, not after it.' },
     { at: 'export-menu', press: true,
       say: 'The file still builds either way. Refusing to hand over your own writing would be absurd.' },
     { say: 'One Word document: your prose and its works-cited page, in the style you picked. Or BibTeX and RIS if the sources are going to Zotero.' },
-    { say: 'And the process record goes separately — every search, every source, every refusal, hash-chained, checkable without reading a word of your draft.' },
+    { say: 'And the process record goes separately. Every search, every source, every refusal, hash-chained, checkable without reading a word of your draft.' },
   ],
 }
 

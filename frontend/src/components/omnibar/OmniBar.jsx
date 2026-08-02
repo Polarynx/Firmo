@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 
 import { useUIStore } from '../../stores/useUIStore'
+import { cannedAsk, fakeLatency, isDemoActive } from '../../lib/demoMode'
 import { useWorkspaceStore } from '../../stores/useWorkspaceStore'
 import { useSavedSources } from '../../stores/selectors'
 import { useResearchStore } from '../../stores/useResearchStore'
@@ -87,6 +88,23 @@ export default function OmniBar() {
         body: 'Save a couple of sources first. This chat only answers from the sources in your project, so it has nothing to read yet.',
       })
       setValue('')
+      return
+    }
+
+    // A walkthrough answers from its own script rather than the model, so the
+    // beat cannot fail, cost a request, or depend on what the viewer has saved.
+    if (isDemoActive()) {
+      const id = pushPopover({ title: q, streaming: true })
+      setValue('')
+      const answer = cannedAsk()
+      // Typed out rather than dropped in whole: the streaming answer is the
+      // thing being demonstrated, and a block of text appearing at once is not
+      // a demonstration of it.
+      for (let i = 0; i <= answer.length; i += 3) {
+        await fakeLatency(14)
+        updatePopover(id, { body: answer.slice(0, i), streaming: true })
+      }
+      updatePopover(id, { body: answer, streaming: false })
       return
     }
 

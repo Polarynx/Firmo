@@ -6,6 +6,7 @@ import {
   claimRun, coldStart, holdsRun, isFullTour, readingTime, restore, snapshot, sleep, tourFor,
 } from '../lib/demo'
 import { prefetchLine, say, stopSpeaking } from '../lib/narrate'
+import { setDemoActive } from '../lib/demoMode'
 
 // ── The demo player ─────────────────────────────────────────────────────────
 //
@@ -139,6 +140,9 @@ export default function Demo({ onClose, stage = 'question' }) {
     // anything that takes focus back does so after the blur. Suppressing the
     // style outright cannot be raced.
     document.documentElement.classList.add('demo-running')
+    // Every control the tour presses now answers from canned data instead of
+    // the network, so nothing it demonstrates can fail or cost a request.
+    setDemoActive(true)
 
     ;(async () => {
       // Start the pointer off the bottom edge so its first move reads as an
@@ -241,6 +245,7 @@ export default function Demo({ onClose, stage = 'question' }) {
 
     return () => {
       claimRun()
+      setDemoActive(false)
       document.documentElement.classList.remove('demo-running')
     }
   }, [reduceMotion, full])
@@ -248,6 +253,7 @@ export default function Demo({ onClose, stage = 'question' }) {
   // Leaving puts the student's own paper back exactly as they left it.
   function finish() {
     claimRun()
+    setDemoActive(false)
     document.documentElement.classList.remove('demo-running')
     stopSpeaking()
     // Everything the tour touched goes back, and the student lands on the tab

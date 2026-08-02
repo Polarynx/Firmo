@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { postJSON } from '../../lib/api'
 import { inTextCitationWithPage } from '../../lib/cite'
 import { paperId } from '../../lib/projects'
+import { cannedSummary, cannedWhy, fakeLatency, isDemoActive } from '../../lib/demoMode'
 import { SOURCE_LABELS, SOURCE_STAMPS, roleFor, SPRING } from '../../lib/constants'
 import { renderMarkup, stripMarkup } from '../../lib/richText'
 import { useWorkspaceStore } from '../../stores/useWorkspaceStore'
@@ -68,6 +69,16 @@ export default function SourceCard({ paper, index = 0, query = '', shape = 'none
   async function handleSummarize() {
     if (summary || busy || !abstract) return
     setBusy('summary')
+    // A walkthrough answers from its own script. Firing the real endpoint would
+    // spend a request on a paper the viewer does not own, and return
+    // "Could not summarize" whenever anything it needs is absent — which is a
+    // demo teaching people that the button is broken.
+    if (isDemoActive()) {
+      await fakeLatency()
+      setSummary(cannedSummary(paper.title))
+      setBusy('')
+      return
+    }
     try {
       const data = await postJSON('/api/summarize', { abstract })
       setSummary(data.summary)
@@ -79,6 +90,12 @@ export default function SourceCard({ paper, index = 0, query = '', shape = 'none
   async function handleWhy() {
     if (why || busy || !abstract) return
     setBusy('why')
+    if (isDemoActive()) {
+      await fakeLatency()
+      setWhy(cannedWhy(paper.title))
+      setBusy('')
+      return
+    }
     try {
       const data = await postJSON('/api/digdeep', { claim: query, title: paper.title, abstract })
       setWhy(data.analysis)

@@ -2,6 +2,8 @@ import { create } from 'zustand'
 import { postJSON, streamNDJSON } from '../lib/api'
 import { useRecordStore } from './useRecordStore'
 import { useUIStore } from './useUIStore'
+import { isDemoActive } from '../lib/demoMode'
+import { FIXTURE } from '../lib/lab'
 import { useWorkspaceStore } from './useWorkspaceStore'
 
 // Everything Firmo has to say about the document in the canvas: the claims it
@@ -214,6 +216,13 @@ export const useAnnotationStore = create((set, get) => ({
     if (!papers?.length) return
     set({ outlineLoading: true, outlineError: '', outlineThesis: thesis })
     useUIStore.getState().setStage('outline')
+    // A walkthrough plans from its own example rather than spending a request
+    // on the viewer's sources, and so cannot fail in front of them.
+    if (isDemoActive()) {
+      await new Promise(r => setTimeout(r, 1100))
+      set({ outline: FIXTURE.OUTLINE, outlineLoading: false })
+      return
+    }
     try {
       const data = await postJSON('/api/outline', { papers, thesis })
       set({ outline: data.sections || [] })

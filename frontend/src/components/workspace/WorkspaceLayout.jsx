@@ -99,10 +99,10 @@ export default function WorkspaceLayout() {
               bar floats over a scrolling page, so without this the last
               paragraph reads straight through the glass. */}
           <div className="desk-edge" aria-hidden="true" />
-          {/* The chat sits out the demo. It is the one thing on screen the
-              script never touches, and a live input box under a caption reads
-              as the thing you are being asked to type into. */}
-          {!showWalkthrough && <OmniBar />}
+          {/* The chat stays up during the demo now that the script uses it —
+              asking five saved sources where they disagree is one of the beats,
+              and it cannot press a control that is not mounted. */}
+          <OmniBar />
         </div>
 
         {/* Zone B, desktop */}

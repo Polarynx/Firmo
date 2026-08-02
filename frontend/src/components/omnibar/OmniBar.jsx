@@ -199,6 +199,7 @@ export default function OmniBar() {
               <LED live={busy} />
             </span>
             <input
+              data-demo="ask-box"
               ref={inputRef}
               value={value}
               onChange={e => setValue(e.target.value)}

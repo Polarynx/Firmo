@@ -4,6 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import {
   CHAPTERS, SCRIPT, chapterFor, claimRun, coldStart, holdsRun, restore, snapshot, sleep,
 } from '../lib/demo'
+import { say, stopSpeaking, warmVoices } from '../lib/narrate'
 
 // ── The demo player ─────────────────────────────────────────────────────────
 //
@@ -90,6 +91,12 @@ export default function Demo({ onClose }) {
   const [spot, setSpot] = useState(null)
   const [opening, setOpening] = useState(true)
   const [chapter, setChapter] = useState('')
+  // Sound is opt-out, not opt-in: a demo nobody unmutes is a demo with captions
+  // and a mute button. The control is visible throughout so it is never a
+  // surprise, and the captions stay on screen either way — for people with the
+  // sound off, on a machine with no voices, or who simply read faster.
+  const [muted, setMuted] = useState(false)
+  const mutedRef = useRef(false)
 
   const snap = useRef(null)
   const token = useRef(0)
@@ -126,6 +133,9 @@ export default function Demo({ onClose }) {
       // to a backgrounded tab does not merely waste it — the viewer comes back
       // to a demo already in motion, having missed the only frame that said what
       // they were about to watch.
+      // Voices load asynchronously in Chrome, so this is done under the title
+      // card where the wait is free rather than mid-sentence where it is not.
+      await warmVoices()
       await whenVisible()
       if (!alive()) return
       await sleep(2600)
@@ -190,7 +200,18 @@ export default function Demo({ onClose }) {
           set(text)
         }
 
-        if (step.hold) await sleep(step.hold)
+        // Paced against the voice, not beside it. The narration and the hold
+        // used to be independent clocks, which meant a long line was still
+        // being read while the cursor had already moved on to the next control
+        // — the one thing that makes a narrated demo feel automated. Speaking
+        // is awaited, and the hold then tops up whatever time is left, so a
+        // short line still gets its beat and a long one is never cut off.
+        const spokeFor = step.say ? Date.now() : 0
+        if (step.say) await say(step.say, { muted: mutedRef.current })
+        if (!alive()) return
+        const already = spokeFor ? Date.now() - spokeFor : 0
+        const remaining = (step.hold || 0) - already
+        if (remaining > 0) await sleep(remaining)
       }
 
       if (!alive()) return
@@ -205,12 +226,24 @@ export default function Demo({ onClose }) {
   // Leaving puts the student's own paper back exactly as they left it.
   function finish() {
     claimRun()
+    stopSpeaking()
     restore(snap.current)
     onClose()
   }
 
+  // The ref exists because the script loop closes over its first render and
+  // would otherwise keep reading `muted === false` for the whole run — pressing
+  // mute would update the button and change nothing about the audio.
   useEffect(() => {
-    function onKey(e) { if (e.key === 'Escape') finish() }
+    mutedRef.current = muted
+    if (muted) stopSpeaking()
+  }, [muted])
+
+  useEffect(() => {
+    function onKey(e) {
+      if (e.key === 'Escape') finish()
+      if (e.key.toLowerCase() === 'm') setMuted(m => !m)
+    }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }) // eslint-disable-line react-hooks/exhaustive-deps
@@ -220,10 +253,17 @@ export default function Demo({ onClose }) {
       {/* A sheet of glass over the workspace. It takes every pointer event, so
           nothing the viewer does can fight the script, and it is otherwise
           invisible: the interface underneath is the thing being shown. */}
+      {/* The glass only holds while the script is actually running.
+          It hides the real pointer so there are not two cursors on screen, and
+          it swallows clicks so nothing the viewer does can fight the script.
+          Both of those are wrong the moment the run ends: the closing card has a
+          button on it, and a workspace you can see but cannot point at reads as
+          a frozen application. So once `done` it stops taking events and gives
+          the cursor back, and the only thing still on top is the card itself. */}
       <div
-        className="fixed inset-0 z-[60]"
-        style={{ cursor: 'none' }}
-        onClick={e => e.preventDefault()}
+        className={`fixed inset-0 z-[60] ${done ? 'pointer-events-none' : ''}`}
+        style={done ? undefined : { cursor: 'none' }}
+        onClick={e => { if (!done) e.preventDefault() }}
       />
 
       {/* The spotlight.
@@ -257,7 +297,9 @@ export default function Demo({ onClose }) {
       {/* The pointer. A ring rather than an arrow — an arrow drawn over a real
           cursor's territory reads as a broken cursor, a ring reads as a
           spotlight, which is what this is. */}
-      {!reduceMotion && (
+      {/* The ghost goes when the run does, or the viewer gets their own cursor
+          back and a second one still floating beside it. */}
+      {!reduceMotion && !done && (
         <motion.div
           className="fixed z-[62] pointer-events-none"
           animate={{ x: cursor.x, y: cursor.y }}
@@ -334,13 +376,27 @@ export default function Demo({ onClose }) {
           modal wearing a costume. */}
       {/* Bottom right, not top right: the masthead already has five controls in
           that corner and the skip button landed on top of them. */}
-      <button
-        onClick={finish}
-        className="fixed bottom-5 right-5 z-[64] glass px-3 py-1.5 text-[11.5px] font-medium
-          text-t2 hover:text-t1 transition-colors"
-      >
-        {done ? 'Close' : 'Skip'} <span className="opacity-50 font-mono ml-1">esc</span>
-      </button>
+      <div className="fixed bottom-5 right-5 z-[64] flex items-center gap-2">
+        {!done && (
+          <button
+            onClick={() => setMuted(m => !m)}
+            aria-pressed={muted}
+            title={muted ? 'Turn the narration on' : 'Turn the narration off'}
+            className="glass px-3 py-1.5 text-[11.5px] font-medium text-t2 hover:text-t1
+              transition-colors"
+          >
+            {muted ? 'Sound off' : 'Sound on'}
+            <span className="opacity-50 font-mono ml-1.5">m</span>
+          </button>
+        )}
+        <button
+          onClick={finish}
+          className="glass px-3 py-1.5 text-[11.5px] font-medium text-t2 hover:text-t1
+            transition-colors"
+        >
+          {done ? 'Close' : 'Skip'} <span className="opacity-50 font-mono ml-1">esc</span>
+        </button>
+      </div>
 
       {/* How far through, as one hairline across the top — with a tick at each
           chapter boundary, so the bar says how much is left in *parts* rather

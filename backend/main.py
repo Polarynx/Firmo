@@ -1,4 +1,5 @@
 import asyncio
+import io
 import json
 import math
 import os
@@ -12,7 +13,7 @@ from io import BytesIO
 from typing import Optional
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from slowapi import Limiter
@@ -76,6 +77,8 @@ from sources import (
     relevance_score,
     search_all,
 )
+from docx import Document as DocxDocument
+
 import citations
 import corpus
 import docx_export
@@ -2271,6 +2274,69 @@ async def record_public(token: str, session: AsyncSession = Depends(auth.get_ses
     body = await _record_body(session, share.project_id, private=False)
     return {**body, "title": share.title, "author": share.author,
             "shared_at": _ms(share.created_at)}
+
+
+# Word documents in, as well as out.
+#
+# Firmo could write a .docx and not read one, which is exactly backwards for
+# where students actually keep their drafts: the paper already exists, in Word
+# or in Docs, and the cost of trying Firmo was retyping it or pasting it and
+# losing every paragraph break. This closes the loop. Google Docs exports as
+# .docx too, so one parser covers both.
+MAX_UPLOAD_BYTES = 8 * 1024 * 1024
+
+
+@app.post("/api/import-docx")
+@limiter.limit("30/hour", key_func=_get_client_ip)
+async def import_docx(request: Request, file: UploadFile = File(...)):
+    """A .docx, as the plain text of its paragraphs.
+
+    Deliberately lossy, and only in the direction that does not matter. Firmo
+    works on sentences — what needs a source, what the references say — so bold
+    runs and heading levels are noise it would only have to strip again. What is
+    preserved is the thing a naive extraction destroys and a student would
+    immediately notice: paragraph breaks, and therefore where one idea ends.
+    """
+    name = (file.filename or "").lower()
+    if not name.endswith(".docx"):
+        # .doc is the pre-2007 binary format and python-docx cannot read it, so
+        # say which file to save instead of failing with a parser error.
+        raise HTTPException(
+            status_code=400,
+            detail="Firmo reads .docx files. If this is an older .doc, open it and "
+                   "'Save As' .docx first. Google Docs: File → Download → .docx.",
+        )
+
+    data = await file.read()
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="That file is larger than 8 MB.")
+    if not data[:2] == b"PK":
+        # A .docx is a zip. Anything else with the extension is mislabelled, and
+        # handing it to the parser produces a stack trace rather than an answer.
+        raise HTTPException(status_code=400, detail="That does not look like a Word document.")
+
+    try:
+        doc = DocxDocument(io.BytesIO(data))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Firmo could not open that document.")
+
+    paras = [p.text.strip() for p in doc.paragraphs]
+
+    # Tables carry reference lists more often than anyone expects — Word's
+    # bibliography tools emit them — and dropping them silently would mean a
+    # student's works-cited page vanished on import.
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                text = cell.text.strip()
+                if text:
+                    paras.append(text)
+
+    kept = [p for p in paras if p]
+    text = "\n\n".join(kept)
+    words = len(text.split())
+    return {"text": text, "words": words, "paragraphs": len(kept),
+            "filename": file.filename or "document.docx"}
 
 
 @app.post("/api/export-docx")

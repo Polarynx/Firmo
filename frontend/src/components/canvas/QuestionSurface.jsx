@@ -7,6 +7,7 @@ import { guessShape } from '../../lib/claims'
 import { EXAMPLE_TOPICS } from '../../lib/constants'
 
 import BriefBlock from './BriefBlock'
+import DocumentDrop from './DocumentDrop'
 
 // ── Stage 1: the question ───────────────────────────────────────────────────
 //
@@ -223,6 +224,11 @@ export default function QuestionSurface() {
             </motion.p>
           )}
         </AnimatePresence>
+
+        {/* The other way in, at caption weight. Only while the field is empty:
+            once someone is typing a question they have chosen their route, and
+            an alternative offered mid-sentence is just noise. */}
+        {!query.trim() && <DocumentDrop />}
       </motion.div>
 
       {/* One invitation, and it changes on its own.

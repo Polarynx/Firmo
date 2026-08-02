@@ -325,12 +325,12 @@ export default function SourceCard({ paper, index = 0, query = '', shape = 'none
           {citing ? 'Citing…' : cite ? 'Hide citation' : 'Cite'}
         </button>
         {abstract && !summary && (
-          <button onClick={handleSummarize} disabled={busy === 'summary'} className="btn-ghost">
+          <button data-demo="summarize" onClick={handleSummarize} disabled={busy === 'summary'} className="btn-ghost">
             {busy === 'summary' ? 'Summarizing…' : 'Summarize'}
           </button>
         )}
         {abstract && !why && query && (
-          <button onClick={handleWhy} disabled={busy === 'why'} className="btn-ghost">
+          <button data-demo="why-matters" onClick={handleWhy} disabled={busy === 'why'} className="btn-ghost">
             {busy === 'why' ? 'Reading…' : 'Why it matters'}
           </button>
         )}

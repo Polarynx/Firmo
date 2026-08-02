@@ -120,11 +120,19 @@ export const SCRIPT = [
     say: 'Firmo starts with a question, not a keyword.',
     at: 'question-field',
     type: { text: QUESTION, set: v => rs().setQuery(v) },
-    hold: 500,
+    hold: 675,
   },
   {
-    say: 'It reads the shape of the question first — this one wants a size, not a yes or no.',
-    hold: 1600,
+    say: 'It reads the shape of the question before it searches. This one wants a size, not a yes or no — so Firmo will go looking for effect estimates and null results.',
+    hold: 3510,
+  },
+  {
+    // The alternate entrance, shown rather than listed. Most students arriving
+    // at Firmo already have three paragraphs somewhere, and a demo that only
+    // ever shows the blank-page path quietly tells them this is not for them.
+    say: 'Already started writing? A Word file works too — and Google Docs exports to Word, so that is the same door.',
+    at: 'import-docx',
+    hold: 3510,
   },
   {
     say: 'One search, sixteen databases.',
@@ -152,16 +160,26 @@ export const SCRIPT = [
         roleCounts: SOURCES.reduce((a, p) => ({ ...a, [p.stance]: (a[p.stance] || 0) + 1 }), {}),
       })
     },
-    hold: 900,
+    hold: 1215,
   },
   {
-    say: 'Every paper is filed by what it will do in your argument — the estimate, the one that cuts against it, the method behind both.',
-    hold: 2200,
+    say: 'Every paper is filed by what it will do in your argument. The estimate, the one that cuts against it, the method behind both.',
+    hold: 4320,
   },
-  { say: 'Keep the ones you will actually use.', at: 'save-nth-0', run: () => save(SOURCES[0]), hold: 350 },
-  { at: 'save-nth-1', run: () => save(SOURCES[1]), hold: 300 },
-  { at: 'save-nth-2', run: () => save(SOURCES[2]), hold: 300 },
-  { at: 'save-nth-3', run: () => save(SOURCES[3]), hold: 300 },
+  {
+    // "Why it matters" is the single most useful button in the product and the
+    // one nobody presses, because its label promises a summary and it actually
+    // answers a harder question: what is this paper for, in YOUR argument.
+    say: 'You do not have to read forty abstracts to find out. Ask any paper why it matters, and Firmo answers against your question, not in general.',
+    at: 'why-matters',
+    press: true,
+    hold: 5670,
+  },
+  { say: 'Keep the ones you will actually use. They collect on the shelf beside you.',
+    at: 'save-nth-0', run: () => save(SOURCES[0]), hold: 900 },
+  { at: 'save-nth-1', run: () => save(SOURCES[1]), hold: 550 },
+  { at: 'save-nth-2', run: () => save(SOURCES[2]), hold: 550 },
+  { at: 'save-nth-3', run: () => save(SOURCES[3]), hold: 900 },
   {
     say: 'Four sources is enough for Firmo to plan the argument.',
     at: 'tab-outline',
@@ -171,18 +189,27 @@ export const SCRIPT = [
       await sleep(1200)
       useAnnotationStore.setState({ outlineLoading: false, outline: OUTLINE })
     },
-    hold: 2000,
+    hold: 2700,
+  },
+  {
+    // The chat is the least discoverable thing in the workspace and the most
+    // asked-for capability in the category, so it gets a beat of its own — and
+    // the refusal gets said out loud, because it is the whole positioning.
+    say: 'Or just ask them. Grounded in the papers you kept, not the open internet — and it will explain and plan, but never write your paragraphs.',
+    at: 'ask-box',
+    type: { text: 'where do these papers actually disagree?', set: v => ui().setOmniValue(v), speed: 26 },
+    hold: 2700,
   },
   {
     say: 'The page is yours. Firmo does not write it.',
     at: 'tab-draft',
     run: () => ui().setStage('draft'),
-    hold: 500,
+    hold: 675,
   },
   {
     at: 'draft-field',
     type: { text: DOC, set: v => ws().setDoc(v), speed: 6 },
-    hold: 400,
+    hold: 540,
   },
   {
     say: 'Now it reads what you wrote and marks every sentence a reader will expect a source for.',
@@ -193,18 +220,18 @@ export const SCRIPT = [
       await sleep(1400)
       useAnnotationStore.setState({ draftLoading: false, draftStatus: '', claims: CLAIMS })
     },
-    hold: 1600,
+    hold: 2160,
   },
   {
     say: 'Red means the evidence you saved disagrees with what you wrote. Firmo shows you what it actually says.',
     at: 'claim-open',
     run: () => an().selectClaim(CLAIMS[0].id),
-    hold: 3000,
+    hold: 4050,
   },
   {
-    say: 'Amber is the softer one: true enough, but a marker will stop at it without a reference.',
+    say: 'Amber is the softer one: true enough, but a marker will stop at it.',
     run: () => an().selectClaim(CLAIMS[2].id),
-    hold: 2400,
+    hold: 2600,
   },
   {
     // Pressed for real. This is the one step in the script that does not call a
@@ -215,12 +242,12 @@ export const SCRIPT = [
     say: 'One press: the citation goes into your sentence, the source joins the paper, and the works-cited page updates itself.',
     at: 'cite',
     press: true,
-    hold: 3000,
+    hold: 4050,
   },
   {
     say: 'Green. That sentence is accounted for.',
     run: () => an().selectClaim(null),
-    hold: 1800,
+    hold: 2430,
   },
   {
     say: 'And the last pass before hand-in: every entry in your reference list, against the publisher record.',
@@ -236,17 +263,17 @@ export const SCRIPT = [
       await sleep(700)
       useAnnotationStore.setState({ citations: CITATIONS })
     },
-    hold: 2400,
+    hold: 3240,
   },
   {
     say: 'That last one does not exist. This is the pass that catches invented citations before a professor does.',
-    hold: 3000,
+    hold: 4050,
   },
   {
     say: 'Then the whole thing leaves as one Word file — your prose and its works-cited page, in the style the assignment asked for.',
     at: 'tab-export',
     run: () => ui().setStage('export'),
-    hold: 2600,
+    hold: 3510,
   },
 ]
 
@@ -264,12 +291,13 @@ export const SCRIPT = [
  */
 export const CHAPTER_AT = {
   0: 'The question',
-  2: 'The search',
-  4: 'Choosing sources',
-  8: 'The plan',
-  9: 'Writing',
-  11: 'The claim check',
-  15: 'Before hand-in',
+  3: 'The search',
+  5: 'Reading what came back',
+  8: 'Choosing sources',
+  12: 'Asking the sources',
+  13: 'Writing',
+  15: 'The claim check',
+  19: 'Before hand-in',
 }
 
 /** Chapter boundaries as fractions of the run, for the progress bar ticks. */

@@ -108,6 +108,17 @@
   }
   /* One visible keyboard ring for the whole workspace. Components that style
      their own focus state opt out with `focus-visible:outline-none`. */
+  /* Suppressed for the duration of a walkthrough. The demo presses real
+     controls, and a pressed button keeps :focus-visible, so the run trailed
+     outlined buttons behind it — each one looking like something the viewer was
+     still meant to be looking at. Blurring after the click races React's
+     re-render; removing the style cannot be raced. */
+  :root.demo-running :focus-visible,
+  :root.demo-running :focus {
+    outline: none !important;
+    box-shadow: none !important;
+  }
+
   :focus-visible {
     outline: 2px solid rgb(var(--accent) / 0.65);
     outline-offset: 2px;

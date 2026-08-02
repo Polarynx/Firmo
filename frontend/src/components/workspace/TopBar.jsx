@@ -364,12 +364,14 @@ export default function TopBar() {
         {/* A play triangle, not a question mark. "?" is where help goes to die;
             this is a sixty-second showing of the product working, and it should
             look like something you press to watch. */}
+        <span data-demo-anchor="walkthrough">
         <IconButton label="Watch the demo" onClick={() => setShowWalkthrough(true)}>
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             <path strokeLinecap="round" strokeLinejoin="round" d="M10 8.5l6 3.5-6 3.5v-7z" />
           </svg>
         </IconButton>
+        </span>
 
         <IconButton label={theme === 'dark' ? 'Light theme' : 'Dark theme'} onClick={toggleTheme}>
           {theme === 'dark' ? (

@@ -115,6 +115,16 @@ function coldStart() {
 // line or a re-render cannot desynchronise the cursor from the thing it is
 // pointing at.
 
+// How long a caption stays up, from how long it takes to read.
+//
+// Hand-tuned holds were fine while a voice set the pace and the number was only
+// a tail. Without it the hold IS the pacing, and one constant cannot serve both
+// "One search, sixteen databases." and a thirty-word sentence — the short line
+// drags and the long one is gone before it is finished. Roughly 200 wpm, with a
+// floor for the eye to find the line at all.
+export const readingTime = text =>
+  Math.min(7000, Math.max(1700, 700 + (text || '').length * 46))
+
 export const SCRIPT = [
   {
     say: 'Firmo starts with a question, not a keyword — and it reads the shape of that question before searching. This one wants a size, not a yes or no.',
@@ -280,44 +290,124 @@ export const SCRIPT = [
     run: () => ui().setStage('export'),
     hold: 761,
   },
+  {
+    say: 'Then it leaves as one Word file — your prose and its works-cited page, in whatever style the assignment asked for.',
+    at: 'tab-export',
+    run: () => ui().setStage('export'),
+    hold: 1200,
+  },
+  {
+    // The closing line. Not a summary of features — a statement of what the
+    // last ninety seconds were actually about, which is the only thing worth
+    // saying at the end of a demo.
+    say: 'Sixteen databases, every source filed by what it argues, every claim traced to the page it came from. Not a chatbot that writes your essay — a workspace that can prove you wrote it.',
+    hold: 1400,
+  },
 ]
 
-/**
- * Which part of making a paper each step belongs to.
- *
- * The captions narrate the individual action — press this, and that happens.
- * A viewer is trying to learn something coarser than that: what the stages of
- * using this thing are. Named chapters carry it, and ticking them onto the
- * progress bar turns "62% through" into "two of six left", which is the form
- * the question is actually asked in.
- *
- * Derived from the script rather than hand-numbered, so inserting a step cannot
- * silently push a boundary onto the wrong caption.
- */
-export const CHAPTER_AT = {
-  0: 'The question',
-  3: 'The search',
-  5: 'Reading what came back',
-  8: 'Choosing sources',
-  12: 'Asking the sources',
-  13: 'Writing',
-  15: 'The claim check',
-  19: 'Before hand-in',
+
+// ── The focused tours ───────────────────────────────────────────────────────
+//
+// The home tour is a survey: ninety seconds, the whole arc, nothing in depth.
+// That is the right shape for someone deciding whether Firmo is for them, and
+// the wrong shape for someone standing in the Sources tab wondering what the
+// coloured chips mean.
+//
+// So every other stage has its own. They are short — four or five beats — and
+// they cover what is actually on that screen rather than repeating the arc.
+// Pressing the walkthrough button asks about the room you are standing in.
+//
+// Unlike the home tour these do NOT cold-start. A student opens one because
+// they are stuck partway through a real paper, and wiping that to show them a
+// fixture would be a strange way to answer the question. They run against
+// whatever is on screen, seeding the fixture only when the stage is empty and
+// there would otherwise be nothing to point at.
+
+const seedIfEmpty = () => {
+  if (useResearchStore.getState().results.length) return
+  const id = ws().activeProjectId || 'demo-project'
+  useWorkspaceStore.setState({
+    projects: [{
+      id,
+      name: ws().activeProject()?.name || 'Minimum wage & employment',
+      createdAt: Date.now(),
+      sources: SOURCES.slice(0, 5),
+      doc: DOC,
+    }],
+    activeProjectId: id,
+    doc: DOC,
+  })
+  useResearchStore.setState({
+    query: QUESTION, searchedQuery: QUESTION, brief: BRIEF, results: SOURCES,
+    questionShape: 'extent', inputType: 'question', isSearching: false,
+    roleCounts: SOURCES.reduce((a, p) => ({ ...a, [p.stance]: (a[p.stance] || 0) + 1 }), {}),
+  })
+  useAnnotationStore.setState({ claims: CLAIMS, outline: OUTLINE, citations: CITATIONS })
 }
 
-/** Chapter boundaries as fractions of the run, for the progress bar ticks. */
-export const CHAPTERS = Object.keys(CHAPTER_AT)
-  .map(Number)
-  .filter(i => i > 0)
-  .map(i => ({ at: i / SCRIPT.length, label: CHAPTER_AT[i] }))
+export const TOURS = {
+  sources: [
+    { run: () => { seedIfEmpty(); ui().setStage('sources') },
+      say: 'Sixty results, and the useful question is never "which is most relevant". It is "what have I got, and what am I missing".' },
+    { say: 'So the stacks are the filing, not a filter. Effect estimates here, the papers that cut against them there, the methods behind both. Nothing is hidden by pressing one, so the counts can be trusted as a picture of the whole search.' },
+    { say: 'The words change with your question. Ask how effective something is and you get Effect estimate and Null or reversed; ask what something means and you get Framework instead.' },
+    { at: 'why-matters', press: true,
+      say: 'Why it matters reads the paper against your question rather than summarising it in general. Retracted work carries a red do-not-cite stamp.' },
+    { say: 'Bookmark what you will use. It lands on the shelf beside you and stays there through every other stage.' },
+  ],
 
-/** The chapter a given step index falls in. */
-export function chapterFor(index) {
-  let name = CHAPTER_AT[0]
-  for (const key of Object.keys(CHAPTER_AT).map(Number).sort((a, b) => a - b)) {
-    if (index >= key) name = CHAPTER_AT[key]
-  }
-  return name
+  outline: [
+    { run: () => { seedIfEmpty(); ui().setStage('outline') },
+      say: 'The outline is built from the sources you kept, not from the topic. That is the difference between a plan and a template.' },
+    { say: 'Every point names the papers behind it, coloured by what each one does. A point argued only from orange is a point argued from the papers that disagree with it, and you can see that from across the room.' },
+    { say: 'A point with no source carries a ready-made search to go and fill the gap. That is the honest version of an outline: it shows you where the argument is not yet earned.' },
+    { say: 'Firmo refuses to plan from fewer than four sources. An outline built from two is a guess with a structure drawn on it.' },
+  ],
+
+  draft: [
+    { run: () => { seedIfEmpty(); ui().setStage('draft') },
+      say: 'This is the page, and it is only the page. No marks while you are composing, because a paragraph covered in amber is a paragraph being argued with before it is finished.' },
+    { at: 'import-docx',
+      say: 'Already have a draft? Drop in a Word file and it opens here, paragraph breaks intact. Google Docs exports to Word, so that is the same door.' },
+    { say: 'The works-cited page assembles itself underneath as you save sources, in APA, MLA, Chicago, Harvard or IEEE. Switch the style and every entry re-sets.' },
+    { say: 'What Firmo will not do is write it. Ask for a paragraph and it declines, and the refusal goes into the record with everything else.' },
+  ],
+
+  claims: [
+    { run: () => { seedIfEmpty(); ui().setStage('claims') },
+      say: 'The same page, read rather than written. Every sentence a marker would expect a source for is marked where you wrote it.' },
+    { say: 'Amber wants a citation. Red means the evidence you already saved disagrees with you, and Firmo shows you what it actually says, with a suggested rewrite.' },
+    { at: 'claim-open', run: () => an().selectClaim(CLAIMS[2].id),
+      say: 'Click any mark and the best papers for that exact sentence arrive beside it. If the PDF is open access, Firmo quotes the page it came from rather than the abstract.' },
+    { at: 'cite', press: true,
+      say: 'One press puts the citation in your sentence, the source on the shelf, and the entry in the works-cited page.' },
+    { run: () => an().selectClaim(null),
+      say: 'The bar tracks how much of the draft is settled. A paragraph of pure opinion counts as done, because Firmo checks factual claims, not style.' },
+  ],
+
+  references: [
+    { run: () => { seedIfEmpty(); ui().setStage('references') },
+      say: 'Paste a finished reference list and every entry goes to CrossRef and OpenAlex.' },
+    { say: 'Four verdicts: matches the record, wrong in the details, retracted, or no such paper. Turn any card over to see what the publisher actually has.' },
+    { say: 'Firmo is careful about the difference between a wrong year and a wrong index. A paper the register only holds a later deposit for is not a student mistake, and saying it was would be worse than saying nothing.' },
+    { say: 'If any of your sources came out of a chatbot, this is the pass that catches the invented ones before a professor does.' },
+  ],
+
+  export: [
+    { run: () => { seedIfEmpty(); ui().setStage('export') },
+      say: 'The last screen, and the only one whose job is to say "not yet" as often as it says "here you go".' },
+    { say: 'Unbacked claims and unmatched references are stated above the download, not discovered after it. The file still builds. Refusing to hand over your own writing would be absurd.' },
+    { say: 'It leaves as one Word document: your prose and its works-cited page, formatted in the style the assignment asked for. Or as BibTeX and RIS, if the sources are going to Zotero.' },
+    { say: 'And the process record travels separately. A hash-chained log of every search, every source and every refusal, that an instructor can verify without reading a word of your draft.' },
+  ],
 }
+
+/** The tour for a stage. Question gets the full survey; everything else its own. */
+export function tourFor(stage) {
+  return stage === 'question' || !TOURS[stage] ? SCRIPT : TOURS[stage]
+}
+
+/** True when this is the full survey, which cold-starts rather than seeding. */
+export const isFullTour = tour => tour === SCRIPT
 
 export { coldStart, sleep }

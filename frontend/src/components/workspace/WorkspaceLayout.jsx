@@ -27,6 +27,7 @@ export default function WorkspaceLayout() {
   const setMobileSidebar = useUIStore(s => s.setMobileSidebar)
   const showWalkthrough = useUIStore(s => s.showWalkthrough)
   const setShowWalkthrough = useUIStore(s => s.setShowWalkthrough)
+  const stage = useUIStore(s => s.stage)
   const setShowHistory = useUIStore(s => s.setShowHistory)
   const setShowProjects = useUIStore(s => s.setShowProjects)
   const showImport = useUIStore(s => s.showImport)
@@ -55,6 +56,9 @@ export default function WorkspaceLayout() {
       const store = JSON.parse(localStorage.getItem('firmo_projects_v1') || '{}')
       if (Array.isArray(store.projects) && store.projects.length > 0) return
       localStorage.setItem('firmo_seen_intro', '1')
+      // Forced to the home tab first, so a genuine first run always gets the
+      // full survey and always lands back on the front page afterwards.
+      useUIStore.getState().setStage('question')
       setShowWalkthrough(true)
     } catch {}
   }, [setShowWalkthrough])
@@ -165,7 +169,17 @@ export default function WorkspaceLayout() {
         {showRecord && <RecordSheet key="record" onClose={() => setShowRecord(false)} />}
       </AnimatePresence>
 
-      {showWalkthrough && <Demo onClose={() => setShowWalkthrough(false)} />}
+      {/* The tour is chosen by the room the button was pressed in — the home
+          tab gets the full survey, every other tab gets its own. `key` so that
+          moving between tabs and reopening always builds a fresh player rather
+          than reusing one that has already run. */}
+      {showWalkthrough && (
+        <Demo
+          key={stage}
+          stage={stage}
+          onClose={() => setShowWalkthrough(false)}
+        />
+      )}
     </div>
   )
 }

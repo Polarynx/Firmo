@@ -1,13 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 
+import { useUIStore } from '../stores/useUIStore'
 import {
-  SCRIPT, claimRun, coldStart, holdsRun, restore, snapshot, sleep,
+  claimRun, coldStart, holdsRun, isFullTour, readingTime, restore, snapshot, sleep, tourFor,
 } from '../lib/demo'
-import {
-  listVoices, pickVoice, prefetchLine, say, setVoice, stopSpeaking,
-  usingServerVoice, warmVoices,
-} from '../lib/narrate'
 
 // ── The demo player ─────────────────────────────────────────────────────────
 //
@@ -80,7 +77,12 @@ function whenVisible() {
   })
 }
 
-export default function Demo({ onClose }) {
+export default function Demo({ onClose, stage: launchedFrom = 'question' }) {
+  // Which tour, decided by the room the button was pressed in. The home tab
+  // gets the ninety-second survey; every other tab gets its own short one about
+  // what is actually on that screen.
+  const SCRIPT = useMemo(() => tourFor(launchedFrom), [launchedFrom])
+  const full = isFullTour(SCRIPT)
   const reduceMotion = useReducedMotion()
   const [caption, setCaption] = useState('')
   const [cursor, setCursor] = useState({ x: -100, y: -100 })
@@ -93,18 +95,10 @@ export default function Demo({ onClose }) {
   // where to look BEFORE the thing happens, not after.
   const [spot, setSpot] = useState(null)
   const [opening, setOpening] = useState(true)
-  // Sound is opt-out, not opt-in: a demo nobody unmutes is a demo with captions
-  // and a mute button. The control is visible throughout so it is never a
-  // surprise, and the captions stay on screen either way — for people with the
-  // sound off, on a machine with no voices, or who simply read faster.
-  const [muted, setMuted] = useState(false)
-  const mutedRef = useRef(false)
-  // Which voice, and what else is available. Exposed rather than decided
-  // silently: voice quality is a property of the viewer's machine, the ranking
-  // below can only guess, and "that one sounds wrong" is a judgement nobody
-  // else can make for them.
-  const [voices, setVoices] = useState([])
-  const [voiceName, setVoiceName] = useState('')
+  // Where the walkthrough button is, so the closing card can point at it. The
+  // last thing a demo should leave behind is "how do I see that again" — the
+  // answer is one icon in the masthead and nobody would find it unaided.
+  const [anchor, setAnchor] = useState(null)
 
   const snap = useRef(null)
   const token = useRef(0)
@@ -116,7 +110,11 @@ export default function Demo({ onClose }) {
     token.current = me
     const alive = () => holdsRun(me)
     if (!snap.current) snap.current = snapshot()
-    coldStart()
+    // The survey starts from nothing, because it is showing someone what
+    // starting a paper looks like. A focused tour runs against whatever the
+    // student already has — they opened it mid-paper to ask about this screen,
+    // and clearing their work to answer would be a strange reply.
+    if (full) coldStart()
 
     // Reduced motion gets the point without the performance: seed the finished
     // state and leave. A moving pointer the viewer did not ask for is exactly
@@ -126,6 +124,17 @@ export default function Demo({ onClose }) {
       setDone(true)
       return () => { claimRun() }
     }
+
+    // Kill focus outlines for the duration.
+    //
+    // The demo presses real controls, and a pressed button keeps :focus-visible
+    // — which index.css draws as a 2px accent outline — so the run left a trail
+    // of ringed buttons behind it, each looking like something the viewer was
+    // still meant to be looking at. Blurring after the click was the obvious
+    // fix and an unreliable one: React re-renders, framer-motion re-mounts, and
+    // anything that takes focus back does so after the blur. Suppressing the
+    // style outright cannot be raced.
+    document.documentElement.classList.add('demo-running')
 
     ;(async () => {
       // Start the pointer off the bottom edge so its first move reads as an
@@ -143,15 +152,6 @@ export default function Demo({ onClose }) {
       // they were about to watch.
       // Voices load asynchronously in Chrome, so this is done under the title
       // card where the wait is free rather than mid-sentence where it is not.
-      // Fire the first line at the server while the title card is up, so the
-      // opening beat plays from cache instead of waiting on a round trip.
-      prefetchLine(SCRIPT.find(x => x.say)?.say)
-
-      const v = await warmVoices()
-      if (alive()) {
-        setVoices(listVoices())
-        setVoiceName(v?.name || '')
-      }
       await whenVisible()
       if (!alive()) return
       await sleep(2200)
@@ -165,21 +165,6 @@ export default function Demo({ onClose }) {
         setProgress((i + 1) / SCRIPT.length)
         if (step.say) setCaption(step.say)
 
-        // The voice starts NOW, next to the visuals, not after them.
-        //
-        // This was the cause of the pauses. Speaking used to be awaited at the
-        // end of the step, so every beat opened with silence for the length of
-        // the scroll, the cursor travel, the press and whatever the step's own
-        // `run` did — which in the search beat is 2.4 seconds of staged status
-        // updates. Half the demo was dead air with a cursor moving through it.
-        //
-        // Narration is the spine and the visuals hang off it: both start
-        // together, and the step ends when the *longer* of the two is done. The
-        // line is being read while the pointer travels to the thing it is about,
-        // which is what a person demonstrating something actually does.
-        const voice = step.say
-          ? say(step.say, { muted: mutedRef.current })
-          : Promise.resolve()
 
         if (step.at) {
           const el = await resolveTarget(step.at)
@@ -207,6 +192,9 @@ export default function Demo({ onClose }) {
               // behind it — every one of them looking like something the viewer
               // is meant to still be looking at.
               try { el.blur() } catch {}
+              // The button has done its job; the frame around it has not got
+              // anything left to say.
+              setSpot(null)
             }
           }
         } else {
@@ -238,39 +226,45 @@ export default function Demo({ onClose }) {
           set(text)
         }
 
-        // Wait for the voice to finish saying this line before moving on — but
-        // only for the voice, since the visuals have been running underneath it
-        // the whole time. `hold` is now a short tail for the eye to settle, not
-        // the pacing mechanism it used to be.
-        await voice
+        // The caption is the clock. Its length decides how long it stays up —
+        // one constant cannot serve "One search, sixteen databases." and a
+        // thirty-word sentence, and the visual work has already run underneath
+        // it, so this is what is left for reading.
         if (!alive()) return
-        if (step.hold) await sleep(step.hold)
+        const read = step.say ? readingTime(step.say) : 0
+        const wait = Math.max(step.hold || 0, read)
+        if (wait > 0) await sleep(wait)
       }
 
       if (!alive()) return
       setCaption('')
       setSpot(null)
+      const btn = document.querySelector('[data-demo-anchor="walkthrough"]')
+      if (btn) {
+        const r = btn.getBoundingClientRect()
+        setAnchor({ x: r.left + r.width / 2, y: r.bottom })
+      }
       setDone(true)
     })()
 
-    return () => { claimRun() }
-  }, [reduceMotion])
+    return () => {
+      claimRun()
+      document.documentElement.classList.remove('demo-running')
+    }
+  }, [reduceMotion, full])
 
   // Leaving puts the student's own paper back exactly as they left it.
   function finish() {
     claimRun()
-    stopSpeaking()
+    document.documentElement.classList.remove('demo-running')
+    // Everything the tour touched goes back, and the student lands on the tab
+    // they pressed the button in — with their own paper on it. A walkthrough
+    // that returns you somewhere else has cost you your place to explain
+    // itself.
     restore(snap.current)
+    useUIStore.getState().setStage(launchedFrom)
     onClose()
   }
-
-  // The ref exists because the script loop closes over its first render and
-  // would otherwise keep reading `muted === false` for the whole run — pressing
-  // mute would update the button and change nothing about the audio.
-  useEffect(() => {
-    mutedRef.current = muted
-    if (muted) stopSpeaking()
-  }, [muted])
 
   useEffect(() => {
     function onKey(e) {
@@ -306,26 +300,36 @@ export default function Demo({ onClose }) {
           outward shadow rather than a mask over the page: a real mask would dim
           the interface, and the interface is the thing being demonstrated. This
           only lifts the target out of it. */}
-      <AnimatePresence>
-        {spot && !opening && (
-          <motion.div
-            key="spot"
-            className="fixed z-[61] pointer-events-none rounded-lg"
-            initial={{ opacity: 0, scale: 1.08 }}
-            animate={{
-              opacity: 1, scale: 1,
-              left: spot.x - 8, top: spot.y - 6,
-              width: spot.w + 16, height: spot.h + 12,
-            }}
-            exit={{ opacity: 0, transition: { duration: 0.2 } }}
-            transition={{ type: 'spring', stiffness: 190, damping: 24 }}
-            style={{
-              border: '1px solid rgb(var(--accent) / 0.55)',
-              boxShadow: '0 0 0 9999px rgb(0 0 0 / 0.28), 0 0 30px -4px rgb(var(--accent) / 0.45)',
-            }}
-          />
-        )}
-      </AnimatePresence>
+      {/* The spotlight.
+          A rounded frame that travels between targets rather than fading out
+          here and in over there, so it reads as one lens being moved. Drawn
+          with a very large outward shadow rather than a mask over the page: a
+          mask would dim the interface, and the interface is the thing being
+          demonstrated.
+
+          Deliberately NOT wrapped in AnimatePresence. An exit animation is
+          rAF-driven, and when it does not resolve the frame simply stays —
+          which is what left a blue outline sitting on a button after the cursor
+          had moved on, looking like something the viewer was still meant to be
+          looking at. There is nothing to gain from animating its departure and
+          a whole class of bug in trying, so it unmounts outright. */}
+      {spot && !opening && !done && (
+        <motion.div
+          key="spot"
+          className="fixed z-[61] pointer-events-none rounded-lg"
+          initial={{ opacity: 0, scale: 1.08 }}
+          animate={{
+            opacity: 1, scale: 1,
+            left: spot.x - 8, top: spot.y - 6,
+            width: spot.w + 16, height: spot.h + 12,
+          }}
+          transition={{ type: 'spring', stiffness: 190, damping: 24 }}
+          style={{
+            border: '1px solid rgb(var(--accent) / 0.55)',
+            boxShadow: '0 0 0 9999px rgb(0 0 0 / 0.28), 0 0 30px -4px rgb(var(--accent) / 0.45)',
+          }}
+        />
+      )}
 
       {/* The pointer. A ring rather than an arrow — an arrow drawn over a real
           cursor's territory reads as a broken cursor, a ring reads as a
@@ -397,8 +401,13 @@ export default function Demo({ onClose }) {
               <h2 className="font-display font-semibold text-2xl text-t1 text-center">
                 Every claim, <span className="display-italic font-normal">accounted for.</span>
               </h2>
+              <p className="text-[12.5px] text-t2 text-center max-w-[42ch] leading-relaxed">
+                {full
+                  ? 'Your own paper is exactly where you left it.'
+                  : 'Back to your paper — nothing here was changed.'}
+              </p>
               <button onClick={finish} className="btn-primary text-xs">
-                Start your own paper
+                {full ? 'Start your own paper' : 'Back to work'}
               </button>
             </motion.div>
           )}
@@ -410,44 +419,6 @@ export default function Demo({ onClose }) {
       {/* Bottom right, not top right: the masthead already has five controls in
           that corner and the skip button landed on top of them. */}
       <div className="fixed bottom-5 right-5 z-[64] flex items-center gap-2">
-        {!done && !usingServerVoice() && voices.length > 1 && (
-          // A picker, not a setting. Windows ships two generations of voice at
-          // once and the good ones are network-backed, so which of them a given
-          // machine has is unknowable from here — this shows the actual list and
-          // lets the ear decide. Changing it speaks a line immediately, because
-          // choosing a voice from a dropdown of names is choosing blind.
-          <select
-            value={voiceName}
-            onChange={e => {
-              const v = voices.find(x => x.name === e.target.value)
-              setVoice(v)
-              setVoiceName(e.target.value)
-              if (!mutedRef.current) say('Right — let us take it from the top.', { muted: false })
-            }}
-            title="Which voice reads the demo"
-            className="glass max-w-[190px] px-2.5 py-1.5 text-[11.5px] font-medium text-t2
-              hover:text-t1 transition-colors outline-none cursor-pointer"
-          >
-            {voices.map(v => (
-              <option key={v.name} value={v.name}>
-                {v.name.replace(/^Microsoft /, '').replace(/ Online \(Natural\)/, ' ·')
-                       .replace(/ - English \(([^)]+)\)/, ' ($1)')}
-              </option>
-            ))}
-          </select>
-        )}
-        {!done && (
-          <button
-            onClick={() => setMuted(m => !m)}
-            aria-pressed={muted}
-            title={muted ? 'Turn the narration on' : 'Turn the narration off'}
-            className="glass px-3 py-1.5 text-[11.5px] font-medium text-t2 hover:text-t1
-              transition-colors"
-          >
-            {muted ? 'Sound off' : 'Sound on'}
-            <span className="opacity-50 font-mono ml-1.5">m</span>
-          </button>
-        )}
         <button
           onClick={finish}
           className="glass px-3 py-1.5 text-[11.5px] font-medium text-t2 hover:text-t1
@@ -474,6 +445,37 @@ export default function Demo({ onClose }) {
         />
       </div>
 
+
+      {/* Where to find this again.
+          A demo that ends without saying how to replay it has taught someone
+          something and then hidden the way back to it. The arrow is drawn from
+          the closing card to the actual button, measured live rather than
+          positioned by hand, so it keeps pointing at the right place when the
+          masthead reflows. */}
+      <AnimatePresence>
+        {done && anchor && (
+          <motion.div
+            key="anchor"
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5, type: 'spring', stiffness: 260, damping: 26 }}
+            className="fixed z-[64] pointer-events-none flex flex-col items-center"
+            style={{ left: anchor.x - 90, top: anchor.y + 6, width: 180 }}
+          >
+            <motion.span
+              aria-hidden="true"
+              animate={{ y: [0, -4, 0] }}
+              transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+              className="text-brand-500 dark:text-signal text-lg leading-none"
+            >
+              ▲
+            </motion.span>
+            <span className="mt-1 glass px-2.5 py-1.5 text-[11px] font-medium text-t1 text-center">
+              Watch this again here
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* The title card. Two and a half seconds of nothing but the promise,
           before a single thing moves. A demo that opens mid-gesture spends its

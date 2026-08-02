@@ -83,7 +83,6 @@ import citations
 import corpus
 import docx_export
 import importers
-import narration
 import record
 
 
@@ -2285,42 +2284,6 @@ async def record_public(token: str, session: AsyncSession = Depends(auth.get_ses
 # losing every paragraph break. This closes the loop. Google Docs exports as
 # .docx too, so one parser covers both.
 MAX_UPLOAD_BYTES = 8 * 1024 * 1024
-
-
-@app.get("/api/narrate")
-@limiter.limit("240/hour", key_func=_get_client_ip)
-async def narrate(request: Request, text: str):
-    """One line of the demo, spoken.
-
-    A GET with the line in the query string, so the browser can hand the URL
-    straight to an <audio> element and let it do the buffering, seeking and
-    caching that a fetch-into-a-Blob would have to reimplement.
-
-    Unauthenticated by necessity — the demo plays before anyone signs in — and
-    therefore capped at 400 characters a line and rate limited per IP, so it
-    cannot be farmed as a free text-to-speech service.
-
-    503 when no key is configured. That is not an error state: the frontend
-    falls back to the browser's own voice, which is where it started.
-    """
-    if not narration.available():
-        raise HTTPException(status_code=503, detail="narration is not configured")
-
-    audio = await narration.synthesize(text, client=get_client())
-    if audio is None:
-        raise HTTPException(status_code=503, detail="could not synthesise that line")
-
-    return Response(
-        content=audio,
-        media_type="audio/mpeg",
-        headers={
-            # The line is immutable for a given text — the cache key is its
-            # hash — so both the browser and any CDN in front of this can keep
-            # it indefinitely.
-            "Cache-Control": "public, max-age=31536000, immutable",
-            "Content-Length": str(len(audio)),
-        },
-    )
 
 
 @app.post("/api/import-docx")

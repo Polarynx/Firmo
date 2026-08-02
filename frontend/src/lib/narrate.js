@@ -125,18 +125,42 @@ export function warmVoices(timeout = 2500) {
  * unavailable — callers await this to pace against the voice, so it must never
  * hang.
  */
-// ── The good voice, when the server has one ─────────────────────────────────
+// ── The recorded voice ──────────────────────────────────────────────────────
 //
-// Web Speech is the fallback now, not the plan. `/api/narrate` returns the same
-// line read by Azure's en-GB-RyanNeural — the young British male the script was
-// written for — so every visitor hears the identical take instead of whatever
-// their machine happens to have installed.
+// Web Speech is the fallback now, not the plan.
 //
-// Probed once. If narration is not configured the endpoint answers 503, this
-// flips to false for the session, and nothing tries again: a demo that pauses
-// on a doomed request before every line is worse than one that never had a
-// server voice at all.
+// The script is eighteen fixed lines. They do not change between visitors, so
+// synthesising them per-visitor was always slightly absurd — a live API call, a
+// key, a quota and a round trip, to produce a byte-identical result every time.
+// `scripts/render_narration.py` renders them once with edge-tts as
+// en-GB-RyanNeural, the young British male the script was written for, and the
+// MP3s are committed. Every visitor hears the same take, instantly, with no key
+// and nothing to run.
+//
+// `manifest.json` maps each line to its file. A line whose text has been edited
+// simply is not in the manifest — the filename is a hash of the text — so it
+// falls through to Web Speech rather than playing the wrong audio, and
+// `--check` fails in CI until it is re-rendered.
+let manifest = null      // null = not loaded, {} = loaded and empty
 let serverVoice = null   // null = untested, true/false = known
+
+async function loadManifest() {
+  if (manifest) return manifest
+  try {
+    const res = await fetch('/narration/manifest.json', { cache: 'force-cache' })
+    manifest = res.ok ? await res.json() : {}
+  } catch {
+    manifest = {}
+  }
+  return manifest
+}
+
+/** The recorded file for a line, or null when it has none. */
+async function recordedUrl(text) {
+  const m = await loadManifest()
+  const file = m?.lines?.[text]
+  return file ? `/narration/${file}` : null
+}
 
 let audioEl = null
 
@@ -148,12 +172,10 @@ function player() {
   return audioEl
 }
 
-/** Fetch and play one line from the server. Resolves false if it cannot. */
-function sayViaServer(text) {
+/** Play one line from a URL. Resolves false if it cannot. */
+function playUrl(url, { recorded = false } = {}) {
   return new Promise(resolve => {
-    if (serverVoice === false) return resolve(false)
     const el = player()
-    const url = `${API}/api/narrate?text=${encodeURIComponent(text)}`
 
     let settled = false
     const done = ok => {
@@ -164,14 +186,14 @@ function sayViaServer(text) {
     }
 
     el.onended = () => done(true)
-    el.onerror = () => { serverVoice = false; done(false) }
+    el.onerror = () => { if (!recorded) serverVoice = false; done(false) }
     // A line is a few seconds; anything past this is a stall, and the caller
     // still has the browser voice to fall back to.
-    setTimeout(() => done(serverVoice === true), 20000)
+    setTimeout(() => done(false), 20000)
 
     el.src = url
     el.play().then(
-      () => { serverVoice = true },
+      () => { if (!recorded) serverVoice = true },
       // Autoplay refusal, not a server problem — the demo is opened by a click,
       // so this is rare, and falling through to Web Speech is the right answer
       // either way.
@@ -180,10 +202,12 @@ function sayViaServer(text) {
   })
 }
 
-/** Warm the first line so the demo does not open on a network round trip. */
+/** Warm the manifest and the first line, under the title card. */
 export function prefetchLine(text) {
-  if (!text || serverVoice === false) return
-  try { fetch(`${API}/api/narrate?text=${encodeURIComponent(text)}`).catch(() => {}) } catch {}
+  loadManifest().then(async () => {
+    const url = text && await recordedUrl(text)
+    if (url) { try { fetch(url, { cache: 'force-cache' }).catch(() => {}) } catch {} }
+  })
 }
 
 export function say(text, { muted = false, rate = 1.06 } = {}) {
@@ -192,7 +216,16 @@ export function say(text, { muted = false, rate = 1.06 } = {}) {
 
 async function sayInternal(text, { muted, rate }) {
   if (muted || !text) return
-  if (serverVoice !== false && await sayViaServer(text)) return
+
+  // Recorded first: identical for everyone, no request, no quota.
+  const url = await recordedUrl(text)
+  if (url && await playUrl(url, { recorded: true })) return
+
+  // Then a configured TTS endpoint, if the deployment has one.
+  if (serverVoice !== false
+      && await playUrl(`${API}/api/narrate?text=${encodeURIComponent(text)}`)) return
+
+  // Then whatever the machine has.
   return sayViaBrowser(text, { muted, rate })
 }
 
@@ -241,7 +274,7 @@ export function stopSpeaking() {
   } catch {}
 }
 
-/** True once the server voice has answered at least one line. Drives the UI. */
+/** True when a real recorded/served voice is reading, rather than the browser. */
 export function usingServerVoice() {
-  return serverVoice === true
+  return serverVoice === true || !!(manifest && Object.keys(manifest.lines || {}).length)
 }

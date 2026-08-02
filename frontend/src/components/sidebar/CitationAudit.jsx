@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 
 import { useAnnotationStore } from '../../stores/useAnnotationStore'
+import { useUIStore } from '../../stores/useUIStore'
+import { useWorkspaceStore } from '../../stores/useWorkspaceStore'
 import { VERDICT, VERDICT_ORDER, SPRING } from '../../lib/constants'
 import { Chip, EmptyNote, ErrorNote, SkeletonCard, StatusLine } from '../ui/primitives'
 
@@ -14,6 +16,9 @@ export default function CitationAudit() {
   const loading = useAnnotationStore(s => s.citeLoading)
   const status = useAnnotationStore(s => s.citeStatus)
   const error = useAnnotationStore(s => s.citeError)
+  const checkCitations = useAnnotationStore(s => s.checkCitations)
+  const doc = useWorkspaceStore(s => s.doc)
+  const setShowImport = useUIStore(s => s.setShowImport)
 
   if (error) return <ErrorNote>{error}</ErrorNote>
 
@@ -28,10 +33,25 @@ export default function CitationAudit() {
 
   if (!items) {
     return (
-      <EmptyNote title="Nothing audited yet">
-        Paste a finished works-cited list into the document. Firmo checks every entry against
-        publisher records, which is how invented citations get caught before a professor
-        finds them.
+      <EmptyNote
+        title="Nothing audited yet"
+        action={
+          <div className="flex items-center gap-2 mt-1">
+            {doc.trim() && (
+              <button onClick={() => checkCitations(doc)} className="btn-primary text-xs">
+                Check the list in my draft
+              </button>
+            )}
+            <button onClick={() => setShowImport(true)} className="btn-ghost">
+              Paste a reference list
+            </button>
+          </div>
+        }
+      >
+        Firmo takes every entry in a works-cited list to CrossRef and OpenAlex and comes back
+        with verified, wrong in the details, retracted, or absent from the record entirely.
+        If any of your sources came out of a chatbot, this is the pass that catches the
+        invented ones before a professor does.
       </EmptyNote>
     )
   }

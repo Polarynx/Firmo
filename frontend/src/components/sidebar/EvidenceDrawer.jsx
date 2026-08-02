@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { API } from '../../lib/api'
 import { authToken } from '../../stores/useAuthStore'
 import { useSavedSources } from '../../stores/selectors'
+import { useUIStore } from '../../stores/useUIStore'
 import { SPRING, roleFor } from '../../lib/constants'
 
 // ── The evidence drawer ─────────────────────────────────────────────────────
@@ -69,7 +70,35 @@ export default function EvidenceDrawer({ claim, projectId }) {
   // once the project has papers read into it and one of them bears on the
   // claim; an empty "no evidence found" box on every claim would train the
   // student to ignore the whole region.
-  if (!signedIn || state.status !== 'ready' || state.passages.length === 0) return null
+  // Signed out, this whole feature simply did not exist — no drawer, no
+  // explanation, no hint that Firmo can read the papers at all. A capability
+  // that is invisible when unavailable is a capability nobody knows to want,
+  // and this is the one that separates Firmo from a search box. So say it once,
+  // where the evidence would have been, and only when the student has actually
+  // saved something to read.
+  if (!signedIn) {
+    if (savedSources.length === 0) return null
+    return (
+      <div className="rounded-control border border-hair/10 bg-hair/[0.03] px-3 py-2.5
+        flex flex-col gap-1.5">
+        <span className="eyebrow">Reading the papers themselves</span>
+        <p className="text-[11.5px] text-t2 leading-relaxed">
+          Firmo can open the open-access PDFs you have saved and match this claim to the
+          sentence that backs it, with the page number — rather than to an abstract. That
+          runs on the server, so it needs an account.
+        </p>
+        <button
+          onClick={() => useUIStore.getState().setShowAuth(true)}
+          className="self-start text-[11.5px] font-medium text-brand-600 dark:text-signal
+            hover:opacity-75 transition-opacity"
+        >
+          Sign in to turn it on
+        </button>
+      </div>
+    )
+  }
+
+  if (state.status !== 'ready' || state.passages.length === 0) return null
 
   return (
     <div className="flex flex-col gap-2">

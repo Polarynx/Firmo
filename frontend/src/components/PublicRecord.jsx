@@ -32,12 +32,22 @@ const LABEL = {
   'export.docx': 'Exported the paper',
 }
 
+// The server redacts the student's own words on this route — quoted sentences,
+// search queries, chat turns — and sends "[redacted]" in their place. Printing
+// that string inside quotation marks would read as a bug, so the placeholder is
+// recognised and turned into a statement about the event instead. A reader
+// should see that a search happened and be unable to read it, which is a
+// different thing from seeing something broken.
+const REDACTED = '[redacted]'
+const kept = v => (typeof v === 'string' && v && v !== REDACTED ? v : null)
+
 function detailOf(ev) {
   const p = ev.payload || {}
-  if (p.query) return `"${p.query}"`
-  if (p.title) return p.title
-  if (p.asked) return `"${p.asked}"`
+  if (kept(p.query)) return `"${p.query}"`
+  if (kept(p.title)) return p.title
+  if (kept(p.asked)) return `"${p.asked}"`
   if (p.words != null) return `${p.words} words`
+  if (p.query === REDACTED || p.asked === REDACTED) return 'withheld'
   return ''
 }
 

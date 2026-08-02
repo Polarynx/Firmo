@@ -1,30 +1,42 @@
 {
   "_about": [
-    "A relevance benchmark for Firmo's search.",
+    "A relevance benchmark for Firmo search.",
     "",
     "Each case is a topic a student might actually type, paired with papers a",
     "human judged squarely on-topic for it. Those papers are the ground truth: a",
     "run scores by how many of them Firmo surfaces, and how high.",
     "",
-    "Every DOI here was resolved against CrossRef before being added. That check",
-    "matters more than it sounds: a first draft of this file was written from",
-    "memory and a third of the DOIs were wrong, one of them pointing at an",
-    "entirely different paper. A benchmark with bad ground truth is worse than no",
-    "benchmark, because it reports confident nonsense. Verify before adding.",
+    "Every reference here was resolved against a real index before being added,",
+    "by verify_benchmark.py. That check matters more than it sounds: a first",
+    "draft of this file was written from memory and a third of the DOIs were",
+    "wrong, one of them pointing at an entirely different paper. The same is true",
+    "of titles, and worse, because a title remembered slightly wrong can never be",
+    "matched and reports itself as a retrieval failure forever. A benchmark with",
+    "bad ground truth is not a weak benchmark, it is confident nonsense.",
+    "",
+    "ALWAYS run verify_benchmark.py after editing this file.",
     "",
     "Fields:",
     "  must_find         DOIs of papers a good search has to return.",
     "  must_find_titles  Titles, for papers with no CrossRef DOI. arXiv registers",
-    "                    with DataCite, so an arXiv-only paper can never be matched",
-    "                    by DOI and would otherwise be scored as a permanent miss.",
+    "                    with DataCite, and books and working papers are often in",
+    "                    neither, so an arXiv-only paper can never be matched by",
+    "                    DOI and would otherwise score as a permanent miss. The",
+    "                    verifier checks these against CrossRef and then OpenAlex,",
+    "                    which does index books and preprints.",
     "  off_topic_terms   Words that signal the wrong sense of an ambiguous query.",
-    "                    Counted separately because that failure ('armed conflict'",
-    "                    for 'high-conflict divorce') is the one semantic ranking",
-    "                    was introduced to fix.",
+    "                    Counted separately because that failure (armed conflict",
+    "                    for high-conflict divorce) is the one semantic ranking",
+    "                    was introduced to fix. Several cases exist only to test",
+    "                    it: attention-psychology against the transformer paper,",
+    "                    depression-economics against clinical depression,",
+    "                    memory-computing against human memory.",
     "",
-    "This set is small and honest about it: a regression net that catches a",
-    "ranking change quietly breaking humanities coverage, not a published",
-    "benchmark. Grow it whenever a real query returns something wrong."
+    "Coverage: 32 cases across 19 disciplines, spread deliberately across the",
+    "question shapes the product recognises - degree, mechanism, comparison,",
+    "enumeration, interpretive, conditional - because ranking that works on",
+    "\"does X cause Y\" can quietly fail on \"what is new historicism\", and the",
+    "humanities half of the set is what catches it."
   ],
   "cases": [
     {
@@ -35,7 +47,12 @@
         "10.1037/0893-3200.15.3.355",
         "10.1111/j.1741-3729.2003.00352.x"
       ],
-      "off_topic_terms": ["armed conflict", "civil war", "combatant", "insurgency"]
+      "off_topic_terms": [
+        "armed conflict",
+        "civil war",
+        "combatant",
+        "insurgency"
+      ]
     },
     {
       "id": "remote-work",
@@ -45,7 +62,11 @@
         "10.1093/qje/qju032",
         "10.3386/w28731"
       ],
-      "off_topic_terms": ["remote sensing", "teleoperation", "remote surgery"]
+      "off_topic_terms": [
+        "remote sensing",
+        "teleoperation",
+        "remote surgery"
+      ]
     },
     {
       "id": "printing-press",
@@ -54,7 +75,11 @@
       "must_find": [
         "10.1093/qje/qjr035"
       ],
-      "off_topic_terms": ["3d printing", "inkjet", "printed circuit"]
+      "off_topic_terms": [
+        "3d printing",
+        "inkjet",
+        "printed circuit"
+      ]
     },
     {
       "id": "microplastics-water",
@@ -64,7 +89,10 @@
         "10.1016/j.watres.2019.02.054",
         "10.1021/acs.est.8b05297"
       ],
-      "off_topic_terms": ["microfluidic", "plastic surgery"]
+      "off_topic_terms": [
+        "microfluidic",
+        "plastic surgery"
+      ]
     },
     {
       "id": "social-media-teens",
@@ -74,7 +102,10 @@
         "10.1177/2167702617723376",
         "10.1038/s41562-018-0506-1"
       ],
-      "off_topic_terms": ["social insects", "media studies theory"]
+      "off_topic_terms": [
+        "social insects",
+        "media studies theory"
+      ]
     },
     {
       "id": "minimum-wage",
@@ -84,7 +115,11 @@
         "10.1257/aer.90.5.1362",
         "10.1093/qje/qjz014"
       ],
-      "off_topic_terms": ["minimum spanning", "minimum variance", "wage of sin"]
+      "off_topic_terms": [
+        "minimum spanning",
+        "minimum variance",
+        "wage of sin"
+      ]
     },
     {
       "id": "school-uniforms",
@@ -94,7 +129,11 @@
         "10.1080/00220679809597575",
         "10.3386/w17337"
       ],
-      "off_topic_terms": ["uniform distribution", "uniform convergence", "military uniform"]
+      "off_topic_terms": [
+        "uniform distribution",
+        "uniform convergence",
+        "military uniform"
+      ]
     },
     {
       "id": "attention-transformers",
@@ -104,7 +143,355 @@
       "must_find_titles": [
         "Attention Is All You Need"
       ],
-      "off_topic_terms": ["electrical transformer", "power grid", "voltage", "transformer oil"]
+      "off_topic_terms": [
+        "electrical transformer",
+        "power grid",
+        "voltage",
+        "transformer oil"
+      ]
+    },
+    {
+      "id": "class-size-achievement",
+      "query": "how much does class size affect student achievement",
+      "discipline": "education",
+      "must_find": [],
+      "must_find_titles": [
+        "Teachers, Schools, and Academic Achievement"
+      ],
+      "off_topic_terms": [
+        "social class",
+        "class struggle",
+        "classroom furniture"
+      ]
+    },
+    {
+      "id": "sleep-memory",
+      "query": "how much does sleep deprivation impair memory consolidation",
+      "discipline": "neuroscience",
+      "must_find": [],
+      "must_find_titles": [
+        "The memory function of sleep",
+        "About sleep's role in memory"
+      ],
+      "off_topic_terms": [
+        "sleep apnea surgery",
+        "mattress",
+        "hibernation"
+      ]
+    },
+    {
+      "id": "masks-respiratory",
+      "query": "how effective are face masks at reducing respiratory transmission",
+      "discipline": "public health",
+      "must_find": [],
+      "must_find_titles": [
+        "Physical interventions to interrupt or reduce the spread of respiratory viruses"
+      ],
+      "off_topic_terms": [
+        "face mask skincare",
+        "masking tape",
+        "gas mask"
+      ]
+    },
+    {
+      "id": "charter-schools",
+      "query": "do charter schools improve test scores",
+      "discipline": "education",
+      "must_find": [],
+      "must_find_titles": [
+        "Multiple Choice: Charter School Performance in 16 States",
+        "Who Benefits from KIPP?"
+      ],
+      "off_topic_terms": [
+        "charter flight",
+        "royal charter",
+        "charter party"
+      ]
+    },
+    {
+      "id": "insulin-resistance-mechanism",
+      "query": "what causes insulin resistance in type 2 diabetes",
+      "discipline": "medicine",
+      "must_find": [],
+      "must_find_titles": [
+        "Mechanisms of insulin resistance in humans and possible links with inflammation",
+        "Banting Lecture 1988. Role of insulin resistance in human disease"
+      ],
+      "off_topic_terms": [
+        "insulin pump hardware",
+        "resistance band"
+      ]
+    },
+    {
+      "id": "ocean-acidification",
+      "query": "how does rising CO2 acidify the ocean and affect shell-forming life",
+      "discipline": "marine science",
+      "must_find": [],
+      "must_find_titles": [
+        "Ocean Acidification: The Other CO2 Problem"
+      ],
+      "off_topic_terms": [
+        "acid rain",
+        "stomach acid",
+        "acid house"
+      ]
+    },
+    {
+      "id": "gut-microbiome-mood",
+      "query": "how does the gut microbiome influence mood and anxiety",
+      "discipline": "neuroscience",
+      "must_find": [],
+      "must_find_titles": [
+        "Mind-altering microorganisms: the impact of the gut microbiota on brain and behaviour",
+        "The gut microbiome in neurological disorders"
+      ],
+      "off_topic_terms": [
+        "gut feeling intuition",
+        "gutter"
+      ]
+    },
+    {
+      "id": "urban-heat-island",
+      "query": "why are cities hotter than surrounding rural areas",
+      "discipline": "environmental science",
+      "must_find": [],
+      "must_find_titles": [
+        "The energetic basis of the urban heat island"
+      ],
+      "off_topic_terms": [
+        "heat island cooking",
+        "island tourism"
+      ]
+    },
+    {
+      "id": "cbt-vs-medication",
+      "query": "cognitive behavioural therapy compared with antidepressants for depression",
+      "discipline": "clinical psychology",
+      "must_find": [],
+      "must_find_titles": [
+        "Cognitive therapy vs medications in the treatment of moderate to severe depression"
+      ],
+      "off_topic_terms": [
+        "behavioural economics",
+        "drug trafficking"
+      ]
+    },
+    {
+      "id": "nuclear-vs-renewables",
+      "query": "nuclear power versus renewables for decarbonising electricity",
+      "discipline": "energy policy",
+      "must_find": [],
+      "must_find_titles": [
+        "Electricity generation and health",
+        "Net-zero emissions energy systems"
+      ],
+      "off_topic_terms": [
+        "nuclear family",
+        "nuclear weapons testing",
+        "nuclear medicine imaging"
+      ]
+    },
+    {
+      "id": "phonics-vs-whole-language",
+      "query": "phonics versus whole language instruction for early reading",
+      "discipline": "education",
+      "must_find": [],
+      "must_find_titles": [
+        "Ending the Reading Wars: Reading Acquisition From Novice to Expert",
+        "How Psychological Science Informs the Teaching of Reading"
+      ],
+      "off_topic_terms": [
+        "programming language",
+        "body language"
+      ]
+    },
+    {
+      "id": "orientalism-critique",
+      "query": "how has Said's Orientalism been criticised by later scholars",
+      "discipline": "literary theory",
+      "must_find": [],
+      "must_find_titles": [
+        "Orientalism",
+        "For Lust of Knowing: The Orientalists and Their Enemies"
+      ],
+      "off_topic_terms": [
+        "oriental rug",
+        "orient express",
+        "orientation training"
+      ]
+    },
+    {
+      "id": "new-historicism",
+      "query": "what is new historicism and how does it read literary texts",
+      "discipline": "literary theory",
+      "must_find": [],
+      "must_find_titles": [
+        "Shakespearean Negotiations",
+        "The New Historicism"
+      ],
+      "off_topic_terms": [
+        "historic building preservation",
+        "history channel"
+      ]
+    },
+    {
+      "id": "reformation-spread",
+      "query": "what caused the Protestant Reformation to spread so quickly",
+      "discipline": "history",
+      "must_find": [],
+      "must_find_titles": [
+        "The Printing Press as an Agent of Change",
+        "Printing and Prophecy"
+      ],
+      "off_topic_terms": [
+        "reform school",
+        "prison reform",
+        "reformatted"
+      ]
+    },
+    {
+      "id": "haitian-revolution",
+      "query": "how did the Haitian Revolution shape ideas about freedom",
+      "discipline": "history",
+      "must_find": [],
+      "must_find_titles": [
+        "Silencing the Past: Power and the Production of History",
+        "The Black Jacobins"
+      ],
+      "off_topic_terms": [
+        "industrial revolution",
+        "revolutions per minute"
+      ]
+    },
+    {
+      "id": "banality-of-evil",
+      "query": "debates over Arendt's banality of evil thesis",
+      "discipline": "political theory",
+      "must_find": [],
+      "must_find_titles": [
+        "Eichmann in Jerusalem: A Report on the Banality of Evil"
+      ],
+      "off_topic_terms": [
+        "evil corporation",
+        "banal advertising"
+      ]
+    },
+    {
+      "id": "crispr-off-target",
+      "query": "what are the known off-target effects of CRISPR gene editing",
+      "discipline": "genetics",
+      "must_find": [],
+      "must_find_titles": [
+        "High-frequency off-target mutagenesis induced by CRISPR-Cas nucleases in human cells",
+        "Search-and-replace genome editing without double-strand breaks or donor DNA"
+      ],
+      "off_topic_terms": [
+        "crisp packaging",
+        "target store"
+      ]
+    },
+    {
+      "id": "cognitive-biases-decisions",
+      "query": "which cognitive biases most affect financial decision making",
+      "discipline": "behavioural economics",
+      "must_find": [],
+      "must_find_titles": [
+        "Prospect Theory: An Analysis of Decision under Risk",
+        "Judgment under Uncertainty: Heuristics and Biases"
+      ],
+      "off_topic_terms": [
+        "media bias",
+        "bias tape sewing"
+      ]
+    },
+    {
+      "id": "ml-fairness-metrics",
+      "query": "what fairness metrics exist for machine learning models",
+      "discipline": "computer science",
+      "must_find": [],
+      "must_find_titles": [
+        "Equality of Opportunity in Supervised Learning",
+        "Fairness Through Awareness",
+        "Inherent Trade-Offs in the Fair Determination of Risk Scores"
+      ],
+      "off_topic_terms": [
+        "county fair",
+        "fair trade coffee",
+        "fairground"
+      ]
+    },
+    {
+      "id": "growth-mindset",
+      "query": "does growth mindset intervention improve grades and for whom",
+      "discipline": "education psychology",
+      "must_find": [],
+      "must_find_titles": [
+        "A national experiment reveals where a growth mindset improves achievement",
+        "To What Extent and Under Which Circumstances Are Growth Mind-Sets Important to Academic Achievement?"
+      ],
+      "off_topic_terms": [
+        "economic growth",
+        "plant growth",
+        "mindfulness retreat"
+      ]
+    },
+    {
+      "id": "cash-transfers",
+      "query": "when do unconditional cash transfers work best",
+      "discipline": "development economics",
+      "must_find": [],
+      "must_find_titles": [
+        "Household Response to Income Changes: Evidence from an Unconditional Cash Transfer Program in Kenya"
+      ],
+      "off_topic_terms": [
+        "cash register",
+        "bank transfer fees",
+        "money laundering"
+      ]
+    },
+    {
+      "id": "attention-psychology",
+      "query": "how selective attention filters what we perceive",
+      "discipline": "psychology",
+      "must_find": [],
+      "must_find_titles": [
+        "Gorillas in our midst: sustained inattentional blindness for dynamic events"
+      ],
+      "off_topic_terms": [
+        "attention is all you need",
+        "transformer architecture",
+        "self-attention layer"
+      ]
+    },
+    {
+      "id": "depression-economics",
+      "query": "what caused the Great Depression of the 1930s",
+      "discipline": "economic history",
+      "must_find": [],
+      "must_find_titles": [
+        "A Monetary History of the United States, 1867-1960",
+        "Nonmonetary Effects of the Financial Crisis in the Propagation of the Great Depression"
+      ],
+      "off_topic_terms": [
+        "clinical depression",
+        "antidepressant",
+        "major depressive disorder"
+      ]
+    },
+    {
+      "id": "memory-computing",
+      "query": "how does cache memory hierarchy affect program performance",
+      "discipline": "computer science",
+      "must_find": [],
+      "must_find_titles": [
+        "What Every Programmer Should Know About Memory",
+        "Computer Architecture: A Quantitative Approach"
+      ],
+      "off_topic_terms": [
+        "human memory consolidation",
+        "hippocampus",
+        "memoir"
+      ]
     }
   ]
 }

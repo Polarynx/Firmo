@@ -9,10 +9,10 @@ import { isLab } from '../../lib/lab'
 
 import TopBar from './TopBar'
 import Spine from './Spine'
-import DocumentCanvas from '../canvas/DocumentCanvas'
+import StageCenter from '../canvas/StageCenter'
 import ContextSidebar from '../sidebar/ContextSidebar'
 import OmniBar from '../omnibar/OmniBar'
-import Walkthrough from '../Walkthrough'
+import Demo from '../Demo'
 import ImportSheet from '../sidebar/ImportSheet'
 import AuthSheet from './AuthSheet'
 import RecordSheet from './RecordSheet'
@@ -36,12 +36,19 @@ export default function WorkspaceLayout() {
   const showRecord = useUIStore(s => s.showRecord)
   const setShowRecord = useUIStore(s => s.setShowRecord)
 
-  // Firmo shipped a walkthrough and then hid it behind a "?" icon nobody
-  // presses, so the one explanation of how the workspace fits together was
-  // never seen by the people who needed it. It opens itself once, for a genuine
-  // first run — no project, nothing written — and records that it has, so it
-  // never interrupts anyone twice.
+  // Firmo shipped an explanation of itself and then hid it behind a "?" icon
+  // nobody presses, so the one account of how the workspace fits together was
+  // never seen by the people who needed it. The demo opens itself once, for a
+  // genuine first run — no project, nothing written — and records that it has,
+  // so it never interrupts anyone twice. It stays reachable from the "?" for
+  // the people who bounced the first time and came back.
   useEffect(() => {
+    // `?demo` plays it on demand, without having to clear site data to get a
+    // first run back. The one way to actually watch the thing end to end.
+    if (new URLSearchParams(window.location.search).has('demo')) {
+      setShowWalkthrough(true)
+      return
+    }
     if (isLab) return
     try {
       if (localStorage.getItem('firmo_seen_intro')) return
@@ -52,16 +59,14 @@ export default function WorkspaceLayout() {
     } catch {}
   }, [setShowWalkthrough])
 
-  const setDoc = useWorkspaceStore(s => s.setDoc)
   const executeSearch = useResearchStore(s => s.executeSearch)
 
   // A shared ?q= link opens straight into a search.
   useEffect(() => {
     const q = new URLSearchParams(window.location.search).get('q')
-    if (q) {
-      setDoc(q)
-      executeSearch(q)
-    }
+    // The question, not the draft. A shared link used to write its own topic
+    // into page one of the recipient's document.
+    if (q) executeSearch(q)
     window.history.replaceState({}, '', window.location.pathname)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -89,12 +94,15 @@ export default function WorkspaceLayout() {
         {/* Zone A, with Zone C floating inside it so the HUD centres over the
             document rather than over the whole window. */}
         <div id="zone-a" className="relative flex-1 min-w-0 flex">
-          <DocumentCanvas />
+          <StageCenter />
           {/* The desk falls into shadow before it reaches the command bar. The
               bar floats over a scrolling page, so without this the last
               paragraph reads straight through the glass. */}
           <div className="desk-edge" aria-hidden="true" />
-          <OmniBar />
+          {/* The chat sits out the demo. It is the one thing on screen the
+              script never touches, and a live input box under a caption reads
+              as the thing you are being asked to type into. */}
+          {!showWalkthrough && <OmniBar />}
         </div>
 
         {/* Zone B, desktop */}
@@ -157,7 +165,7 @@ export default function WorkspaceLayout() {
         {showRecord && <RecordSheet key="record" onClose={() => setShowRecord(false)} />}
       </AnimatePresence>
 
-      {showWalkthrough && <Walkthrough onClose={() => setShowWalkthrough(false)} />}
+      {showWalkthrough && <Demo onClose={() => setShowWalkthrough(false)} />}
     </div>
   )
 }

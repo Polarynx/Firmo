@@ -84,16 +84,43 @@ def split_pdf(data: bytes) -> list[tuple[int, str]]:
     return passages[:MAX_PASSAGES_PER_PAPER]
 
 
-def pdf_url_for(paper: dict) -> Optional[str]:
-    """The open-access PDF for a paper, if Firmo already knows of one.
+# Repositories whose PDF location can be derived from a record we already hold,
+# with no extra request. Between them these cover most of the preprint and
+# life-sciences literature a student saves.
+_ARXIV_RE = re.compile(r"arxiv\.org/(?:abs|pdf)/([0-9]{4}\.[0-9]{4,5}(?:v[0-9]+)?|[a-z-]+/[0-9]{7})",
+                       re.I)
+_PMC_RE = re.compile(r"(?:ncbi\.nlm\.nih\.gov/pmc/articles/|pmcid[=:]\s*)(PMC[0-9]+)", re.I)
 
-    `oa_pdf` is filled in by the Unpaywall enrichment step during a search, so
-    this asks what is already known rather than going looking. Nothing here
+
+def pdf_url_for(paper: dict) -> Optional[str]:
+    """The open-access PDF for a paper, if one can be reached without asking.
+
+    `oa_pdf` is filled in by the Unpaywall enrichment step during a search —
+    but only for the top 25 results, so a paper saved from further down the
+    list, or imported from a reference manager, arrived with nothing here and
+    could never be read. That is the quiet reason Firmo's best feature so often
+    did not fire: not that the paper was paywalled, but that nobody had looked.
+
+    So `oa_pdf` first, and then two locations that can be *derived* from a
+    record already in hand. arXiv and PubMed Central both publish at a URL
+    computable from an identifier, which means a saved preprint becomes readable
+    for the cost of a regular expression rather than an API call. Nothing here
     attempts to reach a paywalled copy.
     """
     url = (paper.get("oa_pdf") or "").strip()
     if url.lower().startswith(("http://", "https://")):
         return url
+
+    haystack = " ".join(str(paper.get(k) or "") for k in ("url", "pdf_url", "doi", "id", "pmcid"))
+
+    m = _ARXIV_RE.search(haystack)
+    if m:
+        return f"https://arxiv.org/pdf/{m.group(1)}"
+
+    m = _PMC_RE.search(haystack)
+    if m:
+        return f"https://www.ncbi.nlm.nih.gov/pmc/articles/{m.group(1)}/pdf/"
+
     return None
 
 

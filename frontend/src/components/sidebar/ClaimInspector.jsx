@@ -59,7 +59,7 @@ function EvidenceRow({ paper, actionLabel, onAction, done, doneLabel }) {
         </p>
       )}
       {onAction && (
-        <button onClick={onAction} disabled={done}
+        <button data-demo="cite" onClick={onAction} disabled={done}
           className={done ? 'btn-ghost self-start' : 'btn-primary text-xs self-start'}>
           {done ? doneLabel : actionLabel}
         </button>
@@ -154,9 +154,11 @@ export default function ClaimInspector() {
     >
       <div className="flex items-center justify-between gap-2">
         <Chip tone={tone} />
-        <button onClick={() => { selectClaim(null); setSidebarView('sources') }}
+        {/* Closing an inspection, not going anywhere. The centre still has the
+            sentence on it; this only empties the panel. */}
+        <button onClick={() => { selectClaim(null); setSidebarView('argument_map') }}
           className="text-[11px] font-medium text-t3 hover:text-t1 transition-colors">
-          Back to sources
+          Done
         </button>
       </div>
 

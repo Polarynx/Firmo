@@ -27,6 +27,47 @@ load_dotenv()
 # share a budget with query planning.
 MODEL = os.getenv("FIRMO_MODEL", "mistral-small-latest")
 REASONING_MODEL = os.getenv("FIRMO_REASONING_MODEL", "mistral-large-latest")
+
+# Which model judges relevance and assigns roles during a search.
+#
+# This was running on MODEL, and it is the single highest-leverage call in the
+# product: it reads a few hundred abstracts and decides which sixty a student
+# ever sees, and what each one is for. Everything downstream — the stacks, the
+# outline, the claim matching — inherits that judgement, and recall@10 measures
+# it directly. Reading four hundred abstracts on the cheap model to save a few
+# cents per search is the wrong trade when the number it moves is the number the
+# product is judged on.
+#
+# MEASURED, and the measurement says: not by default.
+#
+# Pointing this at the large model was the obvious improvement and it made
+# things twenty times worse on a normal API key. Eight rerank chunks per search
+# is more large-model traffic than a standard-tier quota will serve, and the
+# failure is not an error the student ever sees — the chunk falls through to a
+# cosine-only fallback and the search looks completely normal while ranking
+# badly. On the 32-case benchmark: recall@10 0.312 on the small model, 0.016
+# with the large one rate-limited. Gating concurrency to 2 and quadrupling the
+# 429 backoff cut the failures but did not eliminate them.
+#
+# So the default is the model the key can actually serve, and the better model
+# is one env var away for a deployment whose quota can take it. The right order
+# is: raise the quota, set FIRMO_RERANK_MODEL, then re-run the benchmark and
+# check the DEGRADED line is silent — not the other way round.
+RERANK_MODEL = os.getenv("FIRMO_RERANK_MODEL", MODEL)
+
+# How many rerank chunks may be in flight at once.
+#
+# Two, not eight, and the number is the whole reason the model above can be the
+# large one. A search splits its candidates into eight chunks and used to fire
+# all eight together; against the small model's quota that is fine, and against
+# the large model's it is an instant 429 on every one of them. Every chunk then
+# fell through to its semantic fallback, which does not fail loudly — it just
+# quietly returns papers ranked by cosine alone. Measured: recall@10 0.312 with
+# the small model, 0.016 with the large one rate-limited into oblivion.
+#
+# So the gate is the price of the better model. It costs wall-clock time, which
+# is why it is tunable: raise it on a key with a bigger quota.
+RERANK_CONCURRENCY = int(os.getenv("FIRMO_RERANK_CONCURRENCY", "2"))
 EMBED_MODEL = "mistral-embed"
 
 _client = AsyncOpenAI(
@@ -93,7 +134,15 @@ async def chat(prompt: str, max_tokens: int = 512, json_mode: bool = False,
         except _RETRYABLE as e:
             last_exc = e
             print(f"[llm retry {attempt + 1}/3] {type(e).__name__}: {e}")
-            await asyncio.sleep(1.5 * (2 ** attempt) + random.random())
+            # A 429 needs a materially longer wait than a connection blip. The
+            # old schedule (1.5s, 3s, 6s) was tuned for the latter and is far
+            # too quick for a per-minute token bucket: a burst of concurrent
+            # calls would exhaust all three retries inside the same window that
+            # rejected the first one, so every single call failed and the caller
+            # silently fell back. Rate limits get roughly four times the wait.
+            rate_limited = getattr(e, "status_code", None) == 429 or "429" in str(e)
+            base = 6.0 if rate_limited else 1.5
+            await asyncio.sleep(base * (2 ** attempt) + random.random())
         except Exception as e:
             # The account may not carry the reasoning model. Fall back to the
             # small one for this call and every call after it, rather than

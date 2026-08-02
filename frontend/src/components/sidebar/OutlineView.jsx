@@ -61,7 +61,7 @@ export default function OutlineView() {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-2">
-        <span className="eyebrow">Outline · from your {sources.length} saved sources</span>
+        <span className="eyebrow">Built from your {sources.length} saved sources</span>
         <textarea
           value={thesis}
           onChange={e => setThesis(e.target.value)}

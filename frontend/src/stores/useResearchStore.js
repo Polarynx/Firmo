@@ -119,7 +119,10 @@ export const useResearchStore = create((set, get) => ({
       showRelated: false,
     })
     useWorkspaceStore.getState().setMode('searching')
-    useUIStore.getState().setSidebarView('sources')
+    // A search moves the student to Sources. Running one is the act of
+    // finishing with the question, so the centre should be showing what came
+    // back rather than the box they typed it into.
+    useUIStore.getState().setStage('sources')
 
     let briefText = ''
     let invalid = false
@@ -161,6 +164,21 @@ export const useResearchStore = create((set, get) => ({
             case 'papers':
               set({ results: ev.results || [], provisional: true })
               break
+            // Free-PDF links, patched in after the results. They arrive late on
+            // purpose: an Unpaywall lookup per paper used to hold the whole
+            // ranked set back by several seconds for the sake of a download
+            // button, so the papers now land first and the links catch up.
+            case 'pdfs': {
+              const byId = new Map((ev.items || []).map(i => [i.id, i.oa_pdf]))
+              if (byId.size === 0) break
+              set(s => ({
+                results: s.results.map(p => {
+                  const pdf = byId.get(paperId(p))
+                  return pdf ? { ...p, oa_pdf: pdf } : p
+                }),
+              }))
+              break
+            }
             case 'ranked': {
               set({
                 results: ev.results || [],

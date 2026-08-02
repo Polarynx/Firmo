@@ -27,11 +27,22 @@ let running = false
  */
 export function scheduleIngest(projectId, papers) {
   if (!authToken() || !projectId) return
-  const withPdf = (papers || []).filter(p => p?.oa_pdf)
-  if (!withPdf.length) return
+
+  // Everything saved, not only what already carries an `oa_pdf`.
+  //
+  // This filter was the reason the corpus so often stayed empty. `oa_pdf` is
+  // attached by the Unpaywall pass during a search, and only to the top 25
+  // results — so a paper the student scrolled to and saved, or imported from
+  // Zotero, arrived without one and was dropped here, before the server ever
+  // saw it. The server can now derive a PDF location for arXiv and PubMed
+  // Central records on its own, and it is the only place that knows what it can
+  // reach, so the decision belongs there. It skips what it cannot read, and it
+  // already skips what it has read before.
+  const list = (papers || []).filter(Boolean)
+  if (!list.length) return
 
   clearTimeout(timer)
-  timer = setTimeout(() => ingest(projectId, withPdf), DELAY)
+  timer = setTimeout(() => ingest(projectId, list), DELAY)
 }
 
 export async function ingest(projectId, papers) {

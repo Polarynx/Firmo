@@ -230,10 +230,34 @@ export default function RecordSheet({ onClose }) {
         </div>
 
         <div className="shrink-0 border-t border-hair/10 px-6 py-4 flex flex-col gap-3">
+          {/* What a link actually publishes, said before it is minted rather
+              than in a help page nobody opens. Sharing your process record is a
+              genuinely irreversible act — you cannot un-see a URL — and the
+              person pressing this is usually a student handing evidence to an
+              instructor, which is precisely the moment to be exact about what
+              leaves. Firmo redacts the quoted sentences and search queries on
+              the public route; this says so, because "trust us" is not a
+              privacy policy. */}
           {signedIn && !shareToken && (
-            <button onClick={share} className="btn-primary self-start">
-              Create a shareable link
-            </button>
+            <div className="flex flex-col gap-2.5">
+              <div className="rounded-lg border border-hair/10 bg-hair/[0.03] px-3.5 py-3
+                flex flex-col gap-1.5">
+                <span className="eyebrow">A link would show</span>
+                <p className="text-[11.5px] text-t2 leading-relaxed">
+                  Every step, in order, with its timestamp and the hash chain that proves
+                  nothing was edited — searches run, sources saved, claims flagged and backed,
+                  and every time Firmo refused to write.
+                </p>
+                <span className="eyebrow !text-t3 pt-1">and would not show</span>
+                <p className="text-[11.5px] text-t2 leading-relaxed">
+                  Your draft, the sentences you quoted, or what you typed into the search box.
+                  Those are redacted for anyone but you.
+                </p>
+              </div>
+              <button onClick={share} className="btn-primary self-start">
+                Create a shareable link
+              </button>
+            </div>
           )}
 
           {shareToken && (

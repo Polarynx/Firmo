@@ -1,104 +1,137 @@
 // ── The voice ───────────────────────────────────────────────────────────────
 //
-// Captions ask the viewer to read the screen and watch the screen at the same
-// time, and the screen is the point — every second spent on a line of text at
-// the bottom is a second not spent watching a citation land in a sentence. A
-// voice frees the eyes.
+// Captions ask the viewer to read the screen and watch the screen at once, and
+// the screen is the point. A voice frees the eyes.
 //
-// Web Speech, not an audio file. A recorded VO would be better in every way
-// except the one that matters: it would be a fixed artefact that goes stale the
-// moment a caption changes, and the entire discipline of this demo is that
-// nothing in it can drift from the product without breaking visibly. Synthesis
-// reads whatever the script currently says.
+// Web Speech, not a recorded file: a VO would be better in every way except the
+// one that matters, in that it would go stale the moment a line of script
+// changed, and the discipline of this demo is that nothing in it can drift from
+// the product without breaking visibly.
 //
-// The cost is that voice availability is a property of the viewer's machine,
-// not of this code. There is no British male voice guaranteed anywhere, so this
-// asks for one, settles for the nearest thing, and falls back to silence with
-// captions still on screen. Nothing about the demo depends on the audio
-// arriving.
+// The hard part is that voice quality is a property of the viewer's machine.
+// Windows ships two generations at once and they are not close:
+//
+//   SAPI5 (David, Mark, Zira, Hazel)  — local, instant, and audibly a robot.
+//   "Online (Natural)" (Guy, Ryan, Libby, Aria) — Azure neural, genuinely good.
+//
+// The first version of this file ranked by accent first, which on a typical
+// Windows install means the only en-GB voice present is Libby — natural, and
+// female — while the male voices available are the robotic local ones. Asking
+// for "British male" and getting "British female" or "American robot" is a
+// choice the ranking was making silently.
+//
+// So it scores instead of ordering, and the weights say what was actually
+// wanted: never robotic, then male, then British. An American neural voice is a
+// better demo than a British synthesiser from 2005.
 
-const WANT_LANG = 'en-GB'
-
-// Ordered by how close each is to the brief — a young, warm, British male.
-// Names differ per platform and none is guaranteed, so this is a preference
-// list rather than a lookup.
-const PREFERRED = [
-  'Google UK English Male',   // Chrome, and the closest to the brief
-  'Daniel',                   // macOS / iOS en-GB male
-  'Microsoft Ryan Online',    // Edge en-GB male, natural
-  'Microsoft Thomas',         // Edge en-GB male
-  'Arthur',                   // macOS en-GB
-  'Oliver',
+const PREFERRED_GB_MALE = [
+  'ryan',    // Microsoft Ryan Online (Natural) — en-GB male, the target
+  'thomas',
+  'george',
+  'alfie',
+  'elliot',
+  'oliver',
+  'daniel',  // macOS / iOS en-GB male
+  'arthur',
 ]
 
-const AVOID = /female|zira|hazel|susan|serena|kate|fiona|karen|moira|tessa|samantha/i
+// Neural male voices worth taking when no British male exists.
+const PREFERRED_ANY_MALE = ['guy', 'brandon', 'christopher', 'eric', 'roger', 'steffan', 'alex']
 
-let cached = null
+const FEMALE = /aria|libby|sonia|zira|hazel|susan|serena|kate|fiona|karen|moira|tessa|samantha|hayley|heather|priya|jenny|michelle|ana|amber|ashley|cora|elizabeth|monica|nanami/i
+const MALE = /guy|ryan|thomas|george|alfie|elliot|oliver|daniel|arthur|david|mark|brandon|christopher|eric|roger|steffan|alex|james|william|liam|brian/i
 
-/** The best available voice for the brief, or null if the browser has none. */
-export function pickVoice() {
-  if (cached !== undefined && cached !== null) return cached
+// Azure neural voices announce themselves. These are the ones that do not sound
+// like a station announcement.
+const NATURAL = /online|natural|neural|premium|enhanced|siri/i
+
+function score(v) {
+  const name = (v.name || '').toLowerCase()
+  const lang = (v.lang || '').toLowerCase()
+  if (!lang.startsWith('en')) return -1
+
+  let s = 0
+  // Not robotic, above everything. This is the complaint that actually lands:
+  // an accent mismatch is a nitpick, a 2005 synthesiser is unlistenable.
+  if (NATURAL.test(name)) s += 100
+  // Male, next.
+  if (PREFERRED_GB_MALE.some(n => name.includes(n))) s += 40
+  else if (PREFERRED_ANY_MALE.some(n => name.includes(n))) s += 34
+  else if (MALE.test(name) && !FEMALE.test(name)) s += 26
+  else if (FEMALE.test(name)) s -= 20
+  // British, last — the nice-to-have.
+  if (lang.startsWith('en-gb')) s += 12
+  else if (lang.startsWith('en-au') || lang.startsWith('en-ie')) s += 4
+  // Google's voices beat local SAPI even without the Natural marker.
+  if (name.startsWith('google')) s += 20
+  return s
+}
+
+let cached
+let override = null
+
+/** Every English voice this browser has, best first. Drives the picker. */
+export function listVoices() {
   const voices = window.speechSynthesis?.getVoices?.() || []
-  if (!voices.length) return null
+  return voices
+    .filter(v => (v.lang || '').toLowerCase().startsWith('en'))
+    .map(v => ({ voice: v, score: score(v) }))
+    .sort((a, b) => b.score - a.score)
+    .map(x => x.voice)
+}
 
-  for (const name of PREFERRED) {
-    const hit = voices.find(v => v.name.toLowerCase().includes(name.toLowerCase()))
-    if (hit) return (cached = hit)
-  }
-  // Any en-GB that is not obviously a female voice.
-  const gb = voices.filter(v => v.lang?.toLowerCase().startsWith('en-gb'))
-  const male = gb.find(v => !AVOID.test(v.name))
-  if (male) return (cached = male)
-  if (gb.length) return (cached = gb[0])
+/** The chosen voice: whatever the viewer picked, else the best scoring one. */
+export function pickVoice() {
+  if (override) return override
+  if (cached) return cached
+  const ranked = listVoices()
+  return (cached = ranked[0] || null)
+}
 
-  // No British voice at all. An American one reading British-written copy is a
-  // worse result than an accent mismatch: it is the wrong register for lines
-  // like "accounted for". Still better than silence, so it is taken last.
-  const en = voices.find(v => v.lang?.toLowerCase().startsWith('en') && !AVOID.test(v.name))
-  return (cached = en || voices[0] || null)
+export function setVoice(v) {
+  override = v || null
 }
 
 /**
- * Voices load asynchronously in Chrome — `getVoices()` returns an empty array
- * on first call and fires `voiceschanged` later. A demo that asks once, gets
- * nothing, and plays silently on every first visit is the predictable result of
- * not waiting.
+ * Voices load asynchronously in Chrome — `getVoices()` returns empty on the
+ * first call and fires `voiceschanged` later, so asking once and playing silent
+ * is the predictable result of not waiting. The network voices in particular
+ * arrive a beat after the local ones, which is exactly the set worth waiting
+ * for.
  */
-export function warmVoices(timeout = 1500) {
+export function warmVoices(timeout = 2500) {
   return new Promise(resolve => {
-    if (!window.speechSynthesis) return resolve(null)
-    if (window.speechSynthesis.getVoices().length) return resolve(pickVoice())
+    const synth = window.speechSynthesis
+    if (!synth) return resolve(null)
     let done = false
     const finish = () => {
       if (done) return
       done = true
-      window.speechSynthesis.removeEventListener('voiceschanged', finish)
+      synth.removeEventListener('voiceschanged', finish)
+      cached = undefined
       resolve(pickVoice())
     }
-    window.speechSynthesis.addEventListener('voiceschanged', finish)
-    setTimeout(finish, timeout)
+    synth.addEventListener('voiceschanged', finish)
+    // Even with voices already present, give the network set a moment to land.
+    if (synth.getVoices().some(v => NATURAL.test(v.name))) finish()
+    else setTimeout(finish, timeout)
   })
 }
 
 /**
- * Speak one line. Resolves when it finishes, or immediately if speech is
- * unavailable — callers await this to pace themselves against the voice, so it
- * must never hang.
- *
- * The 12-second ceiling is not defensive padding. Chrome drops `onend` on the
- * floor often enough that a demo awaiting it will simply stop mid-run, and a
- * stalled demo is worse than an unnarrated one.
+ * Speak one line. Resolves when it finishes, or immediately when speech is
+ * unavailable — callers await this to pace against the voice, so it must never
+ * hang.
  */
-export function say(text, { muted = false } = {}) {
+export function say(text, { muted = false, rate = 1.06 } = {}) {
   return new Promise(resolve => {
     if (muted || !window.speechSynthesis || !text) return resolve()
 
-    // No voice installed at all — headless Chrome, a stripped Linux image, some
+    // No voice installed at all — headless Chrome, stripped Linux images, some
     // locked-down corporate builds. `speechSynthesis` still exists and `speak()`
-    // still accepts the utterance; it just never fires `onend`, so every
-    // narrated line would sit on the 12-second timeout below and a sixty-second
-    // demo would take four minutes. Return immediately and let the captions
-    // carry it.
+    // still accepts the utterance; it just never fires `onend`, so every line
+    // would sit on the timeout below and a sixty-second demo would take four
+    // minutes. Return immediately and let the captions carry it.
     const voice = pickVoice()
     if (!voice) return resolve()
 
@@ -106,19 +139,20 @@ export function say(text, { muted = false } = {}) {
       window.speechSynthesis.cancel()
       const u = new SpeechSynthesisUtterance(text)
       u.voice = voice
-      u.lang = voice?.lang || WANT_LANG
-      // Slightly slower than default and a touch above neutral pitch: the brief
-      // is young and friendly, and synthesis at rate 1.0 reads as a station
-      // announcement.
-      u.rate = 0.96
-      u.pitch = 1.06
+      u.lang = voice.lang || 'en-GB'
+      // Neural voices carry a faster read than synthesisers do; 1.0 on a good
+      // voice sounds like someone being careful with you.
+      u.rate = rate
+      u.pitch = 1.0
       u.volume = 1
 
       let settled = false
       const done = () => { if (!settled) { settled = true; resolve() } }
       u.onend = done
       u.onerror = done
-      setTimeout(done, 12000)
+      // Chrome drops `onend` often enough that awaiting it alone will stall a
+      // run outright. Roughly words-per-second, with headroom.
+      setTimeout(done, Math.min(14000, 1800 + text.length * 55))
 
       window.speechSynthesis.speak(u)
     } catch {

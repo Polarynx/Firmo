@@ -4,7 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import {
   CHAPTERS, SCRIPT, chapterFor, claimRun, coldStart, holdsRun, restore, snapshot, sleep,
 } from '../lib/demo'
-import { say, stopSpeaking, warmVoices } from '../lib/narrate'
+import { listVoices, pickVoice, say, setVoice, stopSpeaking, warmVoices } from '../lib/narrate'
 
 // ── The demo player ─────────────────────────────────────────────────────────
 //
@@ -19,7 +19,7 @@ import { say, stopSpeaking, warmVoices } from '../lib/narrate'
 // wherever it actually is. The script cannot desynchronise from the interface
 // because it is reading the interface.
 
-const CURSOR_TRAVEL = 620   // ms, and the spring below is tuned to land inside it
+const CURSOR_TRAVEL = 520   // ms, and the spring below is tuned to land inside it
 
 /**
  * Wait for an element to exist and settle, or give up.
@@ -97,6 +97,12 @@ export default function Demo({ onClose }) {
   // sound off, on a machine with no voices, or who simply read faster.
   const [muted, setMuted] = useState(false)
   const mutedRef = useRef(false)
+  // Which voice, and what else is available. Exposed rather than decided
+  // silently: voice quality is a property of the viewer's machine, the ranking
+  // below can only guess, and "that one sounds wrong" is a judgement nobody
+  // else can make for them.
+  const [voices, setVoices] = useState([])
+  const [voiceName, setVoiceName] = useState('')
 
   const snap = useRef(null)
   const token = useRef(0)
@@ -135,12 +141,16 @@ export default function Demo({ onClose }) {
       // they were about to watch.
       // Voices load asynchronously in Chrome, so this is done under the title
       // card where the wait is free rather than mid-sentence where it is not.
-      await warmVoices()
+      const v = await warmVoices()
+      if (alive()) {
+        setVoices(listVoices())
+        setVoiceName(v?.name || '')
+      }
       await whenVisible()
       if (!alive()) return
-      await sleep(2600)
+      await sleep(2200)
       setOpening(false)
-      await sleep(400)
+      await sleep(300)
 
       for (let i = 0; i < SCRIPT.length && alive(); i++) {
         await whenVisible()
@@ -155,7 +165,7 @@ export default function Demo({ onClose }) {
           if (!alive()) return
           if (el) {
             el.scrollIntoView({ block: 'center', behavior: 'smooth' })
-            await sleep(240)
+            await sleep(180)
             const r = el.getBoundingClientRect()
             // The spotlight is set at the same moment the cursor starts moving,
             // not when it arrives, so the frame reads as "here, and something is
@@ -377,6 +387,32 @@ export default function Demo({ onClose }) {
       {/* Bottom right, not top right: the masthead already has five controls in
           that corner and the skip button landed on top of them. */}
       <div className="fixed bottom-5 right-5 z-[64] flex items-center gap-2">
+        {!done && voices.length > 1 && (
+          // A picker, not a setting. Windows ships two generations of voice at
+          // once and the good ones are network-backed, so which of them a given
+          // machine has is unknowable from here — this shows the actual list and
+          // lets the ear decide. Changing it speaks a line immediately, because
+          // choosing a voice from a dropdown of names is choosing blind.
+          <select
+            value={voiceName}
+            onChange={e => {
+              const v = voices.find(x => x.name === e.target.value)
+              setVoice(v)
+              setVoiceName(e.target.value)
+              if (!mutedRef.current) say('Right — let us take it from the top.', { muted: false })
+            }}
+            title="Which voice reads the demo"
+            className="glass max-w-[190px] px-2.5 py-1.5 text-[11.5px] font-medium text-t2
+              hover:text-t1 transition-colors outline-none cursor-pointer"
+          >
+            {voices.map(v => (
+              <option key={v.name} value={v.name}>
+                {v.name.replace(/^Microsoft /, '').replace(/ Online \(Natural\)/, ' ·')
+                       .replace(/ - English \(([^)]+)\)/, ' ($1)')}
+              </option>
+            ))}
+          </select>
+        )}
         {!done && (
           <button
             onClick={() => setMuted(m => !m)}

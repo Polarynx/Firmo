@@ -93,11 +93,6 @@ export default function Demo({ onClose, stage: launchedFrom = 'question' }) {
   const [pressing, setPressing] = useState(false)
   const [progress, setProgress] = useState(0)
   const [done, setDone] = useState(false)
-  // The box the cursor is currently working on, in viewport coordinates. Drives
-  // the spotlight, which is the piece that makes the difference between a dot
-  // wandering across a screenshot and a demonstration: the eye needs to be told
-  // where to look BEFORE the thing happens, not after.
-  const [spot, setSpot] = useState(null)
   const [opening, setOpening] = useState(true)
   // Where the walkthrough button is, so the closing card can point at it. The
   // last thing a demo should leave behind is "how do I see that again" — the
@@ -177,11 +172,6 @@ export default function Demo({ onClose, stage: launchedFrom = 'question' }) {
             el.scrollIntoView({ block: 'center', behavior: 'smooth' })
             await sleep(180)
             const r = el.getBoundingClientRect()
-            // The spotlight is set at the same moment the cursor starts moving,
-            // not when it arrives, so the frame reads as "here, and something is
-            // on its way" rather than as a highlight appearing under a dot that
-            // is already there.
-            setSpot({ x: r.left, y: r.top, w: r.width, h: r.height })
             setCursor({ x: r.left + r.width / 2, y: r.top + r.height / 2 })
             await sleep(CURSOR_TRAVEL)
             setPressing(true)
@@ -196,16 +186,8 @@ export default function Demo({ onClose, stage: launchedFrom = 'question' }) {
               // behind it — every one of them looking like something the viewer
               // is meant to still be looking at.
               try { el.blur() } catch {}
-              // The button has done its job; the frame around it has not got
-              // anything left to say.
-              setSpot(null)
             }
           }
-        } else {
-          // A step with no target is Firmo talking, not the student acting.
-          // Letting the spotlight linger on the last button would keep pointing
-          // at something the caption has stopped being about.
-          setSpot(null)
         }
 
         if (!alive()) return
@@ -242,7 +224,6 @@ export default function Demo({ onClose, stage: launchedFrom = 'question' }) {
 
       if (!alive()) return
       setCaption('')
-      setSpot(null)
       const btn = document.querySelector('[data-demo-anchor="walkthrough"]')
       if (btn) {
         const r = btn.getBoundingClientRect()
@@ -296,44 +277,6 @@ export default function Demo({ onClose, stage: launchedFrom = 'question' }) {
         style={done ? undefined : { cursor: 'none' }}
         onClick={e => { if (!done) e.preventDefault() }}
       />
-
-      {/* The spotlight.
-          A rounded frame that travels between targets rather than one that fades
-          out here and in over there — `layout`-free, just an animated box, so it
-          reads as a single lens being moved. It is drawn with a very large
-          outward shadow rather than a mask over the page: a real mask would dim
-          the interface, and the interface is the thing being demonstrated. This
-          only lifts the target out of it. */}
-      {/* The spotlight.
-          A rounded frame that travels between targets rather than fading out
-          here and in over there, so it reads as one lens being moved. Drawn
-          with a very large outward shadow rather than a mask over the page: a
-          mask would dim the interface, and the interface is the thing being
-          demonstrated.
-
-          Deliberately NOT wrapped in AnimatePresence. An exit animation is
-          rAF-driven, and when it does not resolve the frame simply stays —
-          which is what left a blue outline sitting on a button after the cursor
-          had moved on, looking like something the viewer was still meant to be
-          looking at. There is nothing to gain from animating its departure and
-          a whole class of bug in trying, so it unmounts outright. */}
-      {spot && !opening && !done && (
-        <motion.div
-          key="spot"
-          className="fixed z-[61] pointer-events-none rounded-lg"
-          initial={{ opacity: 0, scale: 1.08 }}
-          animate={{
-            opacity: 1, scale: 1,
-            left: spot.x - 8, top: spot.y - 6,
-            width: spot.w + 16, height: spot.h + 12,
-          }}
-          transition={{ type: 'spring', stiffness: 190, damping: 24 }}
-          style={{
-            border: '1px solid rgb(var(--accent) / 0.55)',
-            boxShadow: '0 0 0 9999px rgb(0 0 0 / 0.28), 0 0 30px -4px rgb(var(--accent) / 0.45)',
-          }}
-        />
-      )}
 
       {/* The pointer. A ring rather than an arrow — an arrow drawn over a real
           cursor's territory reads as a broken cursor, a ring reads as a

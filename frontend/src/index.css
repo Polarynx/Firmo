@@ -108,13 +108,18 @@
   }
   /* One visible keyboard ring for the whole workspace. Components that style
      their own focus state opt out with `focus-visible:outline-none`. */
-  /* Suppressed for the duration of a walkthrough. The demo presses real
-     controls, and a pressed button keeps :focus-visible, so the run trailed
-     outlined buttons behind it — each one looking like something the viewer was
-     still meant to be looking at. Blurring after the click races React's
-     re-render; removing the style cannot be raced. */
-  :root.demo-running :focus-visible,
-  :root.demo-running :focus {
+  /* No accent rings anywhere while a walkthrough is running.
+     The demo presses real controls, and anything that outlines the pressed
+     thing — :focus-visible, a focus ring, a focus-within shadow — is left
+     sitting there after the cursor has moved on, reading as something the
+     viewer is still meant to be looking at. Blurring after the click races
+     React's re-render and cannot be relied on; removing the styles cannot be
+     raced. Nothing is lost: the ghost cursor and its press ripple already say
+     what is being touched. */
+  :root.demo-running *:focus,
+  :root.demo-running *:focus-visible,
+  :root.demo-running *:focus-within,
+  :root.demo-running *:active {
     outline: none !important;
     box-shadow: none !important;
   }

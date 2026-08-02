@@ -367,8 +367,11 @@ export const TOURS = {
   draft: [
     { run: () => { seedIfEmpty(); ui().setStage('draft') },
       say: 'This is the page, and it is only the page. No marks while you are composing, because a paragraph covered in amber is a paragraph being argued with before it is finished.' },
-    { at: 'import-docx',
-      say: 'Already have a draft? Drop in a Word file and it opens here, paragraph breaks intact. Google Docs exports to Word, so that is the same door.' },
+    // No `at` here on purpose: the import control lives on the Question
+    // surface, not this one, so pointing at it from the Draft tour would send
+    // the cursor to something that is not on screen — a four-second wait and
+    // then nothing.
+    { say: 'Already have a draft? The Question tab takes a Word file and opens it here, paragraph breaks intact. Google Docs exports to Word, so that is the same door.' },
     { say: 'The works-cited page assembles itself underneath as you save sources, in APA, MLA, Chicago, Harvard or IEEE. Switch the style and every entry re-sets.' },
     { say: 'What Firmo will not do is write it. Ask for a paragraph and it declines, and the refusal goes into the record with everything else.' },
   ],

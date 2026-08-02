@@ -32,12 +32,16 @@ const CURSOR_TRAVEL = 520   // ms, and the spring below is tuned to land inside 
  * suspended, so the script keeps its place and simply runs slower until the tab
  * is looked at again.
  */
-function waitForEl(selector, timeout = 4000) {
+function waitForEl(selector, timeout = 1600) {
   return new Promise(resolve => {
     const started = Date.now()
     const tick = () => {
       const el = document.querySelector(selector)
       if (el && el.getBoundingClientRect().width > 0) return resolve(el)
+      // Giving up quickly matters more than giving up late. A target that is
+      // not on this stage is a scripting mistake, and the cost of one should be
+      // a beat that does not point at anything — not four seconds of a frozen
+      // cursor while the viewer wonders what broke.
       if (Date.now() - started > timeout) return resolve(null)
       setTimeout(tick, 60)
     }

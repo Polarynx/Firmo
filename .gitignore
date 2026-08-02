@@ -23,3 +23,5 @@ backend/eval/runs/
 .DS_Store
 
 backend/.narration/
+
+frontend/public/narration/samples/

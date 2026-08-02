@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import { useAuthStore } from '../../stores/useAuthStore'
 import { useUIStore } from '../../stores/useUIStore'
 import { useWorkspaceStore } from '../../stores/useWorkspaceStore'
+import { useSavedSources } from '../../stores/selectors'
 import { SPRING } from '../../lib/constants'
 
 // ── Where this paper actually lives ─────────────────────────────────────────
@@ -45,7 +46,7 @@ const SOURCES_AT_RISK = 3
 export function useDeviceAtRisk() {
   const user = useAuthStore(s => s.user)
   const doc = useWorkspaceStore(s => s.doc)
-  const sources = useWorkspaceStore(s => s.activeProject()?.sources || [])
+  const sources = useSavedSources()
   const [dismissed] = useState(
     () => { try { return !!localStorage.getItem(DISMISS_KEY) } catch { return false } },
   )
@@ -57,7 +58,7 @@ export function useDeviceAtRisk() {
 export default function DeviceOnlyNote({ onQuiet }) {
   const setShowAuth = useUIStore(s => s.setShowAuth)
   const doc = useWorkspaceStore(s => s.doc)
-  const sources = useWorkspaceStore(s => s.activeProject()?.sources || [])
+  const sources = useSavedSources()
 
   const words = doc.trim() ? doc.trim().split(/\s+/).length : 0
 

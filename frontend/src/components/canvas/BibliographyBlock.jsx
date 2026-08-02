@@ -126,7 +126,7 @@ export default function BibliographyBlock() {
           <span className="record">{styleLabel}</span>
 
           <div className="relative">
-            <button onClick={() => setMenu(m => !m)} disabled={exporting} className="btn-ghost">
+            <button data-demo="export-menu" onClick={() => setMenu(m => !m)} disabled={exporting} className="btn-ghost">
               {exporting ? 'Building…' : 'Export ▾'}
             </button>
             <AnimatePresence>

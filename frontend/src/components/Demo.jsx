@@ -5,6 +5,7 @@ import { useUIStore } from '../stores/useUIStore'
 import {
   claimRun, coldStart, holdsRun, isFullTour, readingTime, restore, snapshot, sleep, tourFor,
 } from '../lib/demo'
+import { prefetchLine, say, stopSpeaking } from '../lib/narrate'
 
 // ── The demo player ─────────────────────────────────────────────────────────
 //
@@ -81,10 +82,15 @@ function whenVisible() {
   })
 }
 
-export default function Demo({ onClose, stage: launchedFrom = 'question' }) {
+export default function Demo({ onClose, stage = 'question' }) {
+  // Captured on the first render and never re-read. The survey drives the stage
+  // around as it plays, so following the live value would mean the tour changed
+  // underneath itself the moment it navigated anywhere.
+  const launchedFrom = useRef(stage).current
+
   // Which tour, decided by the room the button was pressed in. The home tab
-  // gets the ninety-second survey; every other tab gets its own short one about
-  // what is actually on that screen.
+  // gets the full survey; every other tab gets its own short one about what is
+  // actually on that screen.
   const SCRIPT = useMemo(() => tourFor(launchedFrom), [launchedFrom])
   const full = isFullTour(SCRIPT)
   const reduceMotion = useReducedMotion()
@@ -93,7 +99,6 @@ export default function Demo({ onClose, stage: launchedFrom = 'question' }) {
   const [pressing, setPressing] = useState(false)
   const [progress, setProgress] = useState(0)
   const [done, setDone] = useState(false)
-  const [opening, setOpening] = useState(true)
   // Where the walkthrough button is, so the closing card can point at it. The
   // last thing a demo should leave behind is "how do I see that again" — the
   // answer is one icon in the masthead and nobody would find it unaided.
@@ -140,22 +145,16 @@ export default function Demo({ onClose, stage: launchedFrom = 'question' }) {
       // entrance rather than as a teleport.
       setCursor({ x: window.innerWidth * 0.5, y: window.innerHeight + 40 })
 
-      // The title card. Two and a half seconds before anything moves, because a
-      // demo that starts mid-gesture gives the viewer nothing to orient on and
-      // they spend the first two captions working out what they are looking at.
-      //
-      // Gated on visibility like every step is, and for the same reason turned
-      // up a level: this is the one beat that is pure orientation, so playing it
-      // to a backgrounded tab does not merely waste it — the viewer comes back
-      // to a demo already in motion, having missed the only frame that said what
-      // they were about to watch.
-      // Voices load asynchronously in Chrome, so this is done under the title
-      // card where the wait is free rather than mid-sentence where it is not.
+      // Straight in. There used to be a two-second title card here and it was
+      // the part of the run worth cutting: a viewer who pressed play has
+      // already decided to watch, and holding a logo in front of them is time
+      // spent proving nothing.
+      // Warm the first line while nothing is happening yet.
+      prefetchLine(SCRIPT.find(x => x.say)?.say)
+
       await whenVisible()
       if (!alive()) return
-      await sleep(2200)
-      setOpening(false)
-      await sleep(300)
+      await sleep(250)
 
       for (let i = 0; i < SCRIPT.length && alive(); i++) {
         await whenVisible()
@@ -163,6 +162,14 @@ export default function Demo({ onClose, stage: launchedFrom = 'question' }) {
         const step = SCRIPT[i]
         setProgress((i + 1) / SCRIPT.length)
         if (step.say) setCaption(step.say)
+
+        // Voice and visuals start together, so the line is read while the
+        // pointer travels to the thing it is about. Awaiting it at the end of
+        // the step instead was what made the whole run feel like a series of
+        // pauses.
+        const voice = step.say
+          ? say(step.say).then(() => sleep(200))
+          : Promise.resolve()
 
 
         if (step.at) {
@@ -212,14 +219,14 @@ export default function Demo({ onClose, stage: launchedFrom = 'question' }) {
           set(text)
         }
 
-        // The caption is the clock. Its length decides how long it stays up —
-        // one constant cannot serve "One search, sixteen databases." and a
-        // thirty-word sentence, and the visual work has already run underneath
-        // it, so this is what is left for reading.
+        // Wait for the voice, which has been playing underneath the visuals
+        // since the top of the step. Falls back to reading time when there is no
+        // recording for a line — an edited caption is simply absent from the
+        // manifest rather than playing the wrong words.
         if (!alive()) return
-        const read = step.say ? readingTime(step.say) : 0
-        const wait = Math.max(step.hold || 0, read)
-        if (wait > 0) await sleep(wait)
+        await voice
+        if (!alive()) return
+        if (step.hold) await sleep(step.hold)
       }
 
       if (!alive()) return
@@ -242,6 +249,7 @@ export default function Demo({ onClose, stage: launchedFrom = 'question' }) {
   function finish() {
     claimRun()
     document.documentElement.classList.remove('demo-running')
+    stopSpeaking()
     // Everything the tour touched goes back, and the student lands on the tab
     // they pressed the button in — with their own paper on it. A walkthrough
     // that returns you somewhere else has cost you your place to explain
@@ -424,45 +432,6 @@ export default function Demo({ onClose, stage: launchedFrom = 'question' }) {
         )}
       </AnimatePresence>
 
-      {/* The title card. Two and a half seconds of nothing but the promise,
-          before a single thing moves. A demo that opens mid-gesture spends its
-          first two captions being decoded rather than watched. */}
-      <AnimatePresence>
-        {opening && !reduceMotion && (
-          <motion.div
-            key="opening"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0, transition: { duration: 0.7, ease: 'easeInOut' } }}
-            className="fixed inset-0 z-[65] flex flex-col items-center justify-center
-              gap-4 bg-app pointer-events-none"
-          >
-            <motion.span
-              initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.25, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-              className="eyebrow"
-            >
-              Firmo, end to end
-            </motion.span>
-            <motion.h1
-              initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.45, duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-              className="font-display font-semibold text-[2.4rem] sm:text-[3rem]
-                leading-[1.02] text-t1 text-center max-w-[16ch]"
-            >
-              A question to a finished paper,{' '}
-              <span className="display-italic font-normal">in one minute.</span>
-            </motion.h1>
-            <motion.span
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-              transition={{ delay: 1.1, duration: 0.6 }}
-              className="record"
-            >
-              Nothing here is a mock-up
-            </motion.span>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </>
   )
 }

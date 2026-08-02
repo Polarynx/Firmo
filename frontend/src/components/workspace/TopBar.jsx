@@ -54,6 +54,38 @@ export default function TopBar() {
   const setCitationStyle = useWorkspaceStore(s => s.setCitationStyle)
   const activeMode = useWorkspaceStore(s => s.activeMode)
 
+  // Whether this person has ever watched the demo, so the marker on the button
+  // can stop nagging once they have.
+  const [seenDemo, setSeenDemo] = useState(
+    () => { try { return !!localStorage.getItem('firmo_seen_intro') } catch { return true } },
+  )
+  const markDemoSeen = () => {
+    try { localStorage.setItem('firmo_seen_intro', '1') } catch {}
+    setSeenDemo(true)
+  }
+
+  // Two presses, not a dialog. A confirm sheet for this would be one more
+  // component to build and dismiss; arming the button says the same thing and
+  // disarms itself when the menu closes.
+  const [confirmReset, setConfirmReset] = useState(false)
+
+  function resetEverything() {
+    if (!confirmReset) { setConfirmReset(true); return }
+    try {
+      // Everything Firmo has ever written down on this device. Enumerated
+      // rather than clearing the whole origin, because localStorage is shared
+      // and wiping keys that belong to something else is not ours to do.
+      for (const k of Object.keys(localStorage)) {
+        if (k.startsWith('firmo_')) localStorage.removeItem(k)
+      }
+    } catch {}
+    // Reloading rather than resetting the stores by hand: there are six of
+    // them, plus a bibliography timer, a corpus queue and a sync scheduler, and
+    // a fresh boot is the only version of "blank slate" that cannot leave one
+    // of them holding stale state.
+    window.location.replace(window.location.pathname)
+  }
+
   const [naming, setNaming] = useState(false)
   const [name, setName] = useState('')
   const [styleMenu, setStyleMenu] = useState(false)
@@ -63,6 +95,10 @@ export default function TopBar() {
 
   // Same self-dismissal as the style menu: the workspace-wide handler only
   // closes the store-backed menus.
+  useEffect(() => {
+    if (!showProjects) setConfirmReset(false)
+  }, [showProjects])
+
   useEffect(() => {
     if (!accountMenu) return
     function onDown(e) {
@@ -206,6 +242,26 @@ export default function TopBar() {
                       + New paper
                     </button>
                   )}
+                </div>
+
+                {/* Start over.
+                    Kept behind a confirm and set apart from everything above
+                    it, because it throws away every paper, every saved source
+                    and the process record with them. Destructive and useful in
+                    the same breath: the honest place for it is visible, last,
+                    and impossible to hit by accident. */}
+                <div className="pt-1 mt-1 border-t border-line">
+                  <button
+                    onClick={resetEverything}
+                    className={`w-full text-left px-2.5 py-1.5 rounded-md text-[12px] transition-colors
+                      ${confirmReset
+                        ? 'font-medium text-red-500 bg-red-500/10'
+                        : 'text-t3 hover:text-red-500 hover:bg-raised'}`}
+                  >
+                    {confirmReset
+                      ? `Delete all ${projects.length} paper${projects.length === 1 ? '' : 's'}? Press again`
+                      : 'Reset Firmo'}
+                  </button>
                 </div>
               </motion.div>
             )}
@@ -364,8 +420,23 @@ export default function TopBar() {
         {/* A play triangle, not a question mark. "?" is where help goes to die;
             this is a sixty-second showing of the product working, and it should
             look like something you press to watch. */}
-        <span data-demo-anchor="walkthrough">
-        <IconButton label="Watch the demo" onClick={() => setShowWalkthrough(true)}>
+        <span data-demo-anchor="walkthrough" className="relative">
+        {/* Until it has been watched once. Nothing plays on arrival any more,
+            so the one thing that explains the workspace has to advertise itself
+            — quietly, and exactly once per person. */}
+        {!seenDemo && (
+          <motion.span
+            aria-hidden="true"
+            animate={{ scale: [1, 1.35, 1], opacity: [0.9, 0.4, 0.9] }}
+            transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
+            className="absolute -top-0.5 -right-0.5 z-10 w-1.5 h-1.5 rounded-full
+              bg-brand-500 dark:bg-signal pointer-events-none"
+          />
+        )}
+        <IconButton
+          label={seenDemo ? 'Watch the demo' : 'New here? Watch the demo'}
+          onClick={() => { markDemoSeen(); setShowWalkthrough(true) }}
+        >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             <path strokeLinecap="round" strokeLinejoin="round" d="M10 8.5l6 3.5-6 3.5v-7z" />

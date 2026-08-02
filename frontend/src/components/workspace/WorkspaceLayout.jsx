@@ -5,7 +5,6 @@ import { useUIStore } from '../../stores/useUIStore'
 import { useWorkspaceStore } from '../../stores/useWorkspaceStore'
 import { useResearchStore } from '../../stores/useResearchStore'
 import { SPRING } from '../../lib/constants'
-import { isLab } from '../../lib/lab'
 
 import TopBar from './TopBar'
 import Spine from './Spine'
@@ -37,31 +36,14 @@ export default function WorkspaceLayout() {
   const showRecord = useUIStore(s => s.showRecord)
   const setShowRecord = useUIStore(s => s.setShowRecord)
 
-  // Firmo shipped an explanation of itself and then hid it behind a "?" icon
-  // nobody presses, so the one account of how the workspace fits together was
-  // never seen by the people who needed it. The demo opens itself once, for a
-  // genuine first run — no project, nothing written — and records that it has,
-  // so it never interrupts anyone twice. It stays reachable from the "?" for
-  // the people who bounced the first time and came back.
-  useEffect(() => {
-    // `?demo` plays it on demand, without having to clear site data to get a
-    // first run back. The one way to actually watch the thing end to end.
-    if (new URLSearchParams(window.location.search).has('demo')) {
-      setShowWalkthrough(true)
-      return
-    }
-    if (isLab) return
-    try {
-      if (localStorage.getItem('firmo_seen_intro')) return
-      const store = JSON.parse(localStorage.getItem('firmo_projects_v1') || '{}')
-      if (Array.isArray(store.projects) && store.projects.length > 0) return
-      localStorage.setItem('firmo_seen_intro', '1')
-      // Forced to the home tab first, so a genuine first run always gets the
-      // full survey and always lands back on the front page afterwards.
-      useUIStore.getState().setStage('question')
-      setShowWalkthrough(true)
-    } catch {}
-  }, [setShowWalkthrough])
+  // Nothing plays on arrival.
+  //
+  // The demo used to open itself on a genuine first run, which is the standard
+  // move and the wrong one: it takes the screen away from someone who has not
+  // yet seen what they are being shown a tour of, and the first thing they
+  // learn is where the close button is. So they land on the front page, and the
+  // demo is offered rather than played — by the invitation on the page and by a
+  // marker on the masthead button that stays until they have used it once.
 
   const executeSearch = useResearchStore(s => s.executeSearch)
 
@@ -170,16 +152,14 @@ export default function WorkspaceLayout() {
       </AnimatePresence>
 
       {/* The tour is chosen by the room the button was pressed in — the home
-          tab gets the full survey, every other tab gets its own. `key` so that
-          moving between tabs and reopening always builds a fresh player rather
-          than reusing one that has already run. */}
-      {showWalkthrough && (
-        <Demo
-          key={stage}
-          stage={stage}
-          onClose={() => setShowWalkthrough(false)}
-        />
-      )}
+          tab gets the full survey, every other tab gets its own.
+          NOT keyed on `stage`. It was, and that was the bug behind "the home
+          video plays the Sources one": the survey's third beat moves the stage
+          to Sources, the key changed, React threw the running player away and
+          mounted a fresh one — which then asked `tourFor('sources')` and
+          started the Sources tour from the top. The launch stage is captured
+          once inside the component instead. */}
+      {showWalkthrough && <Demo stage={stage} onClose={() => setShowWalkthrough(false)} />}
     </div>
   )
 }

@@ -71,7 +71,7 @@ export default function OutlineView() {
             text-[12px] leading-relaxed text-t1 placeholder:text-t3 outline-none
             focus:ring-2 focus:ring-brand-500/40 transition-all"
         />
-        <button onClick={() => build(sources, thesis)} disabled={loading} className="btn-primary text-xs self-start">
+        <button data-demo="build-outline" onClick={() => build(sources, thesis)} disabled={loading} className="btn-primary text-xs self-start">
           {loading ? 'Planning…' : sections ? 'Rebuild outline' : 'Build outline'}
         </button>
       </div>
@@ -123,6 +123,7 @@ export default function OutlineView() {
               )}
               {pt.gap_query && (
                 <button
+                  data-demo="gap-search"
                   onClick={() => executeSearch(pt.gap_query)}
                   className="self-start font-mono text-[9px] uppercase tracking-[0.1em] px-1.5 py-0.5
                     rounded border border-amber-500/50 text-amber-600 dark:text-amber-400

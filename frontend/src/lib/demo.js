@@ -119,7 +119,7 @@ function coldStart() {
 //
 // Hand-tuned holds were fine while a voice set the pace and the number was only
 // a tail. Without it the hold IS the pacing, and one constant cannot serve both
-// "One search, sixteen databases." and a thirty-word sentence — the short line
+// "One search. Sixteen databases." and a thirty-word sentence — the short line
 // drags and the long one is gone before it is finished. Roughly 200 wpm, with a
 // floor for the eye to find the line at all.
 export const readingTime = text =>
@@ -127,7 +127,7 @@ export const readingTime = text =>
 
 export const SCRIPT = [
   {
-    say: 'Firmo starts with a question, not a keyword — and it reads the shape of that question before searching. This one wants a size, not a yes or no.',
+    say: 'Start with a question, not keywords. Firmo reads the shape of it first — this one wants a size, not a yes or no.',
     at: 'question-field',
     type: { text: QUESTION, set: v => rs().setQuery(v) },
     hold: 250,
@@ -140,7 +140,7 @@ export const SCRIPT = [
     // The alternate entrance, shown rather than listed. Most students arriving
     // at Firmo already have three paragraphs somewhere, and a demo that only
     // ever shows the blank-page path quietly tells them this is not for them.
-    say: 'Already started writing? Drop in a Word file instead. Google Docs exports to Word, so that is the same door.',
+    say: 'Already writing? Drop in a Word file instead.',
     at: 'import-docx',
     hold: 761,
   },
@@ -173,14 +173,14 @@ export const SCRIPT = [
     hold: 263,
   },
   {
-    say: 'Everything that comes back is filed by what it will do in your argument. The estimate, the one that cuts against it, the method behind both.',
+    say: 'Everything comes back filed by what it does for you. The estimate, the one that cuts against it, the method behind both.',
     hold: 937,
   },
   {
     // "Why it matters" is the single most useful button in the product and the
     // one nobody presses, because its label promises a summary and it actually
     // answers a harder question: what is this paper for, in YOUR argument.
-    say: 'You do not have to read forty abstracts. Ask any paper why it matters, and Firmo answers against your question, not in general.',
+    say: 'You do not have to read forty abstracts. Ask any paper why it matters.',
     at: 'why-matters',
     press: true,
     hold: 1200,
@@ -191,7 +191,7 @@ export const SCRIPT = [
   { at: 'save-nth-2', run: () => save(SOURCES[2]), hold: 550 },
   { at: 'save-nth-3', run: () => save(SOURCES[3]), hold: 900 },
   {
-    say: 'Keep four, and Firmo can plan the argument around them.',
+    say: 'Keep four and it plans the argument around them.',
     at: 'tab-outline',
     run: async () => {
       ui().setStage('outline')
@@ -205,13 +205,13 @@ export const SCRIPT = [
     // The chat is the least discoverable thing in the workspace and the most
     // asked-for capability in the category, so it gets a beat of its own — and
     // the refusal gets said out loud, because it is the whole positioning.
-    say: 'Or just ask them — grounded in the papers you kept, not the open internet.',
+    say: 'Or just ask them. Grounded in your papers, not the open internet.',
     at: 'ask-box',
     type: { text: 'where do these papers actually disagree?', set: v => ui().setOmniValue(v), speed: 26 },
     hold: 585,
   },
   {
-    say: 'The page is yours. Firmo will not write it — but it will read what you wrote and mark every sentence a reader expects a source for.',
+    say: 'The page is yours. Firmo will not write it — but it will read it, and mark every sentence that needs backing.',
     at: 'tab-draft',
     run: () => ui().setStage('draft'),
     hold: 250,
@@ -233,7 +233,7 @@ export const SCRIPT = [
     hold: 468,
   },
   {
-    say: 'Red means the evidence disagrees with you. Amber is softer: true enough, but a marker will stop at it.',
+    say: 'Red means your own evidence disagrees with you. Amber just wants a source.',
     at: 'claim-open',
     run: () => an().selectClaim(CLAIMS[0].id),
     hold: 878,
@@ -255,7 +255,7 @@ export const SCRIPT = [
     // and the citation, the saved source, the green highlight and the new line
     // in the works-cited page all follow from the product's own code. It is the
     // most important beat in the demo and the one least worth faking.
-    say: 'One press. The citation goes into your sentence, the source joins the paper, and the works-cited page writes itself.',
+    say: 'One press. Citation in, source saved, works-cited page updated.',
     at: 'cite',
     press: true,
     hold: 878,
@@ -265,7 +265,7 @@ export const SCRIPT = [
     hold: 527,
   },
   {
-    say: 'Last pass before hand-in — every reference checked against the publisher record.',
+    say: 'Last pass — every reference against the publisher record.',
     at: 'tab-references',
     run: async () => {
       ui().setStage('references')
@@ -291,7 +291,7 @@ export const SCRIPT = [
     hold: 761,
   },
   {
-    say: 'Then it leaves as one Word file — your prose and its works-cited page, in whatever style the assignment asked for.',
+    say: 'Then it leaves as one Word file, works-cited page and all.',
     at: 'tab-export',
     run: () => ui().setStage('export'),
     hold: 1200,
@@ -300,7 +300,7 @@ export const SCRIPT = [
     // The closing line. Not a summary of features — a statement of what the
     // last ninety seconds were actually about, which is the only thing worth
     // saying at the end of a demo.
-    say: 'Sixteen databases, every source filed by what it argues, every claim traced to the page it came from. Not a chatbot that writes your essay — a workspace that can prove you wrote it.',
+    say: 'Not a chatbot that writes your essay. A workspace that can prove you wrote it.',
     hold: 1400,
   },
 ]
@@ -348,60 +348,72 @@ const seedIfEmpty = () => {
 export const TOURS = {
   sources: [
     { run: () => { seedIfEmpty(); ui().setStage('sources') },
-      say: 'Sixty results, and the useful question is never "which is most relevant". It is "what have I got, and what am I missing".' },
-    { say: 'So the stacks are the filing, not a filter. Effect estimates here, the papers that cut against them there, the methods behind both. Nothing is hidden by pressing one, so the counts can be trusted as a picture of the whole search.' },
-    { say: 'The words change with your question. Ask how effective something is and you get Effect estimate and Null or reversed; ask what something means and you get Framework instead.' },
+      say: 'Sixty papers came back. The useful question is never which one is most relevant.' },
+    { say: 'It is what have I got, and what am I missing. So they are stacked by what each one does — estimates, the ones that cut against them, the methods behind both.' },
+    { say: 'These are jumps, not filters. Nothing gets hidden, so the counts tell you the truth about the whole search.' },
     { at: 'why-matters', press: true,
-      say: 'Why it matters reads the paper against your question rather than summarising it in general. Retracted work carries a red do-not-cite stamp.' },
-    { say: 'Bookmark what you will use. It lands on the shelf beside you and stays there through every other stage.' },
+      say: 'Not sure about one? Ask why it matters. It answers against your question, not in general.' },
+    { at: 'summarize', press: true,
+      say: 'Or get the abstract in plain English.' },
+    { at: 'save-nth-0', run: () => save(SOURCES[0]),
+      say: 'Bookmark it and it goes on the shelf, where it stays for the rest of the paper.' },
+    { at: 'save-nth-2', run: () => save(SOURCES[2]),
+      say: 'Retracted work gets a red stamp, so you cannot cite it by accident.' },
   ],
 
   outline: [
     { run: () => { seedIfEmpty(); ui().setStage('outline') },
-      say: 'The outline is built from the sources you kept, not from the topic. That is the difference between a plan and a template.' },
-    { say: 'Every point names the papers behind it, coloured by what each one does. A point argued only from orange is a point argued from the papers that disagree with it, and you can see that from across the room.' },
-    { say: 'A point with no source carries a ready-made search to go and fill the gap. That is the honest version of an outline: it shows you where the argument is not yet earned.' },
-    { say: 'Firmo refuses to plan from fewer than four sources. An outline built from two is a guess with a structure drawn on it.' },
+      say: 'This plans from the sources you kept, not from your topic. That is the difference between a plan and a template.' },
+    { at: 'build-outline', press: true,
+      say: 'Add your thesis if you have one, and it argues that.' },
+    { say: 'Every point names the papers behind it, coloured by what they do. A point backed only by orange is a point argued from the papers that disagree with it.' },
+    { at: 'gap-search',
+      say: 'No source yet? That is a search, ready to run. Firmo shows you where the argument is not earned yet.' },
+    { say: 'It will not plan from fewer than four papers. Two is a guess with a structure drawn on it.' },
   ],
 
   draft: [
     { run: () => { seedIfEmpty(); ui().setStage('draft') },
-      say: 'This is the page, and it is only the page. No marks while you are composing, because a paragraph covered in amber is a paragraph being argued with before it is finished.' },
-    // No `at` here on purpose: the import control lives on the Question
-    // surface, not this one, so pointing at it from the Draft tour would send
-    // the cursor to something that is not on screen — a four-second wait and
-    // then nothing.
-    { say: 'Already have a draft? The Question tab takes a Word file and opens it here, paragraph breaks intact. Google Docs exports to Word, so that is the same door.' },
-    { say: 'The works-cited page assembles itself underneath as you save sources, in APA, MLA, Chicago, Harvard or IEEE. Switch the style and every entry re-sets.' },
-    { say: 'What Firmo will not do is write it. Ask for a paragraph and it declines, and the refusal goes into the record with everything else.' },
+      say: 'This is just the page. No marks while you write — a paragraph covered in amber is a paragraph being argued with before it is finished.' },
+    { say: 'Got something already? The Question tab opens a Word file straight into here, paragraphs intact. Google Docs exports to Word, so same door.' },
+    { say: 'The works-cited page builds itself underneath as you save sources.' },
+    { at: 'export-menu',
+      say: 'APA, MLA, Chicago, Harvard, IEEE. Switch it and every entry re-sets.' },
+    { at: 'check-draft',
+      say: 'And when you are ready, Firmo reads it. What it will not do is write it.' },
   ],
 
   claims: [
     { run: () => { seedIfEmpty(); ui().setStage('claims') },
-      say: 'The same page, read rather than written. Every sentence a marker would expect a source for is marked where you wrote it.' },
-    { say: 'Amber wants a citation. Red means the evidence you already saved disagrees with you, and Firmo shows you what it actually says, with a suggested rewrite.' },
-    { at: 'claim-open', run: () => an().selectClaim(CLAIMS[2].id),
-      say: 'Click any mark and the best papers for that exact sentence arrive beside it. If the PDF is open access, Firmo quotes the page it came from rather than the abstract.' },
+      say: 'Same page, read instead of written. Every sentence a marker would want a source for is marked where you wrote it.' },
+    { say: 'Amber wants a citation. Red means the evidence you saved actually disagrees with you.' },
+    { at: 'claim-open', run: () => an().selectClaim(CLAIMS[0].id),
+      say: 'Click a red one and Firmo shows you what the paper really says, plus a rewrite you can take.' },
+    { run: () => an().selectClaim(CLAIMS[2].id),
+      say: 'Click an amber one and the best papers for that exact sentence turn up beside it. Open access? It quotes the page, not the abstract.' },
     { at: 'cite', press: true,
-      say: 'One press puts the citation in your sentence, the source on the shelf, and the entry in the works-cited page.' },
+      say: 'One press. Citation into the sentence, source onto the shelf, entry into the works-cited page.' },
     { run: () => an().selectClaim(null),
-      say: 'The bar tracks how much of the draft is settled. A paragraph of pure opinion counts as done, because Firmo checks factual claims, not style.' },
+      say: 'The bar tracks what is settled. Pure opinion counts as done — Firmo checks facts, not style.' },
   ],
 
   references: [
     { run: () => { seedIfEmpty(); ui().setStage('references') },
-      say: 'Paste a finished reference list and every entry goes to CrossRef and OpenAlex.' },
-    { say: 'Four verdicts: matches the record, wrong in the details, retracted, or no such paper. Turn any card over to see what the publisher actually has.' },
-    { say: 'Firmo is careful about the difference between a wrong year and a wrong index. A paper the register only holds a later deposit for is not a student mistake, and saying it was would be worse than saying nothing.' },
-    { say: 'If any of your sources came out of a chatbot, this is the pass that catches the invented ones before a professor does.' },
+      say: 'Paste your reference list and every entry goes to CrossRef and OpenAlex.' },
+    { say: 'Four answers: matches, wrong in the details, retracted, or no such paper.' },
+    { say: 'Turn a card over to see what the publisher actually has on file.' },
+    { say: 'And it knows the difference between your mistake and the index being behind. A paper the register only has a later deposit for is not something you got wrong.' },
+    { say: 'If any of these came from a chatbot, this is what catches the invented ones first.' },
   ],
 
   export: [
     { run: () => { seedIfEmpty(); ui().setStage('export') },
-      say: 'The last screen, and the only one whose job is to say "not yet" as often as it says "here you go".' },
-    { say: 'Unbacked claims and unmatched references are stated above the download, not discovered after it. The file still builds. Refusing to hand over your own writing would be absurd.' },
-    { say: 'It leaves as one Word document: your prose and its works-cited page, formatted in the style the assignment asked for. Or as BibTeX and RIS, if the sources are going to Zotero.' },
-    { say: 'And the process record travels separately. A hash-chained log of every search, every source and every refusal, that an instructor can verify without reading a word of your draft.' },
+      say: 'Last screen. Its job is to say not yet as often as it says here you go.' },
+    { say: 'Unbacked claims and missing references are up top, before the download, not after it.' },
+    { at: 'export-menu', press: true,
+      say: 'The file still builds either way. Refusing to hand over your own writing would be absurd.' },
+    { say: 'One Word document: your prose and its works-cited page, in the style you picked. Or BibTeX and RIS if the sources are going to Zotero.' },
+    { say: 'And the process record goes separately — every search, every source, every refusal, hash-chained, checkable without reading a word of your draft.' },
   ],
 }
 

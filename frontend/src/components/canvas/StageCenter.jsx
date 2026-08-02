@@ -76,7 +76,8 @@ export default function StageCenter() {
 
   // One notice at a time, in order of consequence: losing the work outranks a
   // suggestion about what to do next.
-  const deviceAtRisk = useDeviceAtRisk()
+  const demoRunning = useUIStore(s => s.showWalkthrough)
+  const deviceAtRisk = useDeviceAtRisk() && !demoRunning
   const [noteQuiet, setNoteQuiet] = useState(false)
   const atRisk = deviceAtRisk && !noteQuiet
 

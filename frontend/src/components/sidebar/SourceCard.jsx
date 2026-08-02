@@ -114,7 +114,7 @@ export default function SourceCard({ paper, index = 0, query = '', shape = 'none
       })
       setQuotes(data.quotes || [])
     } catch {
-      setQuoteError("Couldn't read this PDF. Not every publisher allows it — open it and quote by hand.")
+      setQuoteError("Couldn't read this PDF. Not every publisher allows it, so open it and quote by hand.")
     } finally { setBusy('') }
   }
 
@@ -221,11 +221,15 @@ export default function SourceCard({ paper, index = 0, query = '', shape = 'none
 
       {/* Stamps: safety first, then role, then access */}
       {(paper.retracted || paper.preprint || (showRole && role) || paper.oa_pdf) && (
-        <div className="flex items-center flex-wrap gap-1.5">
+        // Tagged so a walkthrough can point at the retraction stamp wherever it
+        // lands. Targeting it by position does not work: the results are laid
+        // out in role stacks, so DOM order is not array order.
+        <div data-demo={paper.retracted ? 'retracted-card' : undefined}
+          className="flex items-center flex-wrap gap-1.5">
           {paper.retracted && (
             <Chip
               tone={{ chip: 'text-red-500 border-red-500/50 bg-red-500/10', dot: 'bg-red-500' }}
-              label="Retracted — do not cite"
+              label="Retracted · do not cite"
               title="This paper has been retracted. Citing it will cost you credibility."
             />
           )}

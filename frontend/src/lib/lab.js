@@ -51,8 +51,7 @@ const SOURCES = [
   {
     title: 'Minimum Wage Effects Across State Borders',
     authors: ['Arindrajit Dube', 'T. William Lester', 'Michael Reich'], year: 2010,
-    // No abstract on purpose: a card has to survive a record that arrived bare.
-    abstract: '',
+    abstract: 'Compares county pairs that sit across a state boundary, so the two halves share a labour market but not a minimum wage. Finds no detectable employment loss in restaurants or retail over sixteen years of policy changes.',
     doi: '10.1162/REST_a_00039', url: 'https://doi.org/10.1162/REST_a_00039',
     journal: 'Review of Economics and Statistics', citationCount: 2140,
     source: 'semantic_scholar', stance: 'conditional', shape: 'extent', relevanceScore: 9, tier: 'core',
@@ -73,6 +72,15 @@ const SOURCES = [
     journal: 'Journal of Econometrics', citationCount: 3300,
     source: 'arxiv', stance: 'framework', shape: 'extent', relevanceScore: 8, tier: 'core',
     preprint: true,
+  },
+  {
+    title: 'Wage Floors and Rapid Employment Collapse: Evidence from Four Metropolitan Labour Markets',
+    authors: ['R. T. Vance', 'M. Okonjo'], year: 2016,
+    abstract: 'Reports a sharp fall in low-wage employment following municipal minimum wage ordinances in four metropolitan areas. The analysis was later found to rely on a mis-specified panel, and the paper has been withdrawn by the journal.',
+    doi: '10.1016/j.labeco.2016.09.004', url: 'https://doi.org/10.1016/j.labeco.2016.09.004',
+    journal: 'Labour Economics', citationCount: 412,
+    source: 'crossref', stance: 'tension', shape: 'extent', relevanceScore: 7, tier: 'core',
+    retracted: true,
   },
   {
     title: 'State Minimum Wage Rates, 1968–2023',

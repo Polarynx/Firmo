@@ -119,6 +119,7 @@ export default function Spine() {
       {/* The counter is the way into the full record. Refusals are called out
           separately because they are the part an instructor cares about. */}
       <button
+        data-demo="open-record"
         onClick={() => setShowRecord(true)}
         title="Open the full process record"
         className="w-full py-2 border-t border-hair/[0.07] flex flex-col items-center gap-0.5

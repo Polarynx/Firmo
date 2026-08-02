@@ -115,7 +115,7 @@ export default function QuestionSurface() {
           className="flex flex-col gap-5"
         >
           <div className="pb-2">
-            <span className="eyebrow">Firmo — working paper</span>
+            <span className="eyebrow">Firmo · working paper</span>
             <motion.div variants={RULE} className="mt-3 h-px bg-hair/20 origin-left" />
           </div>
 
@@ -156,7 +156,7 @@ export default function QuestionSurface() {
             <span className="grid place-items-center w-5 h-5 rounded-full border
               border-hair/25 group-hover:border-brand-500 dark:group-hover:border-signal
               transition-colors text-[8px] leading-none pl-[2px]">▶</span>
-            Watch it work — 60 seconds
+            Watch it work, in 60 seconds
           </motion.button>
         </motion.div>
       )}

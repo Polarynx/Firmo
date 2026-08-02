@@ -63,7 +63,7 @@ export function snapshot() {
     Object.fromEntries(keys.map(k => [k, store.getState()[k]]))
   return {
     ui: pick(useUIStore, ['stage', 'sidebarView']),
-    ws: pick(useWorkspaceStore, ['doc', 'projects', 'activeProjectId', 'activeMode']),
+    ws: pick(useWorkspaceStore, ['doc', 'projects', 'activeProjectId', 'activeMode', 'citationStyle']),
     rs: pick(useResearchStore, ['query', 'searchedQuery', 'brief', 'results', 'questionShape',
       'inputType', 'isSearching', 'statusMsg', 'arms', 'gathered', 'kept', 'roleCounts', 'provisional']),
     an: pick(useAnnotationStore, ['claims', 'outline', 'citations', 'selectedClaimId', 'typos', 'meta']),
@@ -379,8 +379,10 @@ export const TOURS = {
       say: 'Or get the abstract in plain English.' },
     { at: 'save-nth-0', run: () => save(SOURCES[0]),
       say: 'Bookmark it and it goes on the shelf, where it stays for the rest of the paper.' },
+    { at: 'retracted-card',
+      say: 'And retracted work carries a red do not cite stamp. This one was withdrawn after the panel turned out to be wrong, and it is still in circulation.' },
     { at: 'save-nth-2', run: () => save(SOURCES[2]),
-      say: 'Retracted work gets a red stamp, so you cannot cite it by accident.' },
+      say: 'Keep the one that disagrees with you too. Answering it is what makes the essay worth reading.' },
   ],
 
   outline: [
@@ -399,8 +401,13 @@ export const TOURS = {
       say: 'This is just the page. No marks while you write. A paragraph covered in amber is a paragraph being argued with before it is finished.' },
     { say: 'Got something already? The Question tab opens a Word file straight into here, paragraphs intact. Google Docs exports to Word, so same door.' },
     { say: 'The works-cited page builds itself underneath as you save sources.' },
-    { at: 'export-menu',
-      say: 'APA, MLA, Chicago, Harvard, IEEE. Switch it and every entry re-sets.' },
+    { at: 'style-menu', press: true,
+      say: 'APA, MLA, Chicago, Harvard, IEEE.' },
+    { run: () => { ws().setCitationStyle('mla'); ui().setStage('draft') },
+      say: 'Switch it and every entry re-sets itself, in the bibliography and in every citation already in your text.',
+      hold: 1400 },
+    { run: () => ws().setCitationStyle('apa'),
+      say: 'Nothing to reformat by hand.' },
     { at: 'check-draft',
       say: 'And when you are ready, Firmo reads it. What it will not do is write it.' },
   ],
@@ -435,7 +442,12 @@ export const TOURS = {
     { at: 'export-menu', press: true,
       say: 'The file still builds either way. Refusing to hand over your own writing would be absurd.' },
     { say: 'One Word document: your prose and its works-cited page, in the style you picked. Or BibTeX and RIS if the sources are going to Zotero.' },
-    { say: 'And the process record goes separately. Every search, every source, every refusal, hash-chained, checkable without reading a word of your draft.' },
+    { at: 'open-record', press: true,
+      say: 'And the process record goes separately.' },
+    { say: 'Every search, every source saved, every claim backed, and every time Firmo refused to write. Hash-chained, so an instructor can check the order has not been edited.',
+      hold: 1600 },
+    { run: () => ui().setShowRecord(false),
+      say: 'Share it as a link and they can verify how the paper was made without reading a word of it.' },
   ],
 }
 

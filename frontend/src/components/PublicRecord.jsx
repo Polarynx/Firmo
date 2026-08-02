@@ -101,7 +101,7 @@ export default function PublicRecord({ token }) {
     <main className="min-h-full overflow-y-auto bg-app text-t1">
       <div className="mx-auto w-full max-w-2xl px-6 py-14 flex flex-col gap-8">
         <header className="flex flex-col gap-3">
-          <span className="eyebrow">Firmo — process record</span>
+          <span className="eyebrow">Firmo · process record</span>
           <div className="masthead-rule pb-4">
             <h1 className="font-display font-semibold text-[2.4rem] leading-[1.05] text-t1">
               {data.title || 'Untitled paper'}

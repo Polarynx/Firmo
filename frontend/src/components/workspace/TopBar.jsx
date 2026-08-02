@@ -274,6 +274,7 @@ export default function TopBar() {
         {/* Active citation style: everything Firmo formats answers to this. */}
         <div ref={styleRef} className="relative hidden sm:block">
           <button
+            data-demo="style-menu"
             onClick={() => setStyleMenu(m => !m)}
             title="Citation style"
             className="pill"

@@ -22,7 +22,8 @@
   "Not sure about one? Ask why it matters. It answers against your question, not in general.": "3699b26b3b22de3e.mp3",
   "Or get the abstract in plain English.": "8037267ca5ea9be4.mp3",
   "Bookmark it and it goes on the shelf, where it stays for the rest of the paper.": "c50579e0fc2c2ff3.mp3",
-  "Retracted work gets a red stamp, so you cannot cite it by accident.": "619a34d87db21105.mp3",
+  "And retracted work carries a red do not cite stamp. This one was withdrawn after the panel turned out to be wrong, and it is still in circulation.": "f278f878badf1714.mp3",
+  "Keep the one that disagrees with you too. Answering it is what makes the essay worth reading.": "31c795cb4797f5e4.mp3",
   "This plans from the sources you kept, not from your topic. That is the difference between a plan and a template.": "04b164bdda938206.mp3",
   "Add your thesis if you have one, and it argues that.": "f1ada202a5f4d81f.mp3",
   "Every point names the papers behind it, coloured by what they do. A point backed only by orange is a point argued from the papers that disagree with it.": "7fd11cbac3fa2e68.mp3",
@@ -31,7 +32,9 @@
   "This is just the page. No marks while you write. A paragraph covered in amber is a paragraph being argued with before it is finished.": "2ac6e2c39027fba2.mp3",
   "Got something already? The Question tab opens a Word file straight into here, paragraphs intact. Google Docs exports to Word, so same door.": "8158b54fa1405e7b.mp3",
   "The works-cited page builds itself underneath as you save sources.": "5020d6374fceaf00.mp3",
-  "APA, MLA, Chicago, Harvard, IEEE. Switch it and every entry re-sets.": "50fe92b6baf6fb29.mp3",
+  "APA, MLA, Chicago, Harvard, IEEE.": "e9eede767e331400.mp3",
+  "Switch it and every entry re-sets itself, in the bibliography and in every citation already in your text.": "72aa6e4db5d16804.mp3",
+  "Nothing to reformat by hand.": "186f2209f9440794.mp3",
   "And when you are ready, Firmo reads it. What it will not do is write it.": "518569c5024cfaf0.mp3",
   "Same page, read instead of written. Every sentence a marker would want a source for is marked where you wrote it.": "d854c10c68cdbbdd.mp3",
   "Amber wants a citation. Red means the evidence you saved actually disagrees with you.": "50d96ae7bad07f8b.mp3",
@@ -48,6 +51,8 @@
   "Unbacked claims and missing references are up top, before the download, not after it.": "3d8ff427f11a9c61.mp3",
   "The file still builds either way. Refusing to hand over your own writing would be absurd.": "ff55b560364aa161.mp3",
   "One Word document: your prose and its works-cited page, in the style you picked. Or BibTeX and RIS if the sources are going to Zotero.": "65cadd3679f8be94.mp3",
-  "And the process record goes separately. Every search, every source, every refusal, hash-chained, checkable without reading a word of your draft.": "bfe833a4c16f195b.mp3"
+  "And the process record goes separately.": "97d5cbc9f5ee4fb5.mp3",
+  "Every search, every source saved, every claim backed, and every time Firmo refused to write. Hash-chained, so an instructor can check the order has not been edited.": "ebb805238930ade0.mp3",
+  "Share it as a link and they can verify how the paper was made without reading a word of it.": "6cb2709596671c5b.mp3"
  }
 }

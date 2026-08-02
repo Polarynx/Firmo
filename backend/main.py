@@ -845,49 +845,24 @@ async def research(req: ResearchRequest, request: Request):
             # from the best few and let the neighbourhood name its own.
             yield _ev("status", stage="expand",
                       message="Following citations from the best matches…")
-            # Seeded from two directions, not one.
+            # Seeded from the closest papers, and NOT from the most-cited.
             #
-            # The walk used to start from `preview[:12]`, which is the twelve
-            # papers closest to the topic by embedding. That is a reasonable set
-            # and a bad seed: a landmark is very often phrased unlike the query
-            # — that is part of what made it a landmark, it named the thing —
-            # so it does not make the top twelve, so nothing walks out to it,
-            # and the one mechanism built to find canonical work is seeded from
-            # the papers least likely to point at it.
+            # Tried and measured: adding the six most-cited papers of the pool
+            # as extra seeds made retrieval strictly worse — 5 cases lost, 0
+            # gained, recall_total 0.219 -> 0.109 on the 32-case benchmark. The
+            # mechanism explains it. This walk ranks references by CO-CITATION
+            # across the seeds, so the landmark is whatever several independent
+            # on-topic papers all cite. Seeding with papers chosen for citation
+            # count alone admits work that is famous but unrelated — a methods
+            # paper, a blockbuster from a neighbouring field — whose references
+            # share nothing with the rest, and the shared-reference signal that
+            # does the actual work gets diluted.
             #
-            # Measured on the 32-case benchmark: searches were returning forty
-            # to sixty genuinely on-topic papers and none of the field's
-            # landmarks. `crispr-off-target` returned 40 papers and neither of
-            # the two canonical ones; `ml-fairness-metrics` returned 55 and
-            # missed all three.
-            #
-            # So half the seeds are still the closest papers, and half are the
-            # most-cited of the on-topic pool. Citation count is a bad way to
-            # rank results and a good way to pick a place to start walking:
-            # heavily-cited work sits near other heavily-cited work in the
-            # graph, which is exactly the neighbourhood being searched for.
-            close = preview[:8]
-            known_seed = {paper_id(p) for p in close}
-            cited = sorted(
-                (p for p in papers if paper_id(p) not in known_seed),
-                key=lambda p: (p.get("citationCount") or 0),
-                reverse=True,
-            )[:6]
-            # Interleaved, not concatenated. `expand_by_citations` tries the
-            # first `max_seeds * 2` and keeps the first `max_seeds` that
-            # resolve, so appending the cited group after eight close ones means
-            # it is usually never reached and the change does nothing.
-            seeds = []
-            for i in range(max(len(close), len(cited))):
-                if i < len(close):
-                    seeds.append(close[i])
-                if i < len(cited):
-                    seeds.append(cited[i])
-
+            # Left as a comment rather than deleted because it is the obvious
+            # idea, and the next person to have it should get the measurement
+            # rather than the ten minutes.
             try:
-                # Eight rather than six, so the co-citation signal is computed
-                # across both kinds of seed rather than mostly within one.
-                extra = await expand_by_citations(seeds, max_seeds=8, year_from=req.year_from)
+                extra = await expand_by_citations(preview[:12], year_from=req.year_from)
             except Exception:
                 traceback.print_exc()
                 extra = []

@@ -167,6 +167,22 @@ export default function Demo({ onClose }) {
         setChapter(chapterFor(i))
         if (step.say) setCaption(step.say)
 
+        // The voice starts NOW, next to the visuals, not after them.
+        //
+        // This was the cause of the pauses. Speaking used to be awaited at the
+        // end of the step, so every beat opened with silence for the length of
+        // the scroll, the cursor travel, the press and whatever the step's own
+        // `run` did — which in the search beat is 2.4 seconds of staged status
+        // updates. Half the demo was dead air with a cursor moving through it.
+        //
+        // Narration is the spine and the visuals hang off it: both start
+        // together, and the step ends when the *longer* of the two is done. The
+        // line is being read while the pointer travels to the thing it is about,
+        // which is what a person demonstrating something actually does.
+        const voice = step.say
+          ? say(step.say, { muted: mutedRef.current })
+          : Promise.resolve()
+
         if (step.at) {
           const el = await resolveTarget(step.at)
           if (!alive()) return
@@ -186,7 +202,14 @@ export default function Demo({ onClose }) {
             setPressing(false)
             // Some steps press the real control rather than calling the setter
             // behind it, so the demo exercises the product's own click handler.
-            if (step.press) el.click()
+            if (step.press) {
+              el.click()
+              // Otherwise the button keeps the focus ring after the pointer has
+              // moved on, and the demo leaves a trail of outlined controls
+              // behind it — every one of them looking like something the viewer
+              // is meant to still be looking at.
+              try { el.blur() } catch {}
+            }
           }
         } else {
           // A step with no target is Firmo talking, not the student acting.
@@ -217,18 +240,13 @@ export default function Demo({ onClose }) {
           set(text)
         }
 
-        // Paced against the voice, not beside it. The narration and the hold
-        // used to be independent clocks, which meant a long line was still
-        // being read while the cursor had already moved on to the next control
-        // — the one thing that makes a narrated demo feel automated. Speaking
-        // is awaited, and the hold then tops up whatever time is left, so a
-        // short line still gets its beat and a long one is never cut off.
-        const spokeFor = step.say ? Date.now() : 0
-        if (step.say) await say(step.say, { muted: mutedRef.current })
+        // Wait for the voice to finish saying this line before moving on — but
+        // only for the voice, since the visuals have been running underneath it
+        // the whole time. `hold` is now a short tail for the eye to settle, not
+        // the pacing mechanism it used to be.
+        await voice
         if (!alive()) return
-        const already = spokeFor ? Date.now() - spokeFor : 0
-        const remaining = (step.hold || 0) - already
-        if (remaining > 0) await sleep(remaining)
+        if (step.hold) await sleep(step.hold)
       }
 
       if (!alive()) return

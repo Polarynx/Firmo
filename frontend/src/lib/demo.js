@@ -120,11 +120,11 @@ export const SCRIPT = [
     say: 'Firmo starts with a question, not a keyword.',
     at: 'question-field',
     type: { text: QUESTION, set: v => rs().setQuery(v) },
-    hold: 500,
+    hold: 250,
   },
   {
     say: 'It reads the shape of the question before it searches. This one wants a size, not a yes or no — so Firmo will go looking for effect estimates and null results.',
-    hold: 2176,
+    hold: 761,
   },
   {
     // The alternate entrance, shown rather than listed. Most students arriving
@@ -132,7 +132,7 @@ export const SCRIPT = [
     // ever shows the blank-page path quietly tells them this is not for them.
     say: 'Already started writing? A Word file works too — and Google Docs exports to Word, so that is the same door.',
     at: 'import-docx',
-    hold: 2176,
+    hold: 761,
   },
   {
     say: 'One search, sixteen databases.',
@@ -160,11 +160,11 @@ export const SCRIPT = [
         roleCounts: SOURCES.reduce((a, p) => ({ ...a, [p.stance]: (a[p.stance] || 0) + 1 }), {}),
       })
     },
-    hold: 753,
+    hold: 263,
   },
   {
     say: 'Every paper is filed by what it will do in your argument. The estimate, the one that cuts against it, the method behind both.',
-    hold: 2678,
+    hold: 937,
   },
   {
     // "Why it matters" is the single most useful button in the product and the
@@ -173,15 +173,15 @@ export const SCRIPT = [
     say: 'You do not have to read forty abstracts to find out. Ask any paper why it matters, and Firmo answers against your question, not in general.',
     at: 'why-matters',
     press: true,
-    hold: 3515,
+    hold: 1200,
   },
-  { say: 'Keep the ones you will actually use. They collect on the shelf beside you.',
+  { say: 'Keep the ones you will actually use.',
     at: 'save-nth-0', run: () => save(SOURCES[0]), hold: 900 },
   { at: 'save-nth-1', run: () => save(SOURCES[1]), hold: 550 },
   { at: 'save-nth-2', run: () => save(SOURCES[2]), hold: 550 },
   { at: 'save-nth-3', run: () => save(SOURCES[3]), hold: 900 },
   {
-    say: 'Four sources is enough for Firmo to plan the argument.',
+    say: 'Four is enough for Firmo to plan the argument around them.',
     at: 'tab-outline',
     run: async () => {
       ui().setStage('outline')
@@ -189,7 +189,7 @@ export const SCRIPT = [
       await sleep(1200)
       useAnnotationStore.setState({ outlineLoading: false, outline: OUTLINE })
     },
-    hold: 1674,
+    hold: 585,
   },
   {
     // The chat is the least discoverable thing in the workspace and the most
@@ -198,18 +198,18 @@ export const SCRIPT = [
     say: 'Or just ask them. Grounded in the papers you kept, not the open internet — and it will explain and plan, but never write your paragraphs.',
     at: 'ask-box',
     type: { text: 'where do these papers actually disagree?', set: v => ui().setOmniValue(v), speed: 26 },
-    hold: 1674,
+    hold: 585,
   },
   {
     say: 'The page is yours. Firmo does not write it.',
     at: 'tab-draft',
     run: () => ui().setStage('draft'),
-    hold: 500,
+    hold: 250,
   },
   {
     at: 'draft-field',
     type: { text: DOC, set: v => ws().setDoc(v), speed: 6 },
-    hold: 500,
+    hold: 250,
   },
   {
     say: 'Now it reads what you wrote and marks every sentence a reader will expect a source for.',
@@ -220,18 +220,18 @@ export const SCRIPT = [
       await sleep(1400)
       useAnnotationStore.setState({ draftLoading: false, draftStatus: '', claims: CLAIMS })
     },
-    hold: 1339,
+    hold: 468,
   },
   {
-    say: 'Red means the evidence you saved disagrees with what you wrote. Firmo shows you what it actually says.',
+    say: 'Red means the evidence you saved disagrees with what you wrote. Amber is softer: true enough, but a marker will stop at it.',
     at: 'claim-open',
     run: () => an().selectClaim(CLAIMS[0].id),
-    hold: 2511,
+    hold: 878,
   },
   {
     say: 'Amber is the softer one: true enough, but a marker will stop at it.',
     run: () => an().selectClaim(CLAIMS[2].id),
-    hold: 1612,
+    hold: 564,
   },
   {
     // Pressed for real. This is the one step in the script that does not call a
@@ -242,12 +242,11 @@ export const SCRIPT = [
     say: 'One press: the citation goes into your sentence, the source joins the paper, and the works-cited page updates itself.',
     at: 'cite',
     press: true,
-    hold: 2511,
+    hold: 878,
   },
   {
-    say: 'Green. That sentence is accounted for.',
     run: () => an().selectClaim(null),
-    hold: 1506,
+    hold: 527,
   },
   {
     say: 'And the last pass before hand-in: every entry in your reference list, against the publisher record.',
@@ -263,17 +262,17 @@ export const SCRIPT = [
       await sleep(700)
       useAnnotationStore.setState({ citations: CITATIONS })
     },
-    hold: 2008,
+    hold: 702,
   },
   {
     say: 'That last one does not exist. This is the pass that catches invented citations before a professor does.',
-    hold: 2511,
+    hold: 878,
   },
   {
     say: 'Then the whole thing leaves as one Word file — your prose and its works-cited page, in the style the assignment asked for.',
     at: 'tab-export',
     run: () => ui().setStage('export'),
-    hold: 2176,
+    hold: 761,
   },
 ]
 

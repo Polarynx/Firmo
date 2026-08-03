@@ -103,7 +103,7 @@ export const useAnnotationStore = create((set, get) => ({
               break
             }
             case 'error':
-              set({ draftError: ev.message || 'Something went wrong.' })
+              set({ draftError: ev.message || 'Firmo got partway through and stopped. Try the check again.' })
               break
             default:
               break
@@ -112,7 +112,7 @@ export const useAnnotationStore = create((set, get) => ({
       })
     } catch (e) {
       if (e.name !== 'AbortError') {
-        set({ draftError: e.message || 'Something went wrong. Is the backend running?' })
+        set({ draftError: e.message || 'Firmo could not read your draft just now. Your writing is untouched, so try again in a moment.' })
       }
     } finally {
       set({ draftLoading: false })
@@ -150,7 +150,7 @@ export const useAnnotationStore = create((set, get) => ({
       const data = await postJSON('/api/argument-review', { text })
       set({ argument: data })
     } catch {
-      set({ argError: "Couldn't review the argument just now." })
+      set({ argError: 'Firmo could not review the argument just now. The claim marks above are unaffected.' })
     } finally {
       set({ argLoading: false })
     }
@@ -196,7 +196,7 @@ export const useAnnotationStore = create((set, get) => ({
               break
             }
             case 'error':
-              set({ citeError: ev.message || 'Something went wrong.' })
+              set({ citeError: ev.message || 'Firmo got partway through your reference list and stopped. Try again.' })
               break
             default:
               break
@@ -205,7 +205,7 @@ export const useAnnotationStore = create((set, get) => ({
       })
     } catch (e) {
       if (e.name !== 'AbortError') {
-        set({ citeError: e.message || 'Something went wrong. Is the backend running?' })
+        set({ citeError: e.message || 'Firmo could not reach the publisher records just now. Try again in a moment.' })
       }
     } finally {
       set({ citeLoading: false })
@@ -230,7 +230,7 @@ export const useAnnotationStore = create((set, get) => ({
       set({ outline: data.sections || [] })
       saveSnapshot()
     } catch {
-      set({ outlineError: "Couldn't build an outline from these sources just now." })
+      set({ outlineError: 'Firmo could not plan the outline just now. Your sources are all still saved, so try again in a moment.' })
     } finally {
       set({ outlineLoading: false })
     }

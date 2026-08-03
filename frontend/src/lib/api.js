@@ -31,6 +31,49 @@ function headers() {
   return h
 }
 
+
+// ── What went wrong, in a sentence a student can act on ─────────────────────
+//
+// "Server error: 500" and "Failed to fetch" are true and useless. They tell
+// somebody who has just lost their place that a number happened. Worse, "Is the
+// backend running?" — which shipped — is a question only a developer can answer,
+// asked of a student.
+//
+// Every failure here is one of about six things, and each has a next step:
+// wait, check your connection, shorten the text, sign in again, or tell us.
+export function humanError(status, detail) {
+  // A detail from our own API is already written for a person; the endpoints
+  // that produce them say things like "That file is larger than 8 MB."
+  if (detail && !/^[A-Z][a-z]+Error:/.test(detail) && detail.length < 240) return detail
+
+  if (status === 0) {
+    return 'Firmo could not be reached. Check your connection and try again in a moment.'
+  }
+  if (status === 401 || status === 403) {
+    return 'Your session has expired. Sign in again and your work will still be here.'
+  }
+  if (status === 413) {
+    return 'That is too much text for one go. Try it in a couple of smaller pieces.'
+  }
+  if (status === 429) {
+    return 'That is a lot of requests in a short time. Give it a minute and try again.'
+  }
+  if (status >= 500) {
+    return 'Something broke on our side, not yours. Try again in a moment; nothing was lost.'
+  }
+  return 'That did not work. Try again in a moment.'
+}
+
+/** Wrap fetch so a dead connection reads like one, not like a TypeError. */
+export async function safeFetch(url, init) {
+  try {
+    return await fetch(url, init)
+  } catch {
+    // No status, no response, nothing to inspect: the request never left.
+    throw new Error(humanError(0))
+  }
+}
+
 export async function postJSON(path, body, signal) {
   const res = await fetch(`${API}${path}`, {
     method: 'POST',
@@ -44,7 +87,7 @@ export async function postJSON(path, body, signal) {
     err.rateLimited = true
     throw err
   }
-  if (!res.ok) throw new Error(`Server error: ${res.status}`)
+  if (!res.ok) throw new Error(humanError(res.status))
   return res.json()
 }
 
@@ -65,7 +108,7 @@ export async function streamNDJSON(path, body, { signal, onEvent }) {
     err.rateLimited = true
     throw err
   }
-  if (!res.ok || !res.body) throw new Error(`Server error: ${res.status}`)
+  if (!res.ok || !res.body) throw new Error(humanError(res.status))
 
   const reader = res.body.getReader()
   const decoder = new TextDecoder()
@@ -100,7 +143,7 @@ export async function downloadFile(path, body, fallbackName) {
   })
   if (!res.ok) {
     const data = await res.json().catch(() => ({}))
-    throw new Error(data.detail || `Server error: ${res.status}`)
+    throw new Error(humanError(res.status, data.detail))
   }
 
   // The server names the file; the disposition header is the only place that

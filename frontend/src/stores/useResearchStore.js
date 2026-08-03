@@ -236,7 +236,7 @@ export const useResearchStore = create((set, get) => ({
               set({ error: 'invalid_query' })
               break
             case 'error':
-              set({ error: ev.message || 'Something went wrong.' })
+              set({ error: ev.message || 'The search stopped partway through. Try it again.' })
               break
             default:
               break
@@ -249,7 +249,7 @@ export const useResearchStore = create((set, get) => ({
       }
     } catch (e) {
       if (e.name !== 'AbortError' && myRun === runId) {
-        set({ error: e.message || 'Something went wrong. Is the backend running?' })
+        set({ error: e.message || 'The search could not finish. Check your connection and try again.' })
       }
     } finally {
       // Only the newest run is allowed to declare the search over.

@@ -45,7 +45,7 @@ async function post(path, body) {
     body: JSON.stringify(body),
   })
   const data = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error(data.detail || 'Something went wrong. Try again.')
+  if (!res.ok) throw new Error(data.detail || 'That did not work. Check the details and try again.')
   return data
 }
 

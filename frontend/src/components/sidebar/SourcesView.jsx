@@ -10,6 +10,7 @@ import { EmptyNote, StatusLine } from '../ui/primitives'
 import QueryLedger from './QueryLedger'
 import SourceCard from './SourceCard'
 import AddSource from './AddSource'
+import SourceFilters from './SourceFilters'
 
 // ── View 1: the sources workspace ───────────────────────────────────────────
 //
@@ -186,6 +187,8 @@ export default function SourcesView() {
             )}
           </div>
 
+          <SourceFilters sourceCounts={sourceCounts} />
+
           <div className="flex flex-wrap gap-1.5">
             {groups.map(g => {
               const isActive = active === g.key
@@ -223,105 +226,6 @@ export default function SourcesView() {
         </div>
       )}
 
-      {/* What this literature is actually about.
-          The role stacks say what each paper does for the argument, and those
-          five buckets are the same for every question ever asked — which is
-          what makes them learnable and what makes them insufficient. These are
-          the subject-matter groupings present in THIS result set: named from
-          the papers that came back rather than guessed from the question, so a
-          chip can never be pressed to reveal nothing. Pressing one narrows the
-          subject and leaves the role stacks organising what is left. */}
-      {!provisional && facets.length > 0 && (
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="eyebrow shrink-0">What they cover</span>
-          {facets.map(f => {
-            const on = activeFacet === f.label
-            return (
-              <button
-                key={f.label}
-                data-demo="facet"
-                onClick={() => setActiveFacet(f.label)}
-                title={`${f.ids.length} papers`}
-                className={`inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1
-                  rounded-full border transition-colors ${on
-                    ? 'border-brand-500/60 text-brand-600 dark:text-signal bg-brand-500/10'
-                    : 'border-line text-t2 hover:text-t1 hover:border-edge'}`}
-              >
-                {f.label}
-                <span className="font-mono text-[9px] opacity-60">{f.ids.length}</span>
-              </button>
-            )
-          })}
-          {activeFacet && (
-            <button onClick={() => setActiveFacet(activeFacet)}
-              className="text-[11px] text-t3 hover:text-t1 transition-colors">
-              clear
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Published since. One of the two filters anybody actually reaches
-          for, and it went missing in a refactor. It re-runs the search rather
-          than hiding rows, because the year is a parameter the databases
-          themselves accept: filtering client-side would quietly shrink a
-          sixty-paper result to nine and call that a search. */}
-      {!provisional && searchedQuery && (
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="eyebrow shrink-0">Published</span>
-          {YEAR_OPTIONS.map(opt => {
-            const on = (store.yearFrom ?? null) === opt.value
-            return (
-              <button
-                key={opt.label}
-                onClick={() => {
-                  store.setYearFrom(opt.value)
-                  executeSearch(searchedQuery)
-                }}
-                className={`font-mono text-[9px] uppercase tracking-[0.12em] px-2 py-0.5
-                  rounded border transition-colors ${on
-                    ? 'border-brand-500/60 text-brand-600 dark:text-signal bg-brand-500/10'
-                    : 'border-line text-t3 hover:text-t2 hover:border-edge'}`}
-              >
-                {opt.label}
-              </button>
-            )
-          })}
-        </div>
-      )}
-
-      {/* Database filter */}
-      {Object.keys(sourceCounts).length > 1 && !provisional && (
-        <details className="group">
-          <summary className="eyebrow cursor-pointer list-none select-none hover:text-t2 transition-colors">
-            Databases ▸
-          </summary>
-          <div className="flex flex-wrap gap-1.5 pt-2">
-            {Object.entries(sourceCounts).sort((a, b) => b[1] - a[1]).map(([src, count]) => {
-              const hidden = hiddenSources.has(src)
-              return (
-                <button
-                  key={src}
-                  onClick={() => store.toggleSourceFilter(src)}
-                  className={`text-[10px] font-medium px-2 py-0.5 rounded border transition-all ${
-                    hidden
-                      ? 'border-line text-t3 line-through'
-                      : 'border-line text-t2 hover:border-brand-500/60 hover:text-t1'
-                  }`}
-                >
-                  {SOURCE_LABELS[src] || src} <span className="opacity-60">{count}</span>
-                </button>
-              )
-            })}
-            {hiddenSources.size > 0 && (
-              <button onClick={store.clearSourceFilters}
-                className="text-[10px] font-medium text-brand-500 dark:text-signal">
-                Show all
-              </button>
-            )}
-          </div>
-        </details>
-      )}
 
       {/* What Firmo is actually doing, rather than three grey rectangles
           pretending to be cards. It stays up through ranking and not only until

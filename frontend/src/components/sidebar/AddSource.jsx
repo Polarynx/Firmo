@@ -31,6 +31,12 @@ export default function AddSource({ query = '', shape = 'none' }) {
   const savedIds = useSavedIds()
   const sources = useWorkspaceStore(s => s.activeProject()?.sources || [])
 
+  // Folded by default. Adding a source you already have is a real thing people
+  // do and a rare one next to reading the results, and an input box plus two
+  // lines of help sitting permanently above sixty papers pushed the papers off
+  // the screen. It opens on a press, and stays open once there is something in
+  // it to show.
+  const [open, setOpen] = useState(false)
   const [value, setValue] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -91,12 +97,21 @@ export default function AddSource({ query = '', shape = 'none' }) {
       }}
       className="relative flex flex-col gap-3"
     >
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="eyebrow">Added by you</span>
-        {mine.length > 0 && <span className="record">{mine.length}</span>}
-      </div>
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="flex items-baseline justify-between gap-2 text-left group"
+      >
+        <span className="eyebrow group-hover:!text-t2 transition-colors">
+          {mine.length ? 'Added by you' : 'Add a source you already have'}
+        </span>
+        <span className="flex items-center gap-2 shrink-0">
+          {mine.length > 0 && <span className="record">{mine.length}</span>}
+          <span className={`text-t3 text-[9px] transition-transform ${open ? 'rotate-90' : ''}`}>▸</span>
+        </span>
+      </button>
 
-      <div className="flex items-center gap-2">
+      {open && (
+        <div className="flex items-center gap-2">
         <input
           data-demo="add-source"
           value={value}
@@ -110,8 +125,10 @@ export default function AddSource({ query = '', shape = 'none' }) {
         <button onClick={lookup} disabled={busy || !value.trim()} className="btn-primary text-xs py-1.5 shrink-0">
           {busy ? 'Looking…' : 'Add'}
         </button>
-      </div>
+        </div>
+      )}
 
+      {open && (
       <p className="text-[11px] text-t3 leading-relaxed">
         Firmo looks it up properly, so it can be cited and checked like anything else.
         Got the file instead?{' '}
@@ -123,6 +140,8 @@ export default function AddSource({ query = '', shape = 'none' }) {
         </button>
         {' '}or drop it here.
       </p>
+      )}
+
       <input
         ref={fileRef}
         type="file"

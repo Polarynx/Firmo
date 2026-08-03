@@ -37,7 +37,7 @@ function Surface({ stage }) {
 
     case 'sources':
       return (
-        <SurfaceShell wide eyebrow="Sources" title="What came back">
+        <SurfaceShell wide>
           <SourcesView />
         </SurfaceShell>
       )

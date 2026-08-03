@@ -128,146 +128,129 @@ export const readingTime = text =>
 
 export const SCRIPT = [
   {
-    say: 'This is Firmo. You start with a question, not keywords, and it reads the shape of that question before it searches. This one wants a size, not a yes or no.',
+    say: 'This is Firmo. You start with a question, not keywords.',
     at: 'question-field',
     type: { text: QUESTION, set: v => rs().setQuery(v) },
-    hold: 250,
+    hold: 300,
   },
   {
-    // The alternate entrance, shown rather than listed. Most students arriving
-    // at Firmo already have three paragraphs somewhere, and a demo that only
-    // ever shows the blank-page path quietly tells them this is not for them.
-    say: 'Already writing? Drop in a Word file instead.',
+    say: 'Already have a draft going, or a session from another computer? You can drop that in instead.',
     at: 'import-docx',
-    hold: 761,
+    hold: 500,
   },
   {
-    say: 'One search, sixteen databases.',
+    say: 'One search. Sixteen databases at once.',
     at: 'question-search',
     run: async () => {
-      useResearchStore.setState({ isSearching: true, statusMsg: 'Reading your topic…', gathered: 0 })
-      ui().setStage('sources')
+      useResearchStore.setState({ isSearching: true, statusMsg: 'Reading your question…', gathered: 0 })
       await sleep(700)
       useResearchStore.setState({ statusMsg: 'Searching sixteen databases…', gathered: 214 })
       await sleep(800)
-      useResearchStore.setState({
-        statusMsg: 'Reading abstracts…', gathered: 428,
-        arms: [
-          { query: 'minimum wage employment effects', found: 96 },
-          { query: 'wage floor low skilled labour', found: 71 },
-          { query: 'minimum wage meta-analysis', found: 54 },
-          { query: 'monopsony wage setting', found: 43 },
-        ],
-      })
-      await sleep(900)
+      useResearchStore.setState({ statusMsg: 'Reading abstracts…', gathered: 428 })
+      await sleep(800)
       useResearchStore.setState({
         isSearching: false, statusMsg: '', brief: BRIEF, results: SOURCES,
         questionShape: 'extent', inputType: 'question', searchedQuery: QUESTION,
-        kept: SOURCES.length,
+        kept: SOURCES.length, facets: FACETS,
         roleCounts: SOURCES.reduce((a, p) => ({ ...a, [p.stance]: (a[p.stance] || 0) + 1 }), {}),
       })
     },
-    hold: 263,
+    hold: 700,
   },
   {
-    say: 'Everything comes back filed by what it does for you. The estimate, the one that cuts against it, the method behind both.',
-    hold: 937,
+    // Firmo no longer moves you when a search finishes, so the demo has to show
+    // the thing that replaced it. This beat exists because a viewer who has just
+    // watched a search will otherwise wonder where the papers went.
+    say: 'It does not drag you anywhere. When you are ready, you go.',
+    at: 'next-sources',
+    press: true,
+    hold: 700,
   },
   {
-    // "Why it matters" is the single most useful button in the product and the
-    // one nobody presses, because its label promises a summary and it actually
-    // answers a harder question: what is this paper for, in YOUR argument.
-    say: 'You do not have to read forty abstracts. Ask any paper why it matters.',
+    say: 'Everything that came back, sorted by what it does for your argument. What backs you up. What pushes back. What says it depends.',
+    hold: 1400,
+  },
+  {
+    say: 'And these are what the papers are actually about. Firmo reads the results and names the groups it finds, so you can go straight to the part you need.',
+    at: 'facet',
+    press: true,
+    hold: 1600,
+  },
+  {
+    say: 'Not sure about one? Ask why it matters. You get an answer about your question, not a summary.',
     at: 'why-matters',
     press: true,
-    hold: 1200,
+    hold: 2400,
   },
-  { 
-    at: 'save-nth-0', run: () => save(SOURCES[0]), hold: 900 },
-  { at: 'save-nth-1', run: () => save(SOURCES[1]), hold: 550 },
-  { at: 'save-nth-2', run: () => save(SOURCES[2]), hold: 550 },
-  { at: 'save-nth-3', run: () => save(SOURCES[3]), hold: 900 },
   {
-    say: 'Keep four and it plans the argument around them.',
+    say: 'Keep the ones you want.',
+    at: 'save-nth-0',
+    run: () => { save(SOURCES[0]); save(SOURCES[1]); save(SOURCES[3]); save(SOURCES[4]) },
+    hold: 900,
+  },
+  {
+    say: 'Four is enough for Firmo to plan the argument around them.',
     at: 'tab-outline',
     run: async () => {
       ui().setStage('outline')
       useAnnotationStore.setState({ outlineLoading: true })
-      await sleep(1200)
+      await sleep(1000)
       useAnnotationStore.setState({ outlineLoading: false, outline: OUTLINE })
     },
-    hold: 585,
+    hold: 1600,
   },
   {
-    // The chat is the least discoverable thing in the workspace and the most
-    // asked-for capability in the category, so it gets a beat of its own — and
-    // the refusal gets said out loud, because it is the whole positioning.
-    say: 'Or just ask them. Grounded in your papers, not the open internet.',
+    say: 'Or just ask. It knows your sources, your outline and whatever you have written so far.',
     at: 'ask-box',
-    type: { text: 'where do these papers actually disagree?', set: v => ui().setOmniValue(v), speed: 26 },
-    hold: 585,
+    type: { text: 'where do these papers disagree?', set: v => ui().setOmniValue(v), speed: 26 },
+    hold: 1600,
   },
   {
-    say: 'The page is yours. Firmo will not write it. But it will read it, and mark every sentence that needs backing.',
+    say: 'Then write. Firmo will not do that part for you.',
     at: 'tab-draft',
-    run: () => ui().setStage('draft'),
-    hold: 250,
+    run: () => { ui().setOmniValue(''); ui().setStage('draft') },
+    hold: 500,
   },
   {
     at: 'draft-field',
     type: { text: DOC, set: v => ws().setDoc(v), speed: 6 },
-    hold: 250,
+    hold: 400,
   },
   {
-    
+    say: 'When you want to know what still needs a source, ask it to check.',
     at: 'check-draft',
     run: async () => {
       useAnnotationStore.setState({ draftLoading: true, draftStatus: 'Reading your draft…' })
-      ui().setStage('draft')
-      await sleep(1400)
+      await sleep(1300)
       useAnnotationStore.setState({ draftLoading: false, draftStatus: '', claims: CLAIMS })
     },
-    hold: 468,
+    hold: 1500,
   },
   {
-    say: 'Red means your own evidence disagrees with you. Amber just wants a source.',
+    say: 'Amber needs a source. Red means the papers you saved actually disagree with what you wrote.',
     at: 'claim-open',
-    run: () => an().selectClaim(CLAIMS[0].id),
-    hold: 878,
-  },
-  {
-    
     run: () => an().selectClaim(CLAIMS[2].id),
-    hold: 564,
+    hold: 2000,
   },
   {
-    // Nothing said, nothing moved. Every beat so far has had a line over it, so
-    // two seconds of quiet is the loudest thing available — and it buys the
-    // viewer a moment to notice the amber sentence before it changes.
-    hold: 1600,
+    // The quiet beat. Everything else has a line over it, so two seconds of
+    // nothing is the loudest thing available and it lands the press that follows.
+    hold: 1500,
   },
   {
-    // Pressed for real. This is the one step in the script that does not call a
-    // store setter at all — the cursor lands on the actual button and clicks it,
-    // and the citation, the saved source, the green highlight and the new line
-    // in the works-cited page all follow from the product's own code. It is the
-    // most important beat in the demo and the one least worth faking.
-    say: 'One press. Citation in, source saved, works-cited page updated.',
+    say: 'One press. The citation goes in, the source is saved, the works cited page updates.',
     at: 'cite',
     press: true,
-    hold: 878,
+    hold: 2200,
   },
   {
-    run: () => an().selectClaim(null),
-    hold: 527,
-  },
-  {
-    say: 'Last pass. Every reference against the publisher record.',
+    say: 'Last check before you hand it in. Every reference, against the publisher record.',
     at: 'tab-references',
     run: async () => {
+      an().selectClaim(null)
       ui().setStage('references')
       useAnnotationStore.setState({ citeLoading: true, citeStatus: 'Reading your reference list…' })
-      await sleep(1100)
+      await sleep(1000)
       useAnnotationStore.setState({
         citeLoading: false, citeStatus: '',
         citations: CITATIONS.map(c => ({ ...c, verdict: 'checking' })),
@@ -275,30 +258,26 @@ export const SCRIPT = [
       await sleep(700)
       useAnnotationStore.setState({ citations: CITATIONS })
     },
-    hold: 702,
+    hold: 1800,
   },
   {
-    say: 'That one does not exist. This is what catches invented citations before a professor does.',
-    hold: 878,
+    say: 'That one does not exist. This is what catches made up citations before your professor does.',
+    hold: 1800,
   },
   {
-    
+    say: 'Then it all leaves as one Word file. Your writing and your works cited page, in the style you picked.',
     at: 'tab-export',
     run: () => ui().setStage('export'),
-    hold: 761,
+    hold: 1600,
   },
   {
-    say: 'Then it leaves as one Word file, works-cited page and all.',
-    at: 'tab-export',
-    run: () => ui().setStage('export'),
-    hold: 1200,
+    say: 'Or save the whole session to a file, and pick it up on another computer or hand it to someone you are working with.',
+    at: 'export-session',
+    hold: 1800,
   },
   {
-    // The closing line. Not a summary of features — a statement of what the
-    // last ninety seconds were actually about, which is the only thing worth
-    // saying at the end of a demo.
     say: 'That is Firmo. Not a chatbot that writes your essay, but a workspace that can prove you wrote it.',
-    hold: 1400,
+    hold: 1600,
   },
 ]
 
@@ -373,72 +352,73 @@ const seedDemo = () => {
 export const TOURS = {
   sources: [
     { run: () => { seedDemo(); ui().setStage('sources') },
-      say: 'Sixty papers came back. The useful question is never which one is most relevant.' },
-    { say: 'It is what have I got, and what am I missing. So they are stacked by what each one does. Estimates, the ones that cut against them, the methods behind both.' },
-    { say: 'These are jumps, not filters. Nothing gets hidden, so the counts tell you the truth about the whole search.' },
+      say: 'Sixty papers came back. The question is never which one is best.' },
+    { say: 'It is what have I got, and what am I missing. So they are stacked by what each one does for you.' },
+    { say: 'Backs your point. Pushes back. It depends. How it is studied. Background. Same five every time, so you only learn them once.' },
+    { at: 'facet', press: true,
+      say: 'These are what the papers are about. Firmo reads the results and names the groups it finds, so you can jump to the part you need.' },
+    { at: 'facet', press: true,
+      say: 'Press it again to see everything.' },
+    { say: 'You can also cut by year, if your professor wants recent work.' },
     { at: 'why-matters', press: true,
-      say: 'Not sure about one? Ask why it matters. It answers against your question, not in general.' },
+      say: 'Ask any paper why it matters and the answer is about your question, not the paper in general.' },
     { at: 'summarize', press: true,
       say: 'Or get the abstract in plain English.' },
-    { at: 'save-nth-0', run: () => save(SOURCES[0]),
-      say: 'Bookmark it and it goes on the shelf, where it stays for the rest of the paper.' },
     { at: 'retracted-card',
-      say: 'And retracted work carries a red do not cite stamp. This one was withdrawn after the panel turned out to be wrong, and it is still in circulation.' },
-    { at: 'save-nth-2', run: () => save(SOURCES[2]),
-      say: 'Keep the one that disagrees with you too. Answering it is what makes the essay worth reading.' },
+      say: 'Retracted work gets a red do not cite mark. This one was pulled after the numbers turned out to be wrong, and it is still floating around.' },
+    { at: 'save-nth-0', run: () => save(SOURCES[0]),
+      say: 'Bookmark what you want. It goes on the shelf and stays there for the rest of the paper.' },
   ],
 
   outline: [
     { run: () => { seedDemo(); ui().setStage('outline') },
-      say: 'This plans from the sources you kept, not from your topic. That is the difference between a plan and a template.' },
+      say: 'This plans from the papers you kept, not from your topic. That is the difference between a plan and a template.' },
     { at: 'build-outline', press: true,
-      say: 'Add your thesis if you have one, and it argues that.' },
-    { say: 'Every point names the papers behind it, coloured by what they do. A point backed only by orange is a point argued from the papers that disagree with it.' },
+      say: 'Add your thesis if you have one and it will argue that.' },
+    { say: 'Every point shows the papers behind it, coloured by what they do. A point held up only by orange is a point you are arguing from the papers that disagree with you.' },
     { at: 'gap-search',
-      say: 'No source yet? That is a search, ready to run. Firmo shows you where the argument is not earned yet.' },
-    { say: 'It will not plan from fewer than four papers. Two is a guess with a structure drawn on it.' },
+      say: 'No source yet? That is a search, ready to go. It shows you where your argument is not earned.' },
+    { say: 'It will not plan from fewer than four papers. Two is a guess with a shape drawn around it.' },
   ],
 
   draft: [
     { run: () => { seedDemo(); ui().setStage('draft') },
-      say: 'This is your page. Firmo will not write it for you.' },
-    { say: 'Write however you like. When you want to know what still needs a source, ask it to check.' },
+      say: 'Writing and checking are the same tab now, because that is how you actually work.' },
     { at: 'check-draft', press: true,
-      say: 'It reads every sentence and marks the ones a marker would stop at.' },
-    { say: 'Amber wants a source. Red means the papers you saved actually disagree with what you wrote.' },
+      say: 'Write however you like, then ask Firmo to check it.' },
+    { say: 'Amber needs a source. Red means your own saved papers disagree with you, and it shows you what they say.' },
     { at: 'claim-open', run: () => an().selectClaim(CLAIMS[2].id),
-      say: 'Click one and the best papers for that exact sentence show up next to it.' },
+      say: 'Click a mark and the best papers for that exact sentence turn up beside it.' },
     { at: 'cite', press: true,
-      say: 'One press. The citation goes in, the source is saved, the works cited page updates.' },
+      say: 'One press. Citation in, source saved, works cited page updated.' },
     { at: 'toggle-marks', press: true, run: () => an().selectClaim(null),
-      say: 'Hide the marks when you want to write again. Nothing is lost, it is the same page.' },
+      say: 'Hide the marks when you want to write again. Same page, nothing lost.' },
     { at: 'style-menu', press: true,
-      say: 'APA, MLA, Chicago, Harvard, IEEE. Change it and every citation re-formats itself.' },
+      say: 'APA, MLA, Chicago, Harvard, IEEE. Change it and every citation reformats itself.' },
   ],
-
 
   references: [
     { run: () => { seedDemo(); ui().setStage('references') },
-      say: 'Paste your reference list and every entry goes to CrossRef and OpenAlex.' },
-    { say: 'Four answers: matches, wrong in the details, retracted, or no such paper.' },
+      say: 'Paste your reference list and every entry goes off to CrossRef and OpenAlex.' },
+    { say: 'Four answers. It matches. The details are wrong. It was retracted. Or there is no such paper.' },
     { say: 'Turn a card over to see what the publisher actually has on file.' },
-    { say: 'And it knows the difference between your mistake and the index being behind. A paper the register only has a later deposit for is not something you got wrong.' },
-    { say: 'If any of these came from a chatbot, this is what catches the invented ones first.' },
+    { say: 'It also knows the difference between your mistake and the index being behind, so it will not tell you a real paper is fake.' },
+    { say: 'If any of these came from a chatbot, this is what catches the made up ones first.' },
   ],
 
   export: [
     { run: () => { seedDemo(); ui().setStage('export') },
       say: 'Last screen. Its job is to say not yet as often as it says here you go.' },
-    { say: 'Unbacked claims and missing references are up top, before the download, not after it.' },
-    { at: 'export-menu', press: true,
-      say: 'The file still builds either way. Refusing to hand over your own writing would be absurd.' },
-    { say: 'One Word document: your prose and its works-cited page, in the style you picked. Or BibTeX and RIS if the sources are going to Zotero.' },
+    { say: 'Anything unbacked or unmatched is up here, before the download, not after.' },
+    { at: 'export-docx',
+      say: 'Then one Word file. Your writing and your works cited page together, in the style you picked.' },
+    { at: 'export-session', press: true,
+      say: 'Or save the whole session. Question, sources, outline, draft, everything, in one file you can open on another computer.' },
+    { say: 'That is how you carry a paper between machines, or hand it to someone working on it with you.' },
     { at: 'open-record', press: true,
-      say: 'And the process record goes separately.' },
-    { say: 'Every search, every source saved, every claim backed, and every time Firmo refused to write. Hash-chained, so an instructor can check the order has not been edited.',
-      hold: 1600 },
+      say: 'And the process record travels on its own.' },
     { run: () => ui().setShowRecord(false),
-      say: 'Share it as a link and they can verify how the paper was made without reading a word of it.' },
+      say: 'Every search, every source, every time Firmo refused to write. Your professor can check how the paper was made without reading a word of it.' },
   ],
 }
 

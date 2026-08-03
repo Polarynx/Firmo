@@ -204,6 +204,13 @@ export default function SourceCard({ paper, index = 0, query = '', shape = 'none
         // out in role stacks, so DOM order is not array order.
         <div data-demo={paper.retracted ? 'retracted-card' : undefined}
           className="flex items-center flex-wrap gap-1.5">
+          {paper.addedByHand && !paper.imported && (
+            <Chip
+              tone={{ chip: 'text-t2 border-hair/30', dot: 'bg-t3' }}
+              label="Added by you"
+              title="You added this yourself rather than Firmo finding it. The record is real, the choice was yours."
+            />
+          )}
           {paper.imported && (
             <Chip
               tone={{ chip: 'text-brand-600 border-brand-500/45 dark:text-signal dark:border-signal/40',

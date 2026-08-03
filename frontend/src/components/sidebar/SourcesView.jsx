@@ -9,6 +9,7 @@ import { SOURCE_LABELS, ROLE_ORDER, YEAR_OPTIONS, roleFor, SPRING } from '../../
 import { EmptyNote, StatusLine } from '../ui/primitives'
 import QueryLedger from './QueryLedger'
 import SourceCard from './SourceCard'
+import AddSource from './AddSource'
 
 // ── View 1: the sources workspace ───────────────────────────────────────────
 //
@@ -134,7 +135,9 @@ export default function SourcesView() {
   // one screen; this says the one thing the surface is missing instead.
   if (results.length === 0 && !isSearching) {
     return (
-      <EmptyNote
+      <div className="flex flex-col gap-5">
+        <AddSource query={searchedQuery} shape={questionShape} />
+        <EmptyNote
         title={savedSources.length > 0 ? 'No search running' : 'Nothing found yet'}
         graphic
         action={
@@ -151,7 +154,8 @@ export default function SourcesView() {
         {savedSources.length > 0
           ? `You have ${savedSources.length} source${savedSources.length === 1 ? '' : 's'} on the shelf beside you. Search again to add to them.`
           : 'Firmo searches sixteen databases at once and files what comes back by what each paper will do in your argument.'}
-      </EmptyNote>
+        </EmptyNote>
+      </div>
     )
   }
 
@@ -160,6 +164,11 @@ export default function SourcesView() {
   return (
     <div ref={rootRef} className="flex flex-col gap-3">
       {isSearching && <StatusLine>{statusMsg}</StatusLine>}
+
+      {/* What you brought, before what Firmo found. A source you already have is
+          one you have already decided about, so it belongs above the results
+          rather than filed among them. */}
+      {!isSearching && <AddSource query={searchedQuery} shape={questionShape} />}
 
       {/* ── The rail ──────────────────────────────────────────────────────
           Sticky, so it is reachable from anywhere in a long panel. These are

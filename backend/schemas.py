@@ -41,6 +41,12 @@ class DraftCheckRequest(BaseModel):
     saved_papers: list[dict] = []
 
 
+class AddSourceRequest(BaseModel):
+    # A DOI, a link, or a title. One field rather than three, because the
+    # student knows what they have and does not want to classify it first.
+    value: str
+
+
 class PaperChatRequest(BaseModel):
     messages: list[dict]  # [{"role": "user"|"assistant", "content": str}, ...]
     papers: list[dict]

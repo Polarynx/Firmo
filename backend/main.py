@@ -55,6 +55,7 @@ from schemas import (
     SyncRequest,
     MoreSourcesRequest,
     OutlineRequest,
+    AddSourceRequest,
     PaperChatRequest,
     QuotesRequest,
     ResearchRequest,
@@ -1120,14 +1121,17 @@ CHAT_SYSTEM = """You are Firmo's research adviser inside a student's paper proje
 
 {sources}
 {outline}{draft}
-You help the student understand their sources, plan the paper, judge whether a section works, and decide how to say something. Strict rules:
-1. You NEVER write sentences, paragraphs, or any prose for the student's paper. Not an intro, not a conclusion, not a "sample sentence", even if asked directly or told it is allowed. When asked to write, decline in one warm line, then give what actually helps: an outline of the points to make, in order, with the sources that back each point.
-2. Ground every factual statement in the saved sources, referring to them as (Surname, Year). If the sources do not cover a question, say so plainly and suggest 2 or 3 short search phrases to try in Find sources.
-2b. You CAN and SHOULD answer questions about the student's own draft and outline when they are given above: whether a paragraph earns its place, what a section is missing, which claim has no source behind it, whether the structure serves the question, how to make a sentence clearer. Judging and diagnosing their writing is help. Writing it for them is not. Quoting their own sentence back while explaining what is wrong with it is fine; supplying the replacement is not.
-3. Be concrete and brief: short paragraphs or dash lists, no filler, no em-dashes.
-4. Plain text only. No markdown symbols like ** or ## or bullets other than a simple dash.
-5. Only discuss the student's research, sources, and paper planning. Politely decline anything else.
-6. Whenever you decline to write prose under rule 1, make the very first line of your reply exactly [[DECLINED]] and nothing else, then continue normally on the next line. This marker is stripped before the student sees it; it exists so the refusal can be recorded."""
+You help the student understand their sources, plan the paper, judge whether a section works, and improve the words they have written. Strict rules:
+
+1. WORK ON THEIR WORDS, NEVER SUPPLY YOUR OWN. This is the line, and it is not the same as being unhelpful:
+   - If they have written something, you may rewrite it, tighten it, restructure it, make it clearer, make it more formal, fix the logic, or show them two versions of their own sentence. Say what changed and why. This is the main thing you are for.
+   - If they have written nothing yet and ask you to start it, give them the structure instead: the points in order, what each one needs, which source carries it. Then ask for a first line, however rough, and offer to work on it with them.
+   - Never produce a sentence they could paste into the paper as new prose. An example sentence is still new prose.
+2. Ground every factual statement in the saved sources, referring to them as (Surname, Year). If the sources do not cover something, say so and suggest 2 or 3 short search phrases.
+3. Judge their work honestly when asked. If a paragraph does not earn its place, say so and say why. If a claim has nothing behind it, name it. Vague encouragement is worse than nothing to someone who has to hand this in.
+4. Be warm and direct. Short paragraphs or dash lists. No filler, no em-dashes, no markdown symbols.
+5. Only discuss their research, sources, and paper. Politely decline anything else.
+6. When rule 1 makes you decline to write new prose, make the very first line of your reply exactly [[DECLINED]] and nothing else, then continue normally on the next line with the help you CAN give. Never make the student feel refused: lead with what you are doing for them, not with what you will not do. The marker is stripped before they see it and exists only so the moment is recorded."""
 
 # The marker rule above is what makes "Firmo never writes your prose" provable
 # rather than merely claimed. It is deliberately the model's own judgment and
@@ -2442,6 +2446,72 @@ async def record_public(token: str, session: AsyncSession = Depends(auth.get_ses
 # losing every paragraph break. This closes the loop. Google Docs exports as
 # .docx too, so one parser covers both.
 MAX_UPLOAD_BYTES = 8 * 1024 * 1024
+
+
+@app.post("/api/add-source")
+@limiter.limit("60/hour", key_func=_get_client_ip)
+async def add_source(request: Request, req: AddSourceRequest):
+    """One source the student brought themselves, from a DOI, a link or a title.
+
+    Firmo could only ever hold papers it found. That is a strange limit for a
+    research tool: the reading list came from a lecturer, the key paper was
+    named in a seminar, the useful one turned up in someone else's
+    bibliography. All of those arrive as a DOI or a link or just a title, and
+    the answer was to search for the topic again and hope.
+
+    Resolved properly rather than accepted as typed, so an added source carries
+    the same metadata as a found one and every per-source feature works on it.
+    A record with a real DOI can be cited, checked against the publisher, and
+    matched to the reference list later. A hand-typed title cannot.
+    """
+    raw = (req.value or "").strip()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Nothing to add.")
+
+    # A DOI hiding in a URL, a "doi:" prefix, or on its own.
+    dois = importers.extract_dois(raw)
+    if dois:
+        paper = await importers.fetch_by_doi(dois[0])
+        if paper:
+            return {"paper": {**paper, "addedByHand": True, "howAdded": "doi"}}
+        raise HTTPException(
+            status_code=404,
+            detail="No publisher has that DOI on record. Check it for a typo, or paste the title instead.",
+        )
+
+    # A link that is not a DOI, or a plain title: search for it by name. One
+    # result, the closest, because the student is naming a specific paper rather
+    # than exploring a topic.
+    query = raw
+    if raw.startswith("http"):
+        # A URL's own text is usually a slug of the title, which CrossRef's
+        # bibliographic search handles better than the URL itself.
+        query = re.sub(r"[-_/]+", " ", re.sub(r"^https?://[^/]+/", "", raw))
+        query = re.sub(r"\.(html?|pdf)$", "", query).strip()
+    if len(query) < 8:
+        raise HTTPException(status_code=400, detail="Give a DOI, a link, or the paper's title.")
+
+    try:
+        found = await search_all([query[:300]], budget=8.0)
+        papers = process_papers(found)
+    except Exception:
+        traceback.print_exc()
+        papers = []
+
+    if not papers:
+        raise HTTPException(
+            status_code=404,
+            detail="Could not find that one. Try the DOI, or a fuller version of the title.",
+        )
+
+    best = max(papers, key=lambda x: _title_closeness(query, x.get("title") or ""))
+    return {"paper": {**best, "addedByHand": True, "howAdded": "lookup"}}
+
+
+def _title_closeness(query: str, title: str) -> float:
+    from difflib import SequenceMatcher
+    norm = lambda t: " ".join(t.lower().split())
+    return SequenceMatcher(None, norm(query), norm(title)).ratio()
 
 
 @app.post("/api/import-docx")

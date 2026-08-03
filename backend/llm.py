@@ -70,10 +70,59 @@ RERANK_MODEL = os.getenv("FIRMO_RERANK_MODEL", MODEL)
 RERANK_CONCURRENCY = int(os.getenv("FIRMO_RERANK_CONCURRENCY", "2"))
 EMBED_MODEL = "mistral-embed"
 
+# Timeouts, because the SDK's default is ten minutes.
+#
+# That default is built for batch work, and Firmo is a student watching a status
+# line. A single hung request would hold a search for ten minutes, and with the
+# three retries below on top of it, half an hour — during which nothing on
+# screen changes and there is no way to tell a slow search from a dead one. This
+# was found by an eval run sitting motionless for exactly ten minutes.
+#
+# Forty-five seconds is well past the p99 for these calls and well short of a
+# student giving up. `max_retries=0` because the retry loop below is ours: the
+# SDK retrying underneath it would silently multiply every wait by three.
 _client = AsyncOpenAI(
     api_key=os.getenv("MISTRAL_API_KEY"),
     base_url="https://api.mistral.ai/v1",
+    timeout=45.0,
+    max_retries=0,
 )
+
+
+# ── One gate over everything that talks to the model ────────────────────────
+#
+# The rerank was gated and nothing else was. Meanwhile a single search fires a
+# brief, an embedding batch, eight rerank chunks and a facet pass; a draft check
+# fires one call per chunk of prose; and all of that can overlap with whatever
+# anyone else on the same key is doing. The quota is a property of the key, not
+# of a request, so limiting one call site protects nothing.
+#
+# The symptom this fixes is subtle and has already cost two wrong conclusions:
+# under 429 pressure the rerank silently falls back to cosine ranking, so the
+# search still returns papers and simply ranks them badly. A benchmark run in
+# that state measures the quota, not the product — twice now a number was read
+# as a ranking regression when it was really rate limiting.
+#
+# Four is comfortable for a standard key. Lower it for anything that hammers
+# the API in a loop, which is exactly what the evaluation harness does:
+#
+#     FIRMO_LLM_CONCURRENCY=2 python eval/run_eval.py
+#
+# The rerank gate stays as well. It is narrower on purpose: eight simultaneous
+# chunks would otherwise eat the whole global allowance and starve the brief and
+# the embeddings queued behind them.
+LLM_CONCURRENCY = int(os.getenv("FIRMO_LLM_CONCURRENCY", "4"))
+
+_gate: asyncio.Semaphore | None = None
+
+
+def _llm_gate() -> asyncio.Semaphore:
+    """Created lazily so it binds to the running loop, not to import time."""
+    global _gate
+    if _gate is None:
+        _gate = asyncio.Semaphore(LLM_CONCURRENCY)
+    return _gate
+
 
 # Mistral throws intermittent 429s and 503 "capacity exceeded" errors; these are
 # retryable and must never surface to the student as a degraded experience.
@@ -118,12 +167,13 @@ async def chat(prompt: str, max_tokens: int = 512, json_mode: bool = False,
     for attempt in range(3):
         use = _resolve(model)
         try:
-            msg = await _client.chat.completions.create(
-                model=use,
-                max_tokens=max_tokens,
-                messages=[{"role": "user", "content": prompt}],
-                **kwargs,
-            )
+            async with _llm_gate():
+                msg = await _client.chat.completions.create(
+                    model=use,
+                    max_tokens=max_tokens,
+                    messages=[{"role": "user", "content": prompt}],
+                    **kwargs,
+                )
             return msg.choices[0].message.content.strip()
         except AuthenticationError as e:
             # A bad/expired key fails every call, so surface it loudly instead of
@@ -169,6 +219,13 @@ async def chat_stream(messages: list[dict], max_tokens: int = 512,
     last_exc = None
     for attempt in range(3):
         yielded = False
+        # Held for the life of the stream, and released in `finally` whatever
+        # happens: an early return, a mid-stream error, or the caller abandoning
+        # the generator. A semaphore acquired on a path that can be torn down
+        # from outside and released on only one of them is a deadlock waiting
+        # for the third time it happens.
+        gate = _llm_gate()
+        await gate.acquire()
         try:
             stream = await _client.chat.completions.create(
                 model=MODEL,
@@ -195,6 +252,8 @@ async def chat_stream(messages: list[dict], max_tokens: int = 512,
             last_exc = e
             print(f"[llm stream retry {attempt + 1}/3] {type(e).__name__}: {e}")
             await asyncio.sleep(1.5 * (2 ** attempt) + random.random())
+        finally:
+            gate.release()
     raise last_exc
 
 
@@ -214,7 +273,8 @@ async def embed_texts(texts: list[str], batch_size: int = 32) -> list:
         payload = [(t if (t and t.strip()) else " ")[:2000] for t in chunk]
         for attempt in range(3):
             try:
-                resp = await _client.embeddings.create(model=EMBED_MODEL, input=payload)
+                async with _llm_gate():
+                    resp = await _client.embeddings.create(model=EMBED_MODEL, input=payload)
                 for i, d in enumerate(resp.data):
                     out[start + i] = d.embedding
                 return

@@ -23,7 +23,7 @@ import ArgumentMap from './ArgumentMap'
 // them is how a workspace ends up with two navigations and no map.
 
 const VIEWS = {
-  saved:           { label: 'Saved to this paper', Component: SavedPanel },
+  saved:           { label: 'Where this paper stands', Component: SavedPanel },
   claim_inspector: { label: 'This claim',          Component: ClaimInspector },
   argument_map:    { label: 'The argument',        Component: ArgumentMap },
 }

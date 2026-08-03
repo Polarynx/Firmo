@@ -3,6 +3,9 @@ import { useSavedSources } from '../../stores/selectors'
 import { useUIStore } from '../../stores/useUIStore'
 import { readStages } from '../../lib/stages'
 
+import { useState } from 'react'
+
+import { downloadSession } from '../../lib/session'
 import SurfaceShell from './SurfaceShell'
 import BibliographyBlock from './BibliographyBlock'
 
@@ -16,6 +19,13 @@ import BibliographyBlock from './BibliographyBlock'
 // the state of the paper is stated above it rather than after the fact.
 
 export default function ExportSurface() {
+  const [saved, setSaved] = useState(false)
+  function saveSession() {
+    downloadSession()
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2400)
+  }
+
   const doc = useWorkspaceStore(s => s.doc)
   const sources = useSavedSources()
   const setStage = useUIStore(s => s.setStage)
@@ -89,6 +99,31 @@ export default function ExportSurface() {
       )}
 
       <BibliographyBlock />
+
+      {/* The session itself, as a file.
+          Different from the Word export in kind, not degree: that produces the
+          artefact you hand in, this produces the one you carry. A student on a
+          library machine, a group of four writing one paper, and anyone who has
+          read the warning that this lives in one browser all needed a copy that
+          is not a browser, and none of them had one. */}
+      <div className="flex flex-col gap-2.5 pt-6 mt-2 border-t border-line">
+        <span className="eyebrow">Take the whole session with you</span>
+        <p className="text-[12.5px] text-t2 leading-relaxed max-w-[54ch]">
+          Your question, everything the search returned, the sources you kept, the outline,
+          the draft and every check Firmo has run, in one file. Open it on another machine,
+          or hand it to someone working on the same paper.
+        </p>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button data-demo="export-session" onClick={saveSession} className="btn-ghost">
+            Download the session
+          </button>
+          {saved && <span className="record !text-brand-600 dark:!text-signal">Saved</span>}
+        </div>
+        <p className="text-[11px] text-t3 leading-relaxed max-w-[54ch]">
+          The process record does not travel with it. It is the log that says you did this
+          work, and a log that can be handed over proves nothing about whoever hands it in.
+        </p>
+      </div>
     </SurfaceShell>
   )
 }

@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 
 import { API } from '../../lib/api'
 import { useUIStore } from '../../stores/useUIStore'
+import { importSession } from '../../lib/session'
 import { useWorkspaceStore } from '../../stores/useWorkspaceStore'
 import { SPRING } from '../../lib/constants'
 
@@ -31,6 +32,7 @@ export default function DocumentDrop() {
   const [over, setOver] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [note, setNote] = useState('')
 
   // Drag events fire per element, so a naive `onDragLeave` clears the state
   // every time the pointer crosses a child. Counting entries and exits is the
@@ -41,6 +43,25 @@ export default function DocumentDrop() {
     if (!file) return
     setError('')
     setBusy(true)
+
+    // A .firmo file is a whole session, not a document. Routed here rather than
+    // behind a second control because from the student's side both are "a file
+    // I have that I want Firmo to open", and making them pick the right slot
+    // first is a puzzle with no benefit.
+    if (file.name?.toLowerCase().endsWith('.firmo')) {
+      try {
+        const info = await importSession(file)
+        setBusy(false)
+        setNote(`Opened "${info.name}" — ${info.sources} source${info.sources === 1 ? '' : 's'}`
+          + `${info.words ? `, ${info.words.toLocaleString()} words` : ''}.`)
+        return
+      } catch (e) {
+        setBusy(false)
+        setError(e.message || 'Could not open that session.')
+        return
+      }
+    }
+
     try {
       const body = new FormData()
       body.append('file', file)
@@ -83,7 +104,7 @@ export default function DocumentDrop() {
       <input
         ref={inputRef}
         type="file"
-        accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        accept=".docx,.firmo,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/json"
         className="sr-only"
         onChange={e => { ingest(e.target.files?.[0]); e.target.value = '' }}
       />
@@ -93,22 +114,28 @@ export default function DocumentDrop() {
           <span className="text-t2">Reading your document…</span>
         ) : (
           <>
-            Already written some of it?{' '}
+            Already have something?{' '}
             <button
               data-demo="import-docx"
               onClick={() => inputRef.current?.click()}
               className="font-medium text-t2 hover:text-t1 underline decoration-hair/30
                 underline-offset-2 transition-colors"
             >
-              Open a Word file
+              Open a Word file or a saved Firmo session
             </button>
-            {' '}or drop it anywhere here. From Google Docs, use File → Download → .docx.
+            {' '}or drop it here. From Google Docs use File → Download → .docx; a session is
+            the .firmo file from another machine.
           </>
         )}
       </p>
 
       {error && (
         <p className="mt-1.5 text-[11.5px] text-red-500 leading-relaxed">{error}</p>
+      )}
+      {note && (
+        <p className="mt-1.5 text-[11.5px] text-brand-600 dark:text-signal leading-relaxed">
+          {note} Everything is where it was.
+        </p>
       )}
 
       {/* The target only exists while something is being carried over it. A

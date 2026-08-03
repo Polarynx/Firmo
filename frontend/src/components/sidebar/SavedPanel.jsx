@@ -1,107 +1,138 @@
 import { motion } from 'framer-motion'
 
 import { useResearchStore } from '../../stores/useResearchStore'
-import { useWorkspaceStore } from '../../stores/useWorkspaceStore'
+import { useAnnotationStore } from '../../stores/useAnnotationStore'
 import { useUIStore } from '../../stores/useUIStore'
+import { useWorkspaceStore } from '../../stores/useWorkspaceStore'
 import { useSavedSources } from '../../stores/selectors'
-import { paperId } from '../../lib/projects'
-import { roleFor, ROLE_ORDER, SPRING } from '../../lib/constants'
+import { readStages, nextMove } from '../../lib/stages'
+import { SPRING } from '../../lib/constants'
 import { EmptyNote } from '../ui/primitives'
 import Shelf from '../ui/Shelf'
 
-// ── The shelf, kept beside the work ─────────────────────────────────────────
+// ── Where the paper stands ──────────────────────────────────────────────────
 //
-// What the student has actually decided to keep, on hand no matter which stage
-// the centre is showing. This is the panel's steady state and the reason the
-// right side of the window is worth its width: the centre changes as the paper
-// is made, and the evidence it is being made out of stays put.
+// The shelf, and then an account of the work.
 //
-// It also closes a gap the workspace had. Once Sources moved to the middle, a
-// student writing a paragraph had no way to see what they had saved without
-// leaving the page they were writing on.
+// This panel used to be the shelf followed by a list of the same sources the
+// shelf was already showing — the collection drawn twice, once as spines and
+// once as titles, in a column three hundred pixels wide. The second copy was
+// the least useful thing on screen and it occupied the most space.
+//
+// What belongs there is the thing no other surface says: what has actually been
+// done to this paper, and what is worth doing next. Every stage knows its own
+// state; nothing was collecting those into one answer, so a student halfway
+// through had to visit six tabs to work out where they were.
+
+const TICK = 'text-brand-600 dark:text-signal'
+
+function Row({ done, children }) {
+  return (
+    <li className="flex items-baseline gap-2.5 text-[12px] leading-relaxed">
+      <span className={`shrink-0 font-mono text-[10px] ${done ? TICK : 'text-t3/50'}`}>
+        {done ? '✓' : '·'}
+      </span>
+      <span className={done ? 'text-t2' : 'text-t3'}>{children}</span>
+    </li>
+  )
+}
 
 export default function SavedPanel() {
   const sources = useSavedSources()
   const shape = useResearchStore(s => s.questionShape)
-  const toggleSource = useWorkspaceStore(s => s.toggleSource)
   const setStage = useUIStore(s => s.setStage)
 
-  if (sources.length === 0) {
+  // Subscribed so the account re-reads as the paper changes.
+  useWorkspaceStore(s => s.doc)
+  useWorkspaceStore(s => s.projects)
+  useResearchStore(s => s.brief)
+  useAnnotationStore(s => s.claims)
+  useAnnotationStore(s => s.outline)
+  useAnnotationStore(s => s.citations)
+
+  const st = readStages()
+  const move = nextMove(st)
+
+  const nothingYet = !st.question.count && st.question.state === 'empty'
+    && sources.length === 0 && st.draft.state === 'empty'
+
+  if (nothingYet) {
     return (
       <EmptyNote
-        title="Nothing saved yet"
+        title="Nothing here yet"
         action={
-          <button onClick={() => setStage('sources')} className="btn-ghost mt-1">
-            Open sources
+          <button onClick={() => setStage('question')} className="btn-ghost mt-1">
+            Start with a question
           </button>
         }
       >
-        Bookmark the papers you will actually use and they collect here — on hand while you
-        outline, while you write, and in the works-cited page at the end.
+        As you search, save sources and write, this panel keeps score: what is done, what is
+        still open, and the one thing most worth doing next.
       </EmptyNote>
     )
   }
 
-  // Grouped by what each source does in the argument, because that is the
-  // question being asked of this panel mid-paragraph: not "what have I got" but
-  // "have I got anything that cuts the other way".
-  const byRole = new Map()
-  for (const s of sources) {
-    const role = s.stance ? roleFor(s.stance, s.shape || shape) : null
-    const key = role?.key || 'other'
-    if (!byRole.has(key)) byRole.set(key, { role, items: [] })
-    byRole.get(key).items.push(s)
-  }
-  const groups = [...ROLE_ORDER, 'other']
-    .map(k => byRole.get(k) && { key: k, ...byRole.get(k) })
-    .filter(Boolean)
-
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
       <Shelf
         sources={sources}
         shape={shape}
         onOpen={p => window.open(p.url || (p.doi ? `https://doi.org/${p.doi}` : '#'), '_blank')}
       />
 
-      {groups.map(g => (
-        <div key={g.key} className="flex flex-col gap-1.5">
-          <div className="flex items-baseline justify-between gap-2">
-            <span className={`eyebrow ${g.role ? '' : '!text-t3'}`}>
-              {g.role?.label || 'Unfiled'}
-            </span>
-            <span className="record">{g.items.length}</span>
-          </div>
-          {g.items.map(s => (
-            <motion.div
-              key={paperId(s)}
-              layout
-              transition={SPRING}
-              className="group flex items-start gap-2 text-xs"
-            >
-              <span className={`mt-[6px] w-1 h-1 rounded-full shrink-0
-                ${g.role ? g.role.dot : 'bg-unverified/50'}`} />
-              <a
-                href={s.url || (s.doi ? `https://doi.org/${s.doi}` : undefined)}
-                target="_blank" rel="noopener noreferrer"
-                className="flex-1 min-w-0 text-t2 hover:text-brand-500 dark:hover:text-signal
-                  leading-snug transition-colors"
-              >
-                {s.title}
-                {s.year ? <span className="text-t3"> ({s.year})</span> : null}
-              </a>
-              <button
-                onClick={() => toggleSource(s)}
-                title="Remove from this paper"
-                className="opacity-0 group-hover:opacity-100 text-t3 hover:text-red-400
-                  transition-all shrink-0 leading-none"
-              >
-                ✕
-              </button>
-            </motion.div>
-          ))}
-        </div>
-      ))}
+      <div className="flex flex-col gap-2">
+        <span className="eyebrow">Where this paper stands</span>
+        <ul className="flex flex-col gap-1.5">
+          <Row done={st.question.state === 'done'}>
+            {st.question.state === 'done'
+              ? 'Question asked, and Firmo has read it'
+              : 'No question yet'}
+          </Row>
+          <Row done={sources.length > 0}>
+            {sources.length
+              ? `${sources.length} source${sources.length === 1 ? '' : 's'} on the shelf`
+              : 'No sources saved'}
+          </Row>
+          <Row done={st.outline.state !== 'empty'}>
+            {st.outline.note || 'No outline yet'}
+          </Row>
+          <Row done={st.draft.state === 'done'}>
+            {st.draft.note || 'Nothing written yet'}
+          </Row>
+          <Row done={st.references.state === 'done'}>
+            {st.references.note || 'References not checked'}
+          </Row>
+        </ul>
+      </div>
+
+      {/* The one thing worth doing next, if there is one. `nextMove` returns
+          null far more often than it returns a suggestion, which is what keeps
+          this from becoming a checklist that nags. */}
+      {move && (
+        <motion.button
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={SPRING}
+          onClick={() => setStage(move.stage)}
+          className="group flex flex-col gap-1.5 rounded-lg border border-brand-500/30
+            bg-brand-500/[0.06] px-3.5 py-3 text-left hover:bg-brand-500/[0.11] transition-colors"
+        >
+          <span className="eyebrow !text-brand-600 dark:!text-signal">Next</span>
+          <span className="text-[12px] text-t1 leading-relaxed">{move.text}</span>
+          <span className="text-[11.5px] font-medium text-brand-600 dark:text-signal
+            group-hover:translate-x-0.5 transition-transform">
+            {move.label} →
+          </span>
+        </motion.button>
+      )}
+
+      {/* The shelf shows what is there; this is the way to change it. A list of
+          titles is not, which is why the list that used to live here is gone. */}
+      {sources.length > 0 && (
+        <button onClick={() => setStage('sources')} className="btn-ghost w-full">
+          Manage sources
+        </button>
+      )}
     </div>
   )
 }

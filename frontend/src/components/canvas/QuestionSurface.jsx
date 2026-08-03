@@ -227,10 +227,14 @@ export default function QuestionSurface() {
           )}
         </AnimatePresence>
 
-        {/* The other way in, at caption weight. Only while the field is empty:
-            once someone is typing a question they have chosen their route, and
-            an alternative offered mid-sentence is just noise. */}
-        {!query.trim() && <DocumentDrop />}
+        {/* The other way in, at caption weight, and permanent.
+            It used to hide the moment someone started typing, on the theory
+            that they had chosen their route. That is right for a Word file and
+            wrong for a session: importing one is not an alternative to asking a
+            question, it is how you resume work you already did, and hiding it
+            behind an empty field made it findable only by people who did not
+            need it yet. */}
+        <DocumentDrop />
       </motion.div>
 
       {/* One invitation, and it changes on its own.

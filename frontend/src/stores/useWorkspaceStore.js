@@ -210,6 +210,9 @@ export const useWorkspaceStore = create((set, get) => ({
     set(s => ({ projects: [p, ...s.projects], activeProjectId: p.id }))
     get().persist()
     get().refreshBibliography()
+    // Returned so a caller that needs to fill the project it just made does not
+    // have to guess which one that was.
+    return p.id
   },
 
   deleteProject: id => {

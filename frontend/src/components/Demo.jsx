@@ -172,7 +172,7 @@ export default function Demo({ onClose, stage = 'question' }) {
         // the step instead was what made the whole run feel like a series of
         // pauses.
         const voice = step.say
-          ? say(step.say).then(() => sleep(200))
+          ? say(step.say)
           : Promise.resolve()
 
 
@@ -224,13 +224,20 @@ export default function Demo({ onClose, stage = 'question' }) {
         }
 
         // Wait for the voice, which has been playing underneath the visuals
-        // since the top of the step. Falls back to reading time when there is no
-        // recording for a line — an edited caption is simply absent from the
-        // manifest rather than playing the wrong words.
+        // since the top of the step. Falls back to reading time when a line has
+        // no recording, because an edited caption is absent from the manifest
+        // rather than playing the wrong words.
         if (!alive()) return
         await voice
         if (!alive()) return
-        if (step.hold) await sleep(step.hold)
+
+        // And then almost nothing. `hold` used to fire in full after the audio
+        // finished, so every beat ended with a second or two of a still screen
+        // and no sound — which is exactly the dead space between sentences.
+        // A spoken line has already given the eye its time; what is left is the
+        // gap between two people's sentences, not a pause for reading.
+        const tail = step.say ? Math.min(step.hold || 0, 260) : (step.hold || 0)
+        if (tail > 0) await sleep(tail)
       }
 
       if (!alive()) return

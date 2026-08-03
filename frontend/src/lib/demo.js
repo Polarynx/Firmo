@@ -128,18 +128,18 @@ export const readingTime = text =>
 
 export const SCRIPT = [
   {
-    say: 'This is Firmo. You start with a question, not keywords.',
+    say: "This is Firmo. You start with a question, not keywords.",
     at: 'question-field',
     type: { text: QUESTION, set: v => rs().setQuery(v) },
     hold: 300,
   },
   {
-    say: 'Already have a draft going, or a session from another computer? You can drop that in instead.',
+    say: "Got a draft already? Drop it in. Same with a session from another computer.",
     at: 'import-docx',
     hold: 500,
   },
   {
-    say: 'One search. Sixteen databases at once.',
+    say: "One search hits sixteen databases.",
     at: 'question-search',
     run: async () => {
       useResearchStore.setState({ isSearching: true, statusMsg: 'Reading your question…', gathered: 0 })
@@ -161,35 +161,35 @@ export const SCRIPT = [
     // Firmo no longer moves you when a search finishes, so the demo has to show
     // the thing that replaced it. This beat exists because a viewer who has just
     // watched a search will otherwise wonder where the papers went.
-    say: 'It does not drag you anywhere. When you are ready, you go.',
+    say: "It won't drag you off the page. Go when you're ready.",
     at: 'next-sources',
     press: true,
     hold: 700,
   },
   {
-    say: 'Everything that came back, sorted by what it does for your argument. What backs you up. What pushes back. What says it depends.',
+    say: "Here's what came back, sorted by what each paper does for you. Backs you up. Pushes back. Says it depends.",
     hold: 1400,
   },
   {
-    say: 'And these are what the papers are actually about. Firmo reads the results and names the groups it finds, so you can go straight to the part you need.',
+    say: "And these are what they're about. Firmo reads the results and names the groups it finds, so you can jump straight to your bit.",
     at: 'facet',
     press: true,
     hold: 1600,
   },
   {
-    say: 'Not sure about one? Ask why it matters. You get an answer about your question, not a summary.',
+    say: "Not sure about one? Ask why it matters. It answers about your question, not the paper in general.",
     at: 'why-matters',
     press: true,
     hold: 2400,
   },
   {
-    say: 'Keep the ones you want.',
+    say: "Keep the ones you want.",
     at: 'save-nth-0',
     run: () => { save(SOURCES[0]); save(SOURCES[1]); save(SOURCES[3]); save(SOURCES[4]) },
     hold: 900,
   },
   {
-    say: 'Four is enough for Firmo to plan the argument around them.',
+    say: "Four's enough to plan the argument around.",
     at: 'tab-outline',
     run: async () => {
       ui().setStage('outline')
@@ -200,13 +200,13 @@ export const SCRIPT = [
     hold: 1600,
   },
   {
-    say: 'Or just ask. It knows your sources, your outline and whatever you have written so far.',
+    say: "Or just ask. It's read your sources, your outline, and whatever you've written.",
     at: 'ask-box',
     type: { text: 'where do these papers disagree?', set: v => ui().setOmniValue(v), speed: 26 },
     hold: 1600,
   },
   {
-    say: 'Then write. Firmo will not do that part for you.',
+    say: "Then write. It'll help you sharpen it, but the words stay yours.",
     at: 'tab-draft',
     run: () => { ui().setOmniValue(''); ui().setStage('draft') },
     hold: 500,
@@ -217,7 +217,7 @@ export const SCRIPT = [
     hold: 400,
   },
   {
-    say: 'When you want to know what still needs a source, ask it to check.',
+    say: "When you want to know what still needs backing up, ask it to check.",
     at: 'check-draft',
     run: async () => {
       useAnnotationStore.setState({ draftLoading: true, draftStatus: 'Reading your draft…' })
@@ -227,7 +227,7 @@ export const SCRIPT = [
     hold: 1500,
   },
   {
-    say: 'Amber needs a source. Red means the papers you saved actually disagree with what you wrote.',
+    say: "Amber needs a source. Red means your own papers disagree with you.",
     at: 'claim-open',
     run: () => an().selectClaim(CLAIMS[2].id),
     hold: 2000,
@@ -238,13 +238,13 @@ export const SCRIPT = [
     hold: 1500,
   },
   {
-    say: 'One press. The citation goes in, the source is saved, the works cited page updates.',
+    say: "One click. Citation's in, source is saved, works cited updates itself.",
     at: 'cite',
     press: true,
     hold: 2200,
   },
   {
-    say: 'Last check before you hand it in. Every reference, against the publisher record.',
+    say: "Last check before you hand it in. Every reference, against the publisher.",
     at: 'tab-references',
     run: async () => {
       an().selectClaim(null)
@@ -261,22 +261,22 @@ export const SCRIPT = [
     hold: 1800,
   },
   {
-    say: 'That one does not exist. This is what catches made up citations before your professor does.',
+    say: "That one doesn't exist. This is what catches made up citations before your professor does.",
     hold: 1800,
   },
   {
-    say: 'Then it all leaves as one Word file. Your writing and your works cited page, in the style you picked.',
+    say: "Then it all comes out as one Word file. Your writing, your works cited, in whatever style you need.",
     at: 'tab-export',
     run: () => ui().setStage('export'),
     hold: 1600,
   },
   {
-    say: 'Or save the whole session to a file, and pick it up on another computer or hand it to someone you are working with.',
+    say: "Or save the whole thing to a file. Pick it up on another computer, or hand it to someone you're working with.",
     at: 'export-session',
     hold: 1800,
   },
   {
-    say: 'That is Firmo. Not a chatbot that writes your essay, but a workspace that can prove you wrote it.',
+    say: "That's Firmo. It won't write your essay. It'll help you write a better one, and prove you did.",
     hold: 1600,
   },
 ]
@@ -352,73 +352,73 @@ const seedDemo = () => {
 export const TOURS = {
   sources: [
     { run: () => { seedDemo(); ui().setStage('sources') },
-      say: 'Sixty papers came back. The question is never which one is best.' },
-    { say: 'It is what have I got, and what am I missing. So they are stacked by what each one does for you.' },
-    { say: 'Backs your point. Pushes back. It depends. How it is studied. Background. Same five every time, so you only learn them once.' },
+      say: "Sixty papers. Now what?" },
+    { say: "The thing you actually want to know is what you've got and what you're missing. So they're stacked by what each one does." },
+    { say: "Backs your point. Pushes back. It depends. Same five every time, so you learn them once." },
     { at: 'facet', press: true,
-      say: 'These are what the papers are about. Firmo reads the results and names the groups it finds, so you can jump to the part you need.' },
+      say: "These are what they're about. Firmo names the groups it finds in your results." },
     { at: 'facet', press: true,
-      say: 'Press it again to see everything.' },
-    { say: 'You can also cut by year, if your professor wants recent work.' },
+      say: "Click it again to see everything." },
+    { say: "You can cut by year too, if your professor wants recent stuff." },
     { at: 'why-matters', press: true,
-      say: 'Ask any paper why it matters and the answer is about your question, not the paper in general.' },
+      say: "Ask any paper why it matters. You get an answer about your question." },
     { at: 'summarize', press: true,
-      say: 'Or get the abstract in plain English.' },
+      say: "Or just get the abstract in plain English." },
     { at: 'retracted-card',
-      say: 'Retracted work gets a red do not cite mark. This one was pulled after the numbers turned out to be wrong, and it is still floating around.' },
+      say: "Retracted work gets a red flag. This one got pulled after the numbers turned out wrong, and it's still floating around out there." },
     { at: 'save-nth-0', run: () => save(SOURCES[0]),
-      say: 'Bookmark what you want. It goes on the shelf and stays there for the rest of the paper.' },
+      say: "Bookmark what you want. It goes on the shelf and stays there. Click a spine to pull it back out." },
   ],
 
   outline: [
     { run: () => { seedDemo(); ui().setStage('outline') },
-      say: 'This plans from the papers you kept, not from your topic. That is the difference between a plan and a template.' },
+      say: "This builds from the papers you kept, not from your topic. That's the difference between a plan and a template." },
     { at: 'build-outline', press: true,
-      say: 'Add your thesis if you have one and it will argue that.' },
-    { say: 'Every point shows the papers behind it, coloured by what they do. A point held up only by orange is a point you are arguing from the papers that disagree with you.' },
+      say: "Got a thesis? Add it and the outline argues that." },
+    { say: "Every point shows what's behind it. If a point's only got orange under it, you're arguing from the papers that disagree with you." },
     { at: 'gap-search',
-      say: 'No source yet? That is a search, ready to go. It shows you where your argument is not earned.' },
-    { say: 'It will not plan from fewer than four papers. Two is a guess with a shape drawn around it.' },
+      say: "Nothing behind a point yet? That's a search, ready to run. It shows you where the argument's thin." },
+    { say: "It won't plan from two papers. That's a guess with a shape drawn round it." },
   ],
 
   draft: [
     { run: () => { seedDemo(); ui().setStage('draft') },
-      say: 'Writing and checking are the same tab now, because that is how you actually work.' },
+      say: "Writing and checking live in the same place, because that's how you actually work." },
     { at: 'check-draft', press: true,
-      say: 'Write however you like, then ask Firmo to check it.' },
-    { say: 'Amber needs a source. Red means your own saved papers disagree with you, and it shows you what they say.' },
+      say: "Write however you like. Then ask it to check." },
+    { say: "Amber needs a source. Red means your own papers disagree with you, and it'll show you what they say." },
     { at: 'claim-open', run: () => an().selectClaim(CLAIMS[2].id),
-      say: 'Click a mark and the best papers for that exact sentence turn up beside it.' },
+      say: "Click a mark and the best papers for that exact sentence show up next to it." },
     { at: 'cite', press: true,
-      say: 'One press. Citation in, source saved, works cited page updated.' },
+      say: "One click. Citation in, source saved, works cited updated." },
     { at: 'toggle-marks', press: true, run: () => an().selectClaim(null),
-      say: 'Hide the marks when you want to write again. Same page, nothing lost.' },
+      say: "Hide the marks when you want to write again. Same page, nothing lost." },
     { at: 'style-menu', press: true,
-      say: 'APA, MLA, Chicago, Harvard, IEEE. Change it and every citation reformats itself.' },
+      say: "APA, MLA, Chicago, Harvard, IEEE. Switch it and everything reformats itself." },
   ],
 
   references: [
     { run: () => { seedDemo(); ui().setStage('references') },
-      say: 'Paste your reference list and every entry goes off to CrossRef and OpenAlex.' },
-    { say: 'Four answers. It matches. The details are wrong. It was retracted. Or there is no such paper.' },
-    { say: 'Turn a card over to see what the publisher actually has on file.' },
-    { say: 'It also knows the difference between your mistake and the index being behind, so it will not tell you a real paper is fake.' },
-    { say: 'If any of these came from a chatbot, this is what catches the made up ones first.' },
+      say: "Paste your reference list. Every entry goes off to CrossRef and OpenAlex." },
+    { say: "Four answers. It matches. The details are off. It's been retracted. Or there's no such paper." },
+    { say: "Flip a card to see what the publisher actually has." },
+    { say: "It knows the difference between your mistake and the index being out of date, so it won't call a real paper fake." },
+    { say: "If any of these came from a chatbot, this is what catches the made up ones." },
   ],
 
   export: [
     { run: () => { seedDemo(); ui().setStage('export') },
-      say: 'Last screen. Its job is to say not yet as often as it says here you go.' },
-    { say: 'Anything unbacked or unmatched is up here, before the download, not after.' },
+      say: "Last screen. Its job is to say not yet about as often as it says go ahead." },
+    { say: "Anything still unbacked is up top, before you download, not after." },
     { at: 'export-docx',
-      say: 'Then one Word file. Your writing and your works cited page together, in the style you picked.' },
+      say: "Then one Word file. Your writing and your works cited together, in the style you need." },
     { at: 'export-session', press: true,
-      say: 'Or save the whole session. Question, sources, outline, draft, everything, in one file you can open on another computer.' },
-    { say: 'That is how you carry a paper between machines, or hand it to someone working on it with you.' },
+      say: "Or save the whole session. Question, sources, outline, draft, all of it, in one file." },
+    { say: "That's how you move a paper between computers, or hand it to someone working on it with you." },
     { at: 'open-record', press: true,
-      say: 'And the process record travels on its own.' },
+      say: "And the process record goes separately." },
     { run: () => ui().setShowRecord(false),
-      say: 'Every search, every source, every time Firmo refused to write. Your professor can check how the paper was made without reading a word of it.' },
+      say: "Every search, every source, every step. Your professor can check how you built it without reading a word of it." },
   ],
 }
 

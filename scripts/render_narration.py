@@ -55,7 +55,14 @@ DEFAULT_VOICE = "en-US-AndrewMultilingualNeural"   # warm, conversational
 # generation than the standard *Neural ones and audibly less synthetic; there is
 # no en-GB Multilingual, so this trades the accent for the naturalness. British
 # if the trade stops being worth it: en-GB-RyanNeural, en-GB-ThomasNeural.
-DEFAULT_RATE = "+6%"                 # neural voices carry a quicker read
+DEFAULT_RATE = "+4%"                 # conversational, not brisk
+
+# A touch below default. Neural voices read slightly high and bright out of the
+# box, which is what makes them sound like an announcement; dropping the pitch a
+# little is most of the difference between "presenter" and "person explaining
+# something to you". Small on purpose — pushed further it sounds like a
+# performance, which is its own kind of artificial.
+PITCH = "-4Hz"
 
 
 def line_id(text: str) -> str:
@@ -85,8 +92,11 @@ def extract_lines() -> list[str]:
     # a line shared between two tours is rendered once.
     body = src[src.index("export const SCRIPT"):]
     out, seen = [], set()
-    for m in re.finditer(r"say:\s*'((?:[^'\\]|\\.)*)'", body):
-        text = m.group(1).replace("\\'", "'").replace("\\\\", "\\")
+    # Double-quoted, because these lines are written to be spoken and speech is
+    # full of contractions. In JavaScript an apostrophe and a string delimiter
+    # are the same character, so single quotes made every "won't" a syntax error.
+    for m in re.finditer(r'say:\s*"((?:[^"\\]|\\.)*)"', body):
+        text = m.group(1).replace('\\"', '"').replace("\\\\", "\\")
         if text not in seen:
             seen.add(text)
             out.append(text)
@@ -94,7 +104,7 @@ def extract_lines() -> list[str]:
 
 
 async def render(text: str, voice: str, rate: str, path: Path) -> None:
-    comm = edge_tts.Communicate(spoken(text), voice, rate=rate)
+    comm = edge_tts.Communicate(spoken(text), voice, rate=rate, pitch=PITCH)
     await comm.save(str(path))
 
 

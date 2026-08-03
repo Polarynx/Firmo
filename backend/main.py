@@ -1172,12 +1172,30 @@ def _chat_draft_block(draft: str) -> str:
     return f"\nTheir draft so far:\n\"\"\"\n{clipped}{tail}\n\"\"\"\n"
 
 
+def source_text(p: dict, limit: int) -> str:
+    """What a model should read of a source, and how much of it.
+
+    For a search result the answer is the abstract, because the abstract is all
+    Firmo has. For a file the student imported it is the document itself, and a
+    great deal more of it — that source exists precisely because they were given
+    it and it is not in any index, so the abstract-sized slice Firmo used to
+    take was throwing away the only full text in the project.
+
+    Four times the budget for imported files, which sounds generous until you
+    notice that a set reading is usually the source a student most wants their
+    outline and their claim check to actually reflect.
+    """
+    if p.get("imported") and p.get("fullText"):
+        return str(p["fullText"])[: limit * 4]
+    return str(p.get("abstract") or "")[:limit]
+
+
 def _chat_sources_block(papers: list[dict]) -> str:
     lines = []
     for i, p in enumerate(papers):
         authors = p.get("authors") or []
         who = authors[0].rsplit(" ", 1)[-1] if authors else "Unknown"
-        snippet = (p.get("abstract") or "no abstract available")[:300]
+        snippet = source_text(p, 300) or "no abstract available"
         lines.append(f'[{i + 1}] {who} ({p.get("year", "n.d.")}), "{p.get("title", "")}": {snippet}')
     return "\n\n".join(lines)
 
@@ -1262,7 +1280,7 @@ async def ask_sources(req: AskSourcesRequest):
 
     lines = []
     for i, p in enumerate(req.papers[:15]):
-        snippet = (p.get("abstract") or "")[:350]
+        snippet = source_text(p, 350)
         if not snippet:
             continue
         authors = p.get("authors", [])
@@ -1381,7 +1399,7 @@ def _numbered_block(sources: list[dict], empty: str) -> str:
     for i, p in enumerate(sources):
         authors = p.get("authors") or []
         who = authors[0].rsplit(" ", 1)[-1] if authors else "Unknown"
-        snippet = (p.get("abstract") or "")[:320]
+        snippet = source_text(p, 320)
         lines.append(f'[{i + 1}] {who} ({p.get("year", "n.d.")}), "{p.get("title", "")}": {snippet}')
     return "\n\n".join(lines)
 

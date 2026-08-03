@@ -26,9 +26,10 @@ import { useWorkspaceStore } from '../stores/useWorkspaceStore'
 // so the search *result* is written straight in while the search *interface*
 // does everything it normally does.
 
-const { SOURCES, BRIEF, OUTLINE, DOC, CLAIMS, CITATIONS } = FIXTURE
+const { SOURCES, BRIEF, OUTLINE, DOC, CLAIMS, CITATIONS, FACETS } = FIXTURE
 
 const QUESTION = 'To what extent does raising the minimum wage reduce employment?'
+
 
 // The whole fixture draft, not an excerpt. Claims are pinned by finding their
 // quote in the document, so a demo that types three of the four paragraphs
@@ -359,6 +360,8 @@ const seedDemo = () => {
       { query: 'monopsony wage setting', found: 43 },
     ],
     gathered: 428, kept: SOURCES.length, stage: 'done',
+    facets: FACETS,
+    activeFacet: null,
   })
   useAnnotationStore.setState({
     claims: CLAIMS, outline: OUTLINE, citations: CITATIONS,

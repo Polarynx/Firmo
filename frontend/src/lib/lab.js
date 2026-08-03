@@ -1,3 +1,5 @@
+import { paperId } from './projects'
+
 // ── Fixture mode ─────────────────────────────────────────────────────────────
 //
 // `?lab` boots the workspace already mid-paper: a project with saved sources, a
@@ -194,7 +196,24 @@ const CITATIONS = [
 // data rather than two: a demo with its own private happy-path corpus is a demo
 // that keeps working after the product stops, which is the entire failure mode
 // of recorded product tours.
-export const FIXTURE = { SOURCES, BRIEF, OUTLINE, DOC, CLAIMS, CITATIONS }
+// Subject-matter groupings, as a real search would name them from these very
+// papers. Written out because neither the fixture nor the demo calls the model,
+// and a filter row with nothing in it teaches the wrong lesson about a feature
+// whose whole point is that it is never empty.
+const pick = t => {
+  const hit = SOURCES.find(x => x.title.startsWith(t))
+  return hit ? paperId(hit) : null
+}
+const FACETS = [
+  { label: 'Border studies',
+    ids: [pick('Minimum Wages and Employment'), pick('Minimum Wage Effects Across State')] },
+  { label: 'Method disputes',
+    ids: [pick('Difference-in-Differences'), pick('The New Minimum Wage Research')] },
+  { label: 'Enforcement and informality',
+    ids: [pick('Employment Effects of Minimum Wages in Low-Income'), pick('Wage Floors and Rapid')] },
+].filter(f => f.ids.filter(Boolean).length >= 2)
+
+export const FIXTURE = { SOURCES, BRIEF, OUTLINE, DOC, CLAIMS, CITATIONS, FACETS }
 
 /**
  * Fill the stores with a paper already in progress. Called once at boot, after
@@ -231,6 +250,8 @@ export function seedLab({ useWorkspaceStore, useResearchStore, useAnnotationStor
     stage: 'done',
     gathered: 428,
     kept: SOURCES.length,
+    facets: FACETS,
+    activeFacet: null,
     arms: [
       { query: 'minimum wage employment effects', found: 96 },
       { query: 'wage floor low skilled labour', found: 71 },

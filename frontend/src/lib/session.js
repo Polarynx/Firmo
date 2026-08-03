@@ -47,6 +47,7 @@ export function exportSession() {
     // the keepers loses the ability to go back and pick differently.
     results: rs.results || [],
     roleCounts: rs.roleCounts || null,
+    facets: rs.facets || [],
     sources: project?.sources || [],
     doc: ws.doc || '',
     outline: an.outline || null,
@@ -125,6 +126,8 @@ export async function importSession(file) {
     inputType: q.inputType || 'topic',
     results: data.results || [],
     roleCounts: data.roleCounts || null,
+    facets: data.facets || [],
+    activeFacet: null,
     provisional: false,
     isSearching: false,
     error: '',

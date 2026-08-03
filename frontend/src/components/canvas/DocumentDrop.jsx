@@ -26,6 +26,7 @@ import { SPRING } from '../../lib/constants'
 
 export default function DocumentDrop() {
   const setDoc = useWorkspaceStore(s => s.setDoc)
+  const addSources = useWorkspaceStore(s => s.addSources)
   const setStage = useUIStore(s => s.setStage)
   const inputRef = useRef(null)
 
@@ -33,6 +34,7 @@ export default function DocumentDrop() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [note, setNote] = useState('')
+  const [pending, setPending] = useState(null)
 
   // Drag events fire per element, so a naive `onDragLeave` clears the state
   // every time the pointer crosses a child. Counting entries and exits is the
@@ -70,16 +72,35 @@ export default function DocumentDrop() {
       if (!res.ok) throw new Error(data.detail || 'Firmo could not read that file.')
       if (!data.text?.trim()) throw new Error('That document appears to be empty.')
 
-      setDoc(data.text)
-      // Straight to the page it became, not to a confirmation. The student
-      // dropped a draft in order to see it in Firmo; making them press "open"
-      // afterwards is a step that exists only to prove the upload worked.
-      setStage('draft')
+      // Two things a student can mean by handing over a document, and the
+      // answer is obvious to them and unknowable from here. Asked once, with
+      // the file already parsed so the question is concrete: this many words,
+      // this title, which is it.
+      setPending({
+        text: data.text,
+        words: data.words,
+        paper: data.paper,
+        filename: data.filename,
+      })
     } catch (e) {
       setError(e.message || 'Something went wrong reading that file.')
     } finally {
       setBusy(false)
     }
+  }
+
+  function asDraft() {
+    setDoc(pending.text)
+    setPending(null)
+    setStage('draft')
+  }
+
+  function asSource() {
+    const added = addSources([pending.paper], 'Your file')
+    setNote(added?.added === 0
+      ? `"${pending.paper.title}" is already on your shelf.`
+      : `Added "${pending.paper.title}" to your sources.`)
+    setPending(null)
   }
 
   function onDrop(e) {
@@ -128,6 +149,44 @@ export default function DocumentDrop() {
           </>
         )}
       </p>
+
+      {/* The one question worth asking, asked once, with the file in hand.
+          Inferring would be guessing: a student with no draft yet might be
+          importing a set reading, and a student with three paragraphs might be
+          pasting in the rest of their own essay. */}
+      {pending && (
+        <motion.div
+          initial={{ opacity: 0, y: -4 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={SPRING}
+          className="mt-2 rounded-lg border border-hair/15 bg-hair/[0.04] px-3.5 py-3
+            flex flex-col gap-2.5"
+        >
+          <p className="text-[12px] text-t1 leading-relaxed">
+            Read <span className="font-medium">{pending.paper.title}</span>
+            <span className="text-t3"> · {pending.words.toLocaleString()} words</span>.
+            What is it?
+          </p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button onClick={asDraft} className="btn-primary text-xs py-1.5">
+              My draft
+            </button>
+            <button onClick={asSource} className="btn-ghost">
+              A source to research with
+            </button>
+            <button
+              onClick={() => setPending(null)}
+              className="text-[11.5px] text-t3 hover:text-t1 transition-colors px-1"
+            >
+              Cancel
+            </button>
+          </div>
+          <p className="text-[11px] text-t3 leading-relaxed">
+            A source joins your shelf and is used when Firmo plans your outline, checks your
+            claims and answers questions about your paper.
+          </p>
+        </motion.div>
+      )}
 
       {error && (
         <p className="mt-1.5 text-[11.5px] text-red-500 leading-relaxed">{error}</p>

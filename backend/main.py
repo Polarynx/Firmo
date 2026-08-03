@@ -2475,8 +2475,82 @@ async def import_docx(request: Request, file: UploadFile = File(...)):
     kept = [p for p in paras if p]
     text = "\n\n".join(kept)
     words = len(text.split())
-    return {"text": text, "words": words, "paragraphs": len(kept),
-            "filename": file.filename or "document.docx"}
+    name = file.filename or "document.docx"
+
+    # The same file, described two ways, because there are two things a student
+    # means when they hand Firmo a document. Usually it is "this is my draft".
+    # Sometimes it is "this is a paper I was given, research with it" — a set
+    # reading, a report the department published, a chapter that is not in any
+    # index Firmo searches. Those are sources, and a research tool that can only
+    # accept sources it found itself is refusing the ones a student was actually
+    # assigned.
+    #
+    # Both shapes are returned and the client decides, because the answer is
+    # obvious to the person holding the file and unknowable from here.
+    return {
+        "text": text,
+        "words": words,
+        "paragraphs": len(kept),
+        "filename": name,
+        "paper": _file_as_paper(name, kept, doc),
+    }
+
+
+def _file_as_paper(filename: str, paragraphs: list[str], doc) -> dict:
+    """A parsed document, shaped like a search result.
+
+    Everything downstream — the outline, the claim check, the chat, the
+    bibliography — takes papers. Making an imported file into one means it
+    reaches all of them without a single special case, and the alternative is a
+    parallel "attachments" concept threaded through five features.
+
+    The title is the document's own if it has a real one, else the filename with
+    its extension and separators cleaned up. The abstract is the opening of the
+    text, which for a paper is the abstract and for lecture notes is the first
+    thing on the page: either way it is what a reader would skim to decide what
+    this is.
+    """
+    title = ""
+    # A Word Heading 1, if the document uses styles properly.
+    try:
+        for para in doc.paragraphs:
+            if (para.style and para.style.name or "").lower().startswith("heading") \
+                    and para.text.strip():
+                title = para.text.strip()
+                break
+    except Exception:
+        pass
+    if not title:
+        first = paragraphs[0] if paragraphs else ""
+        # A first line short enough to be a title probably is one; a first line
+        # that runs to 300 characters is the opening of a paragraph.
+        if 0 < len(first) <= 140:
+            title = first
+    if not title:
+        stem = re.sub(r"\.[A-Za-z0-9]+$", "", filename)
+        title = re.sub(r"[_\-]+", " ", stem).strip() or "Imported document"
+
+    body = "\n\n".join(paragraphs)
+    return {
+        "title": title[:300],
+        "authors": [],
+        "year": None,
+        "abstract": body[:1500],
+        # The whole thing, so a claim can be matched against page eight rather
+        # than the first paragraph. Bounded, because this is going into
+        # localStorage alongside everything else.
+        "fullText": body[:40000],
+        "doi": None,
+        "url": None,
+        "journal": "",
+        "citationCount": 0,
+        "source": "upload",
+        "imported": True,
+        "filename": filename,
+        "stance": "context",
+        "relevanceScore": 8,
+        "tier": "core",
+    }
 
 
 @app.post("/api/export-docx")

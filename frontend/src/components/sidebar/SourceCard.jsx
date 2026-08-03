@@ -204,6 +204,16 @@ export default function SourceCard({ paper, index = 0, query = '', shape = 'none
         // out in role stacks, so DOM order is not array order.
         <div data-demo={paper.retracted ? 'retracted-card' : undefined}
           className="flex items-center flex-wrap gap-1.5">
+          {paper.imported && (
+            <Chip
+              tone={{ chip: 'text-brand-600 border-brand-500/45 dark:text-signal dark:border-signal/40',
+                      dot: 'bg-brand-500 dark:bg-signal' }}
+              label="Your file"
+              title={paper.filename
+                ? `Imported from ${paper.filename}. Firmo did not find this, you supplied it.`
+                : 'You supplied this file rather than Firmo finding it.'}
+            />
+          )}
           {paper.retracted && (
             <Chip
               tone={{ chip: 'text-red-500 border-red-500/50 bg-red-500/10', dot: 'bg-red-500' }}

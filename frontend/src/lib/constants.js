@@ -1,4 +1,5 @@
 export const SOURCE_LABELS = {
+  upload: 'Your file',
   semantic_scholar: 'Semantic Scholar',
   crossref: 'CrossRef',
   pubmed: 'PubMed',
@@ -21,6 +22,7 @@ export const SOURCE_LABELS = {
 // column of results reads the stamp before the title, so it has to be the
 // database's own shorthand rather than an invented abbreviation.
 export const SOURCE_STAMPS = {
+  upload: 'YOURS',
   semantic_scholar: 'S2',
   crossref: 'CR',
   pubmed: 'PM',

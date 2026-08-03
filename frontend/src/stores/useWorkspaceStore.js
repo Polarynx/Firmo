@@ -3,6 +3,7 @@ import { postJSON } from '../lib/api'
 import { loadStore, saveStore, newProject, paperId } from '../lib/projects'
 import { scheduleIngest } from '../lib/corpus'
 import { scheduleSync, syncNow } from '../lib/sync'
+import { saveSnapshot } from '../lib/backup'
 import { useRecordStore } from './useRecordStore'
 
 // The document and the project it belongs to. Everything the student is
@@ -167,6 +168,7 @@ export const useWorkspaceStore = create((set, get) => ({
     }
     get().persist()
     get().refreshBibliography()
+    saveSnapshot()
   },
 
   /**

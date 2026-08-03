@@ -12,6 +12,7 @@ import StageCenter from '../canvas/StageCenter'
 import ContextSidebar from '../sidebar/ContextSidebar'
 import OmniBar from '../omnibar/OmniBar'
 import Demo from '../Demo'
+import { saveSnapshot } from '../../lib/backup'
 import ImportSheet from '../sidebar/ImportSheet'
 import AuthSheet from './AuthSheet'
 import RecordSheet from './RecordSheet'
@@ -55,6 +56,15 @@ export default function WorkspaceLayout() {
     if (q) executeSearch(q)
     window.history.replaceState({}, '', window.location.pathname)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // One last snapshot as the tab goes. `visibilitychange` rather than
+  // `beforeunload`: mobile browsers routinely kill a backgrounded tab without
+  // ever firing unload, which is precisely the case this is for.
+  useEffect(() => {
+    const onHide = () => { if (document.hidden) saveSnapshot({ force: true }) }
+    document.addEventListener('visibilitychange', onHide)
+    return () => document.removeEventListener('visibilitychange', onHide)
+  }, [])
 
   // Any click outside a header menu closes it.
   useEffect(() => {

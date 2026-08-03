@@ -9,6 +9,7 @@ import { EdgeProgress } from '../ui/primitives'
 import StageTabs from '../workspace/StageTabs'
 import NextMove from '../workspace/NextMove'
 import DeviceOnlyNote, { useDeviceAtRisk } from '../workspace/DeviceOnlyNote'
+import RestoreNote from '../workspace/RestoreNote'
 import QuestionSurface from './QuestionSurface'
 import DocumentCanvas from './DocumentCanvas'
 import ExportSurface from './ExportSurface'
@@ -121,6 +122,9 @@ export default function StageCenter() {
               a cookie policy, and the second one is read by nobody — so the
               next-move line waits its turn rather than competing. */}
           <div className="mx-auto w-full max-w-3xl px-8 pt-4 empty:hidden">
+            {/* A recovered paper outranks everything: it is the only notice
+                here that is about work already lost. */}
+            <RestoreNote />
             {atRisk ? <DeviceOnlyNote onQuiet={() => setNoteQuiet(true)} /> : <NextMove />}
           </div>
           <Surface stage={stage} />

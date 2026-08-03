@@ -3,6 +3,7 @@ import { postJSON, streamNDJSON } from '../lib/api'
 import { useRecordStore } from './useRecordStore'
 import { useUIStore } from './useUIStore'
 import { isDemoActive } from '../lib/demoMode'
+import { saveSnapshot } from '../lib/backup'
 import { FIXTURE } from '../lib/lab'
 import { useWorkspaceStore } from './useWorkspaceStore'
 
@@ -134,6 +135,7 @@ export const useAnnotationStore = create((set, get) => ({
       }
 
       draftAbort = null
+      saveSnapshot()
       useWorkspaceStore.getState().setMode('idle')
       // The structural read is what a student wants next, so fetch it now
       // rather than making them ask for it.
@@ -226,6 +228,7 @@ export const useAnnotationStore = create((set, get) => ({
     try {
       const data = await postJSON('/api/outline', { papers, thesis })
       set({ outline: data.sections || [] })
+      saveSnapshot()
     } catch {
       set({ outlineError: "Couldn't build an outline from these sources just now." })
     } finally {

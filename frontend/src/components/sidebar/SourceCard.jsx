@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 
 import { postJSON } from '../../lib/api'
-import { inTextCitationWithPage } from '../../lib/cite'
 import { paperId } from '../../lib/projects'
 import { cannedSummary, cannedWhy, fakeLatency, isDemoActive } from '../../lib/demoMode'
 import { SOURCE_LABELS, SOURCE_STAMPS, roleFor, SPRING } from '../../lib/constants'
@@ -28,8 +27,6 @@ export default function SourceCard({ paper, index = 0, query = '', shape = 'none
   const [summary, setSummary] = useState(null)
   const [busy, setBusy] = useState('')
   const [why, setWhy] = useState(null)
-  const [quotes, setQuotes] = useState(null)
-  const [quoteError, setQuoteError] = useState('')
   const [copied, setCopied] = useState('')
 
   const authors = Array.isArray(paper.authors) ? paper.authors : []
@@ -102,25 +99,6 @@ export default function SourceCard({ paper, index = 0, query = '', shape = 'none
     } catch {
       setWhy('Could not analyze.')
     } finally { setBusy('') }
-  }
-
-  async function handleQuotes() {
-    if (quotes || busy || !paper.oa_pdf) return
-    setBusy('quotes')
-    setQuoteError('')
-    try {
-      const data = await postJSON('/api/quotes', {
-        pdf_url: paper.oa_pdf, query: query || paper.title, title: paper.title,
-      })
-      setQuotes(data.quotes || [])
-    } catch {
-      setQuoteError("Couldn't read this PDF. Not every publisher allows it, so open it and quote by hand.")
-    } finally { setBusy('') }
-  }
-
-  function copyQuote(q, i) {
-    const c = inTextCitationWithPage(paper, style, q.page)
-    navigator.clipboard.writeText(`"${q.quote}" ${c}`).then(() => flash(`q${i}`))
   }
 
   return (
@@ -316,30 +294,6 @@ export default function SourceCard({ paper, index = 0, query = '', shape = 'none
         )}
       </AnimatePresence>
 
-      {quoteError && <p className="text-[11px] text-t3">{quoteError}</p>}
-      {quotes && (
-        quotes.length === 0 ? (
-          <p className="text-[11px] text-t3">Nothing in this PDF stood out as directly quotable.</p>
-        ) : (
-          <div className="flex flex-col gap-2">
-            <span className="eyebrow">Quotable, from the PDF</span>
-            {quotes.map((q, i) => (
-              <div key={i} className="border-l-2 border-l-highlight/80 bg-highlight/[0.06] rounded-r px-3 py-2 flex flex-col gap-1.5">
-                <p className="text-[11.5px] text-t1 leading-relaxed">
-                  “{q.quote}”
-                  {q.page != null && <span className="record ml-1.5">· p.&thinsp;{q.page}</span>}
-                </p>
-                {q.why && <p className="text-[10.5px] text-t3">{q.why}</p>}
-                <button onClick={() => copyQuote(q, i)}
-                  className="self-start text-[11px] font-medium text-brand-500 dark:text-signal hover:opacity-75">
-                  {copied === `q${i}` ? '✓ Copied with citation' : 'Copy with citation'}
-                </button>
-              </div>
-            ))}
-          </div>
-        )
-      )}
-
       {/* Quick actions */}
       <div className="flex flex-wrap gap-1.5 pt-0.5">
         <button onClick={handleCite} disabled={citing} className="btn-ghost">
@@ -353,11 +307,6 @@ export default function SourceCard({ paper, index = 0, query = '', shape = 'none
         {abstract && !why && query && (
           <button data-demo="why-matters" onClick={handleWhy} disabled={busy === 'why'} className="btn-ghost">
             {busy === 'why' ? 'Reading…' : 'Why it matters'}
-          </button>
-        )}
-        {paper.oa_pdf && !quotes && (
-          <button onClick={handleQuotes} disabled={busy === 'quotes'} className="btn-ghost">
-            {busy === 'quotes' ? 'Reading the PDF…' : 'Find quotes'}
           </button>
         )}
       </div>

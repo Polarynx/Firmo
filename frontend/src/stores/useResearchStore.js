@@ -119,10 +119,12 @@ export const useResearchStore = create((set, get) => ({
       showRelated: false,
     })
     useWorkspaceStore.getState().setMode('searching')
-    // A search moves the student to Sources. Running one is the act of
-    // finishing with the question, so the centre should be showing what came
-    // back rather than the box they typed it into.
-    useUIStore.getState().setStage('sources')
+    // Deliberately does NOT move the student. Firmo used to jump to Sources the
+    // instant a search began, which takes the screen away from someone who is
+    // still reading the brief they just asked for — and worse, teaches them that
+    // pressing things here moves them somewhere without warning. The Question
+    // surface offers the way forward instead, and they take it when they are
+    // ready.
 
     let briefText = ''
     let invalid = false

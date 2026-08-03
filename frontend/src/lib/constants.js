@@ -122,19 +122,19 @@ export const CITATION_STYLES = [
 // question shape, so the palette keeps meaning one thing everywhere.
 export const ROLE = {
   finding: {
-    label: 'Finding',
+    label: 'Backs your point',
     chip: 'text-brand-500 border-brand-500/50 dark:text-signal dark:border-signal/40',
     dot: 'bg-brand-500 dark:bg-signal',
     rail: 'border-l-brand-500 dark:border-l-signal',
   },
   tension: {
-    label: 'Tension',
+    label: 'Pushes back',
     chip: 'text-orange-600 border-orange-400/50 dark:text-orange-300 dark:border-orange-500/40',
     dot: 'bg-orange-500',
     rail: 'border-l-orange-500',
   },
   conditional: {
-    label: 'Depends',
+    label: 'It depends',
     chip: 'text-amber-600 border-amber-400/50 dark:text-amber-300 dark:border-amber-500/40',
     dot: 'bg-amber-400',
     rail: 'border-l-amber-400',
@@ -146,13 +146,13 @@ export const ROLE = {
   // student assembling a methods section needs to see which is which without
   // reading every card.
   framework: {
-    label: 'Framework',
+    label: "How it's studied",
     chip: 'text-unverified border-unverified/30',
     dot: 'border border-unverified bg-transparent',
     rail: 'border-l-unverified/50',
   },
   context: {
-    label: 'Context',
+    label: 'Background',
     chip: 'text-unverified border-unverified/20',
     dot: 'bg-unverified/60',
     rail: 'border-l-unverified/30',
@@ -165,38 +165,17 @@ export const ROLE_ORDER = ['finding', 'tension', 'conditional', 'framework', 'co
 // magnitude question wants "Effect estimate", not "Finding"; a reading of a
 // novel wants "Reading", not "Evidence". Only the label moves — the colour and
 // the meaning stay put.
-const ROLE_LABELS = {
-  extent: {
-    finding: 'Effect estimate', tension: 'Null or reversed', conditional: 'Moderator',
-    framework: 'Method', context: 'Context',
-  },
-  mechanism: {
-    finding: 'Pathway', tension: 'Rival pathway', conditional: 'Boundary condition',
-    framework: 'Theory', context: 'Context',
-  },
-  comparison: {
-    finding: 'For this side', tension: 'For the other', conditional: 'Both / neither',
-    framework: 'Method', context: 'Context',
-  },
-  enumeration: {
-    finding: 'Names an item', tension: 'Disputes an item', conditional: 'Case-dependent',
-    framework: 'Taxonomy', context: 'Case material',
-  },
-  interpretive: {
-    finding: 'Reading', tension: 'Counter-reading', conditional: 'Qualified',
-    framework: 'Theory', context: 'Primary source',
-  },
-  causal: {
-    finding: 'Supports', tension: 'Counterpoint', conditional: 'Mixed evidence',
-    framework: 'Framework', context: 'Background',
-  },
-}
+// The labels no longer change with the question type. A table of six
+// vocabularies used to live here — "Effect estimate" for one shape, "Pathway"
+// for another, "Names an item" for a third — which meant the words on screen
+// were different every time a student searched for something new. They were
+// precise and they were unlearnable, and precision nobody can read is not
+// precision. `roleFor` keeps its shape argument so callers do not all have to
+// change, and ignores it.
 
 /** The role's config, worded for this question's shape. */
-export function roleFor(key, shape) {
-  const base = ROLE[key] || ROLE.context
-  const label = ROLE_LABELS[shape]?.[key]
-  return label ? { ...base, label } : base
+export function roleFor(key) {
+  return ROLE[key] || ROLE.context
 }
 
 // What the panel calls the question, and the one line under it that says what a

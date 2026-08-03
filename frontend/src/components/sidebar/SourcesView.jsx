@@ -5,7 +5,7 @@ import { useResearchStore, selectFiltered } from '../../stores/useResearchStore'
 import { useUIStore } from '../../stores/useUIStore'
 import { useSavedSources, useSavedIds } from '../../stores/selectors'
 import { paperId } from '../../lib/projects'
-import { SOURCE_LABELS, ROLE_ORDER, SHAPE, roleFor, SPRING } from '../../lib/constants'
+import { SOURCE_LABELS, ROLE_ORDER, YEAR_OPTIONS, roleFor, SPRING } from '../../lib/constants'
 import { EmptyNote, StatusLine } from '../ui/primitives'
 import QueryLedger from './QueryLedger'
 import SourceCard from './SourceCard'
@@ -44,8 +44,8 @@ export default function SourcesView() {
   const savedIds = useSavedIds()
   const setShowImport = useUIStore(s => s.setShowImport)
   const setStage = useUIStore(s => s.setStage)
+  const executeSearch = useResearchStore(s => s.executeSearch)
 
-  const shape = SHAPE[questionShape]
   const [collapsed, setCollapsed] = useState(() => new Set())
   const [active, setActive] = useState(null)
   const rootRef = useRef(null)
@@ -169,7 +169,6 @@ export default function SourcesView() {
           <div className="flex items-baseline justify-between gap-2">
             <span className="eyebrow">
               {shown.length} source{shown.length !== 1 ? 's' : ''}
-              {shape && <span className="text-t3"> · {shape.label.toLowerCase()}</span>}
             </span>
             {totalSaved > 0 && (
               <span className="record text-brand-500 dark:text-signal">{totalSaved} in your paper</span>
@@ -213,18 +212,33 @@ export default function SourcesView() {
         </div>
       )}
 
-      {/* What kind of question this is, and what a good answer to it looks
-          like. One line, shown once, above everything it governs. */}
-      {shape && results.length > 0 && !provisional && (
-        <motion.div
-          initial={{ opacity: 0, y: -4 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={SPRING}
-          className="flex flex-col gap-1 rounded-lg border border-line bg-raised/40 px-3 py-2.5"
-        >
-          <span className="eyebrow">{shape.label}</span>
-          <p className="text-[11px] text-t2 leading-relaxed">{shape.note}</p>
-        </motion.div>
+      {/* Published since. One of the two filters anybody actually reaches
+          for, and it went missing in a refactor. It re-runs the search rather
+          than hiding rows, because the year is a parameter the databases
+          themselves accept: filtering client-side would quietly shrink a
+          sixty-paper result to nine and call that a search. */}
+      {!provisional && searchedQuery && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="eyebrow shrink-0">Published</span>
+          {YEAR_OPTIONS.map(opt => {
+            const on = (store.yearFrom ?? null) === opt.value
+            return (
+              <button
+                key={opt.label}
+                onClick={() => {
+                  store.setYearFrom(opt.value)
+                  executeSearch(searchedQuery)
+                }}
+                className={`font-mono text-[9px] uppercase tracking-[0.12em] px-2 py-0.5
+                  rounded border transition-colors ${on
+                    ? 'border-brand-500/60 text-brand-600 dark:text-signal bg-brand-500/10'
+                    : 'border-line text-t3 hover:text-t2 hover:border-edge'}`}
+              >
+                {opt.label}
+              </button>
+            )
+          })}
+        </div>
       )}
 
       {/* Database filter */}

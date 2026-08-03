@@ -8,6 +8,7 @@ import { EXAMPLE_TOPICS } from '../../lib/constants'
 
 import BriefBlock from './BriefBlock'
 import DocumentDrop from './DocumentDrop'
+import NextStep from '../workspace/NextStep'
 
 // ── Stage 1: the question ───────────────────────────────────────────────────
 //
@@ -71,6 +72,7 @@ export default function QuestionSurface() {
   const cancel = useResearchStore(s => s.cancel)
   const brief = useResearchStore(s => s.brief)
   const searchError = useResearchStore(s => s.error)
+  const results = useResearchStore(s => s.results)
   const setStage = useUIStore(s => s.setStage)
   const setShowWalkthrough = useUIStore(s => s.setShowWalkthrough)
 
@@ -267,13 +269,14 @@ export default function QuestionSurface() {
       {/* The brief, once Firmo has read the question. */}
       <BriefBlock />
 
+      {/* The way forward, once there is somewhere to go. This replaced a small
+          ghost link that said the same thing and was routinely missed. */}
       {brief && !isSearching && (
-        <button
-          onClick={() => setStage('sources')}
-          className="btn-ghost self-start"
-        >
-          See what came back →
-        </button>
+        <NextStep
+          to="sources"
+          label={results.length ? `See the ${results.length} sources that came back` : 'See what came back'}
+          hint="Filed by what each one does for your argument. Bookmark the ones you will use."
+        />
       )}
 
       {searchError === 'invalid_query' ? (

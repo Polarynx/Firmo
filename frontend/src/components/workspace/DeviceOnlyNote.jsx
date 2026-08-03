@@ -84,8 +84,14 @@ export default function DeviceOnlyNote({ onQuiet }) {
       <div className="min-w-0 flex-1 flex flex-col gap-2">
         <p className="text-[12px] text-t1 leading-relaxed">
           This paper lives in this browser only. You have {has} here, and clearing your
-          site data — or opening Firmo on another machine — would lose it.
+          site data, or opening Firmo on another machine, would lose it.
         </p>
+        {/* Three ways out, and the third one matters most.
+            Offering only the signup would make a safety notice into a growth
+            tactic; offering only signup and download still leaves someone who
+            has understood the risk and accepted it with nothing to press but
+            the same × they pressed yesterday. "Don't ask again" is the honest
+            option, so it is here rather than hidden behind the dismiss. */}
         <div className="flex items-center gap-3 flex-wrap">
           <button
             onClick={() => setShowAuth(true)}
@@ -93,16 +99,19 @@ export default function DeviceOnlyNote({ onQuiet }) {
           >
             Save it to an account
           </button>
-          {/* The second exit matters as much as the first. Someone who does not
-              want an account still deserves a way to not lose their work, and
-              offering only the signup is how a safety notice reads as a growth
-              tactic. */}
-          <span className="text-t3 text-[11px]">or</span>
+          <span className="text-t3 text-[11px]">·</span>
           <button
             onClick={() => useUIStore.getState().setStage('export')}
             className="text-[11.5px] font-medium text-t2 hover:text-t1 transition-colors"
           >
-            Download a copy now
+            Download a copy
+          </button>
+          <span className="text-t3 text-[11px]">·</span>
+          <button
+            onClick={dismiss}
+            className="text-[11.5px] font-medium text-t3 hover:text-t1 transition-colors"
+          >
+            Don't ask again
           </button>
         </div>
       </div>

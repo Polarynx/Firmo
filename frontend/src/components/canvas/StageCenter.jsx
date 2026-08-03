@@ -59,9 +59,6 @@ function Surface({ stage }) {
     case 'export':
       return <ExportSurface />
 
-    case 'claims':
-      return <DocumentCanvas mode="claims" />
-
     case 'draft':
     default:
       return <DocumentCanvas mode="draft" />

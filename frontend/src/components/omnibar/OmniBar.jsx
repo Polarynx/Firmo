@@ -6,6 +6,7 @@ import { cannedAsk, fakeLatency, isDemoActive } from '../../lib/demoMode'
 import { useWorkspaceStore } from '../../stores/useWorkspaceStore'
 import { useSavedSources } from '../../stores/selectors'
 import { useResearchStore } from '../../stores/useResearchStore'
+import { useAnnotationStore } from '../../stores/useAnnotationStore'
 import { useRecordStore } from '../../stores/useRecordStore'
 import { streamNDJSON } from '../../lib/api'
 import { runIntent } from '../../lib/runIntent'
@@ -122,6 +123,14 @@ export default function OmniBar() {
         messages: history.slice(-12),
         papers: sources,
         project_name: projectName,
+        // The rest of the paper goes with the question. Without these the chat
+        // could only answer "what do my sources say"; with them it can answer
+        // "does this section work", "what is this paragraph missing", "how do I
+        // say this more plainly" — the questions someone actually has with a
+        // half-written draft open.
+        question: useResearchStore.getState().searchedQuery || '',
+        outline: useAnnotationStore.getState().outline || [],
+        draft: useWorkspaceStore.getState().doc || '',
       }, {
         signal: abortRef.current.signal,
         onEvent: ev => {
@@ -228,8 +237,8 @@ export default function OmniBar() {
               }}
               placeholder={
                 sources.length === 0
-                  ? 'Ask Firmo about your sources…'
-                  : `Ask your ${sources.length} source${sources.length === 1 ? '' : 's'}…`
+                  ? 'Ask Firmo about your paper…'
+                  : `Ask about your ${sources.length} source${sources.length === 1 ? '' : 's'}, outline or draft…`
               }
               className="flex-1 min-w-0 bg-transparent outline-none focus-visible:outline-none
                 text-[13px] text-t1 placeholder:text-t3"

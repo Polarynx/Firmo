@@ -45,6 +45,15 @@ class PaperChatRequest(BaseModel):
     messages: list[dict]  # [{"role": "user"|"assistant", "content": str}, ...]
     papers: list[dict]
     project_name: str = ""
+    # The rest of the paper. The chat could only see the sources, so it could
+    # answer "what do these say about X" and nothing else — not "does this
+    # section work", not "how should I word this", not "what am I missing",
+    # which are the questions someone actually has at 2am with a half-written
+    # draft open. All optional: a chat opened before any of this exists still
+    # works, it just knows less.
+    question: str = ""
+    outline: list[dict] = []
+    draft: str = ""
 
 
 class AnnotatedBibRequest(BaseModel):

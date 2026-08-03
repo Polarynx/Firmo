@@ -26,10 +26,10 @@ export default function ExportSurface() {
   // Only the two that mean something is actually wrong. "You have not built an
   // outline" is not a reason to hold up a finished paper.
   const warnings = [
-    stages.claims.state === 'part' && {
-      key: 'claims',
-      text: stages.claims.note,
-      action: 'Open claims',
+    stages.draft.state === 'part' && {
+      key: 'draft',
+      text: stages.draft.note,
+      action: 'Open the draft',
     },
     stages.references.state === 'part' && {
       key: 'references',

@@ -26,7 +26,6 @@ const COMPANION = {
   sources:    'saved',
   outline:    'saved',
   draft:      'saved',
-  claims:     'argument_map',
   references: 'saved',
   export:     'saved',
 }

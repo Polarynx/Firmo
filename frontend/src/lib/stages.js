@@ -56,13 +56,7 @@ export const STAGES = [
     key: 'draft',
     label: 'Draft',
     surface: 'document',
-    hint: 'The page itself',
-  },
-  {
-    key: 'claims',
-    label: 'Claims',
-    surface: 'document',
-    hint: 'Every sentence that needs backing, and whether it has any',
+    hint: 'The page, and whether every sentence on it is backed',
   },
   {
     key: 'references',
@@ -142,17 +136,19 @@ export function readStages() {
         : null,
     },
     draft: {
-      state: state(words >= 300, words > 0),
+      // One stage, two things to be done to it: written, then checked. Done
+      // means both — a finished-length draft nobody has checked is not finished.
+      state: openClaims > 0 ? 'part'
+        : claims.length > 0 && words >= 300 ? 'done'
+        : state(false, words > 0),
       count: words || null,
-      note: words ? `${words.toLocaleString()} word${words !== 1 ? 's' : ''}` : null,
-    },
-    claims: {
-      state: state(claims.length > 0 && openClaims === 0, claims.length > 0),
-      count: claims.length || null,
-      note: claims.length
-        ? openClaims ? `${openClaims} still unbacked` : `${claims.length} all backed`
+      note: words
+        ? claims.length
+          ? openClaims
+            ? `${words.toLocaleString()} words, ${openClaims} unbacked`
+            : `${words.toLocaleString()} words, all backed`
+          : `${words.toLocaleString()} word${words !== 1 ? 's' : ''}, not checked yet`
         : null,
-      blocked: words < 40 ? 'Write a paragraph or two first, then Firmo can mark what needs backing.' : null,
     },
     references: {
       state: state(cites.length > 0 && badRefs === 0, cites.length > 0),
@@ -193,13 +189,10 @@ export function nextMove(stages) {
   if (stages.draft.state === 'empty' && stages.outline.state !== 'empty') {
     return { stage: 'draft', label: 'Start writing', text: 'The outline is ready. Send a section to the page and start from it.' }
   }
-  if (stages.draft.state !== 'empty' && stages.claims.state === 'empty' && !stages.claims.blocked) {
-    return { stage: 'claims', label: 'Check the draft', text: 'Firmo can mark every sentence a reader would expect a source for.' }
+  if (stages.draft.state === 'part' && stages.draft.count) {
+    return { stage: 'draft', label: 'Open the draft', text: `${stages.draft.note}. Each one needs a source or a rewrite.` }
   }
-  if (stages.claims.count && stages.claims.state === 'part') {
-    return { stage: 'claims', label: 'Open claims', text: `${stages.claims.note} — each one needs a source or a rewrite.` }
-  }
-  if (stages.claims.state === 'done' && stages.references.state === 'empty') {
+  if (stages.draft.state === 'done' && stages.references.state === 'empty') {
     return { stage: 'references', label: 'Verify references', text: 'Every claim is backed. Last thing before hand-in is the reference list.' }
   }
   return null

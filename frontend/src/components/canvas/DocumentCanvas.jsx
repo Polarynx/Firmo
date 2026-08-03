@@ -32,6 +32,13 @@ import SurfaceShell from './SurfaceShell'
 // clickable.
 
 export default function DocumentCanvas({ mode = 'draft' }) {
+  // Writing and checking are one activity interleaved: write a paragraph, check
+  // it, fix it, write the next. They used to be two tabs, which put a navigation
+  // between two halves of one motion. Now the marks are a toggle on the page,
+  // off while composing because a paragraph covered in amber is a paragraph
+  // being argued with before it is finished, and on the moment you want to know
+  // what is still unbacked.
+  const [showMarks, setShowMarks] = useState(true)
   const doc = useWorkspaceStore(s => s.doc)
   const setDoc = useWorkspaceStore(s => s.setDoc)
   const activeMode = useWorkspaceStore(s => s.activeMode)
@@ -70,12 +77,17 @@ export default function DocumentCanvas({ mode = 'draft' }) {
   }
   useEffect(() => () => clearTimeout(readTimer.current), [])
 
+  // A finished check turns the marks on. Running one and seeing nothing change
+  // is the worst possible outcome of pressing a button called "Check the draft".
+  const claimCount = claims?.length ?? 0
+  useEffect(() => { if (claimCount) setShowMarks(true) }, [claimCount])
+
   const busy = activeMode !== 'idle'
   const placed = useMemo(() => (claims ? placeClaims(doc, claims) : []), [doc, claims])
   // Marks only exist on the Claims reading of the page. On Draft the student is
   // writing, and a paragraph already covered in amber is a paragraph being
   // argued with while it is still being composed.
-  const annotated = mode === 'claims' && placed.length > 0
+  const annotated = mode !== 'export' && showMarks && placed.length > 0
 
   // Grow the surface with the prose. The overlay is absolutely positioned over
   // this element, so its height has to be driven by the same measurement.
@@ -172,25 +184,6 @@ export default function DocumentCanvas({ mode = 'draft' }) {
 
   const words = doc.trim() ? doc.trim().split(/\s+/).length : 0
 
-  // Claims are marks on prose, so with no prose there is nothing to show and an
-  // empty writing surface under a heading that says "Claims" is a screen that
-  // looks broken. Say what it needs and offer the way to get it, which is the
-  // same standard every other refusal in Firmo is held to.
-  if (mode === 'claims' && words < 8) {
-    return (
-      <SurfaceShell eyebrow="Claims" title="Nothing to check yet">
-        <p className="text-[13px] text-t2 leading-relaxed max-w-[52ch]">
-          Write or paste a draft and Firmo marks every sentence a reader would expect a source
-          for — amber where a citation is missing, red where the evidence you saved actually
-          disagrees with what you wrote.
-        </p>
-        <button onClick={() => setStage('draft')} className="btn-primary text-xs self-start">
-          Go to the draft
-        </button>
-      </SurfaceShell>
-    )
-  }
-
   return (
     <div ref={sectionRef} className="relative flex flex-col">
       {/* The hovered claim's next move, named. */}
@@ -230,15 +223,24 @@ export default function DocumentCanvas({ mode = 'draft' }) {
             over it. What it offers depends on which reading you are on. */}
         <div className="flex items-center justify-between gap-3">
           <span className="record">
-            {draftLoading
-              ? ''
-              : words
-                ? `${words.toLocaleString()} word${words === 1 ? '' : 's'}`
-                : mode === 'claims' ? 'Nothing written yet' : 'Draft'}
+            {draftLoading ? '' : words
+              ? `${words.toLocaleString()} word${words === 1 ? '' : 's'}`
+                + (placed.length ? ` · ${settled} of ${placed.length} settled` : '')
+              : 'Draft'}
           </span>
           {draftLoading && <StatusLine>{draftStatus}</StatusLine>}
 
           <div className="flex items-center gap-2">
+            {placed.length > 0 && !busy && (
+              <button
+                data-demo="toggle-marks"
+                onClick={() => setShowMarks(m => !m)}
+                className="btn-ghost"
+                title={showMarks ? 'Hide the marks and write' : 'Show what still needs a source'}
+              >
+                {showMarks ? 'Hide marks' : `Show ${placed.length} marks`}
+              </button>
+            )}
             {annotated && !busy && (
               <button onClick={clearDraft} className="btn-ghost">Clear marks</button>
             )}
@@ -279,9 +281,7 @@ export default function DocumentCanvas({ mode = 'draft' }) {
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
             spellCheck
-            placeholder={mode === 'claims'
-              ? 'Nothing to check yet — write or paste your draft.'
-              : 'Start typing, or paste your draft…'}
+            placeholder="Start typing, or paste your draft…"
             className={`canvas-type relative z-0 block w-full min-h-[42vh] resize-none
               bg-transparent outline-none border-0 overflow-hidden
               placeholder:text-t3/70 ${annotated ? 'text-transparent' : 'text-t1'}`}
@@ -337,7 +337,7 @@ export default function DocumentCanvas({ mode = 'draft' }) {
         {/* How far through the draft is. A claim is settled once it no longer
             asks anything of the student, so a paragraph of pure opinion counts
             as done rather than as unfinished work. */}
-        {mode === 'claims' && placed.length > 0 && (
+        {showMarks && placed.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
@@ -374,7 +374,7 @@ export default function DocumentCanvas({ mode = 'draft' }) {
           </motion.div>
         )}
 
-        {mode === 'claims' && claims && claims.length === 0 && !draftLoading && (
+        {claims && claims.length === 0 && !draftLoading && (
           <p className="text-xs text-t2 leading-relaxed">
             Nothing here needs backing up with evidence. Firmo checks factual claims, not
             opinions or style, so this reads as opinion, narrative, or common knowledge.
@@ -425,7 +425,7 @@ export default function DocumentCanvas({ mode = 'draft' }) {
         {/* The works-cited page, assembling itself under the document. It is
             part of the paper, so it belongs under the paper — but only on the
             Draft reading. On Claims the subject is the prose. */}
-        {mode === 'draft' && <BibliographyBlock />}
+        <BibliographyBlock />
       </div>
     </div>
   )

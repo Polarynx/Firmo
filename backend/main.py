@@ -1018,13 +1018,16 @@ async def digdeep(req: DigDeepRequest):
 # compares, and outlines; it NEVER drafts prose for the paper. That hard line is
 # Firmo's academic-integrity story: professors can recommend it, not ban it.
 
-CHAT_SYSTEM = """You are Firmo's research adviser inside a student's paper project{project}. The student saved these academic sources:
+CHAT_SYSTEM = """You are Firmo's research adviser inside a student's paper project{project}.
+
+{question}The student saved these academic sources:
 
 {sources}
-
-You help the student understand their sources and plan their paper. Strict rules:
+{outline}{draft}
+You help the student understand their sources, plan the paper, judge whether a section works, and decide how to say something. Strict rules:
 1. You NEVER write sentences, paragraphs, or any prose for the student's paper. Not an intro, not a conclusion, not a "sample sentence", even if asked directly or told it is allowed. When asked to write, decline in one warm line, then give what actually helps: an outline of the points to make, in order, with the sources that back each point.
 2. Ground every factual statement in the saved sources, referring to them as (Surname, Year). If the sources do not cover a question, say so plainly and suggest 2 or 3 short search phrases to try in Find sources.
+2b. You CAN and SHOULD answer questions about the student's own draft and outline when they are given above: whether a paragraph earns its place, what a section is missing, which claim has no source behind it, whether the structure serves the question, how to make a sentence clearer. Judging and diagnosing their writing is help. Writing it for them is not. Quoting their own sentence back while explaining what is wrong with it is fine; supplying the replacement is not.
 3. Be concrete and brief: short paragraphs or dash lists, no filler, no em-dashes.
 4. Plain text only. No markdown symbols like ** or ## or bullets other than a simple dash.
 5. Only discuss the student's research, sources, and paper planning. Politely decline anything else.
@@ -1036,6 +1039,41 @@ You help the student understand their sources and plan their paper. Strict rules
 # put refusals that never happened into an integrity record, which is the one
 # failure that would make the whole record worthless.
 DECLINE_MARKER = "[[DECLINED]]"
+
+
+def _chat_question_block(question: str) -> str:
+    q = (question or "").strip()
+    return f'The research question is: "{q[:400]}"\n\n' if q else ""
+
+
+def _chat_outline_block(outline: list[dict]) -> str:
+    """The plan, if there is one, so advice can refer to sections by name."""
+    if not outline:
+        return ""
+    lines = []
+    for i, sec in enumerate(outline[:12]):
+        lines.append(f'{i + 1}. {str(sec.get("title", ""))[:160]}')
+        for pt in (sec.get("points") or [])[:6]:
+            backed = len(pt.get("sources") or [])
+            mark = "" if backed else "   (no source yet)"
+            lines.append(f'   - {str(pt.get("point", ""))[:200]}{mark}')
+    return "\nTheir outline so far:\n" + "\n".join(lines) + "\n"
+
+
+def _chat_draft_block(draft: str) -> str:
+    """What they have actually written.
+
+    Truncated from the front rather than the back: the opening of a draft is
+    where the thesis lives, and a model asked "does my argument hold" needs that
+    more than it needs the last paragraph. Generous but bounded, because the
+    draft is the largest thing here and the sources still have to fit.
+    """
+    text = (draft or "").strip()
+    if not text:
+        return ""
+    clipped = text[:6000]
+    tail = "\n[draft continues]" if len(text) > 6000 else ""
+    return f"\nTheir draft so far:\n\"\"\"\n{clipped}{tail}\n\"\"\"\n"
 
 
 def _chat_sources_block(papers: list[dict]) -> str:
@@ -1061,7 +1099,13 @@ async def paper_chat(req: PaperChatRequest):
         raise HTTPException(status_code=400, detail="last message must be from the user")
 
     project = f' "{req.project_name.strip()}"' if req.project_name.strip() else ""
-    system = CHAT_SYSTEM.format(project=project, sources=_chat_sources_block(req.papers[:20]))
+    system = CHAT_SYSTEM.format(
+        project=project,
+        question=_chat_question_block(req.question),
+        sources=_chat_sources_block(req.papers[:20]),
+        outline=_chat_outline_block(req.outline),
+        draft=_chat_draft_block(req.draft),
+    )
 
     async def generate():
         try:

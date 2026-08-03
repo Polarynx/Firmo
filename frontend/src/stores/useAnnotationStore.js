@@ -77,7 +77,7 @@ export const useAnnotationStore = create((set, get) => ({
       draftStatus: 'Reading your draft…',
     })
     useWorkspaceStore.getState().setMode('draft_checking')
-    useUIStore.getState().setStage('claims')
+    useUIStore.getState().setStage('draft')
 
     try {
       await streamNDJSON('/api/draft-check', { text, saved_papers: savedPapers }, {

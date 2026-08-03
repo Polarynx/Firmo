@@ -222,7 +222,7 @@ export const SCRIPT = [
     at: 'check-draft',
     run: async () => {
       useAnnotationStore.setState({ draftLoading: true, draftStatus: 'Reading your draft…' })
-      ui().setStage('claims')
+      ui().setStage('draft')
       await sleep(1400)
       useAnnotationStore.setState({ draftLoading: false, draftStatus: '', claims: CLAIMS })
     },
@@ -398,33 +398,21 @@ export const TOURS = {
 
   draft: [
     { run: () => { seedDemo(); ui().setStage('draft') },
-      say: 'This is just the page. No marks while you write. A paragraph covered in amber is a paragraph being argued with before it is finished.' },
-    { say: 'Got something already? The Question tab opens a Word file straight into here, paragraphs intact. Google Docs exports to Word, so same door.' },
-    { say: 'The works-cited page builds itself underneath as you save sources.' },
+      say: 'This is your page. Firmo will not write it for you.' },
+    { say: 'Write however you like. When you want to know what still needs a source, ask it to check.' },
+    { at: 'check-draft', press: true,
+      say: 'It reads every sentence and marks the ones a marker would stop at.' },
+    { say: 'Amber wants a source. Red means the papers you saved actually disagree with what you wrote.' },
+    { at: 'claim-open', run: () => an().selectClaim(CLAIMS[2].id),
+      say: 'Click one and the best papers for that exact sentence show up next to it.' },
+    { at: 'cite', press: true,
+      say: 'One press. The citation goes in, the source is saved, the works cited page updates.' },
+    { at: 'toggle-marks', press: true, run: () => an().selectClaim(null),
+      say: 'Hide the marks when you want to write again. Nothing is lost, it is the same page.' },
     { at: 'style-menu', press: true,
-      say: 'APA, MLA, Chicago, Harvard, IEEE.' },
-    { run: () => { ws().setCitationStyle('mla'); ui().setStage('draft') },
-      say: 'Switch it and every entry re-sets itself, in the bibliography and in every citation already in your text.',
-      hold: 1400 },
-    { run: () => ws().setCitationStyle('apa'),
-      say: 'Nothing to reformat by hand.' },
-    { at: 'check-draft',
-      say: 'And when you are ready, Firmo reads it. What it will not do is write it.' },
+      say: 'APA, MLA, Chicago, Harvard, IEEE. Change it and every citation re-formats itself.' },
   ],
 
-  claims: [
-    { run: () => { seedDemo(); ui().setStage('claims') },
-      say: 'Same page, read instead of written. Every sentence a marker would want a source for is marked where you wrote it.' },
-    { say: 'Amber wants a citation. Red means the evidence you saved actually disagrees with you.' },
-    { at: 'claim-open', run: () => an().selectClaim(CLAIMS[0].id),
-      say: 'Click a red one and Firmo shows you what the paper really says, plus a rewrite you can take.' },
-    { run: () => an().selectClaim(CLAIMS[2].id),
-      say: 'Click an amber one and the best papers for that exact sentence turn up beside it. Open access? It quotes the page, not the abstract.' },
-    { at: 'cite', press: true,
-      say: 'One press. Citation into the sentence, source onto the shelf, entry into the works-cited page.' },
-    { run: () => an().selectClaim(null),
-      say: 'The bar tracks what is settled. Pure opinion counts as done. Firmo checks facts, not style.' },
-  ],
 
   references: [
     { run: () => { seedDemo(); ui().setStage('references') },

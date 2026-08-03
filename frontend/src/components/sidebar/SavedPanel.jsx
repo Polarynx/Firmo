@@ -9,6 +9,7 @@ import { readStages, nextMove } from '../../lib/stages'
 import { SPRING } from '../../lib/constants'
 import { EmptyNote } from '../ui/primitives'
 import Shelf from '../ui/Shelf'
+import RecordReceipt from '../workspace/RecordReceipt'
 
 // ── Where the paper stands ──────────────────────────────────────────────────
 //
@@ -125,6 +126,10 @@ export default function SavedPanel() {
           </span>
         </motion.button>
       )}
+
+      {/* What the work adds up to. Below the next move, because what to do now
+          outranks what you have already done. */}
+      <RecordReceipt />
 
       {/* The shelf shows what is there; this is the way to change it. A list of
           titles is not, which is why the list that used to live here is gone. */}

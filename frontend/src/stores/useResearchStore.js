@@ -50,6 +50,10 @@ export const useResearchStore = create((set, get) => ({
   results: [],
   provisional: false,
   roleCounts: null,
+  // Subject-matter groupings named from the results themselves, and which of
+  // them the student is currently filtering to. Arrives after the papers do.
+  facets: [],
+  activeFacet: null,
   hiddenSources: new Set(),
   showRelated: false,
   isSearching: false,
@@ -69,6 +73,9 @@ export const useResearchStore = create((set, get) => ({
   setQuery: query => set({ query }),
   setYearFrom: yearFrom => set({ yearFrom }),
   setShowRelated: showRelated => set({ showRelated }),
+  setActiveFacet: activeFacet => set(s => ({
+    activeFacet: s.activeFacet === activeFacet ? null : activeFacet,
+  })),
 
   toggleSourceFilter: src => set(s => {
     const next = new Set(s.hiddenSources)
@@ -115,6 +122,8 @@ export const useResearchStore = create((set, get) => ({
       results: [],
       provisional: false,
       roleCounts: null,
+      facets: [],
+      activeFacet: null,
       hiddenSources: new Set(),
       showRelated: false,
     })
@@ -170,6 +179,23 @@ export const useResearchStore = create((set, get) => ({
             // purpose: an Unpaywall lookup per paper used to hold the whole
             // ranked set back by several seconds for the sake of a download
             // button, so the papers now land first and the links catch up.
+            // Subject-matter groups, named from what came back. The indices
+            // refer to the ranked list, so they are resolved to paper ids here
+            // — the list gets re-sorted and re-filtered downstream, and an
+            // index would quietly start pointing at a different paper.
+            case 'facets': {
+              const ranked = get().results
+              set({
+                facets: (ev.items || []).map(f => ({
+                  label: f.label,
+                  ids: (f.indices || [])
+                    .map(i => ranked[i])
+                    .filter(Boolean)
+                    .map(paperId),
+                })).filter(f => f.ids.length >= 2),
+              })
+              break
+            }
             case 'pdfs': {
               const byId = new Map((ev.items || []).map(i => [i.id, i.oa_pdf]))
               if (byId.size === 0) break
@@ -259,6 +285,18 @@ export const useResearchStore = create((set, get) => ({
 // when the panel showed one role at a time; the sources view stacks them all
 // now, so the rail scrolls rather than hides and there is nothing to subtract.
 export function selectFiltered(s) {
-  if (s.hiddenSources.size === 0) return s.results
-  return s.results.filter(p => !s.hiddenSources.has(p.source))
+  let out = s.results
+  if (s.hiddenSources.size > 0) out = out.filter(p => !s.hiddenSources.has(p.source))
+  // A facet narrows to a subject; the role stacks still organise whatever is
+  // left, so pressing "Enforcement" shows the papers on enforcement still filed
+  // by what each one argues. Filtering by subject and grouping by role are
+  // different questions and both are worth being able to ask at once.
+  if (s.activeFacet) {
+    const f = s.facets.find(x => x.label === s.activeFacet)
+    if (f) {
+      const ids = new Set(f.ids)
+      out = out.filter(p => ids.has(paperId(p)))
+    }
+  }
+  return out
 }

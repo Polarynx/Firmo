@@ -38,6 +38,7 @@ export default function SourcesView() {
   const {
     results, provisional, isSearching, statusMsg,
     questionShape, searchedQuery, showRelated, hiddenSources, moreLoading, error,
+    facets, activeFacet,
   } = store
 
   const savedSources = useSavedSources()
@@ -45,6 +46,7 @@ export default function SourcesView() {
   const setShowImport = useUIStore(s => s.setShowImport)
   const setStage = useUIStore(s => s.setStage)
   const executeSearch = useResearchStore(s => s.executeSearch)
+  const setActiveFacet = useResearchStore(s => s.setActiveFacet)
 
   const [collapsed, setCollapsed] = useState(() => new Set())
   const [active, setActive] = useState(null)
@@ -209,6 +211,44 @@ export default function SourcesView() {
               )
             })}
           </div>
+        </div>
+      )}
+
+      {/* What this literature is actually about.
+          The role stacks say what each paper does for the argument, and those
+          five buckets are the same for every question ever asked — which is
+          what makes them learnable and what makes them insufficient. These are
+          the subject-matter groupings present in THIS result set: named from
+          the papers that came back rather than guessed from the question, so a
+          chip can never be pressed to reveal nothing. Pressing one narrows the
+          subject and leaves the role stacks organising what is left. */}
+      {!provisional && facets.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="eyebrow shrink-0">What they cover</span>
+          {facets.map(f => {
+            const on = activeFacet === f.label
+            return (
+              <button
+                key={f.label}
+                data-demo="facet"
+                onClick={() => setActiveFacet(f.label)}
+                title={`${f.ids.length} papers`}
+                className={`inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1
+                  rounded-full border transition-colors ${on
+                    ? 'border-brand-500/60 text-brand-600 dark:text-signal bg-brand-500/10'
+                    : 'border-line text-t2 hover:text-t1 hover:border-edge'}`}
+              >
+                {f.label}
+                <span className="font-mono text-[9px] opacity-60">{f.ids.length}</span>
+              </button>
+            )
+          })}
+          {activeFacet && (
+            <button onClick={() => setActiveFacet(activeFacet)}
+              className="text-[11px] text-t3 hover:text-t1 transition-colors">
+              clear
+            </button>
+          )}
         </div>
       )}
 

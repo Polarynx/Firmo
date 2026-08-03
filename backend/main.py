@@ -200,6 +200,91 @@ app.add_middleware(
 )
 
 
+
+# ── The shape of this particular literature ─────────────────────────────────
+#
+# The role stacks say what each paper DOES for the argument — backs it, pushes
+# back, depends. That is the same five buckets for every question ever asked,
+# which is exactly what makes them learnable and exactly what makes them
+# insufficient. A student looking at sixty papers on the minimum wage also wants
+# to know that eleven of them are about enforcement in developing economies,
+# nine are about the monopsony explanation, and six are methodological quarrels
+# about difference-in-differences. Those groupings do not generalise; they are a
+# property of this question and these results.
+#
+# So they are read off the results themselves rather than guessed from the
+# question. A facet named from the question can come back with nothing in it,
+# which is worse than no facet at all: it tells a student their search failed
+# when what actually happened is that the literature is not organised the way
+# they imagined.
+
+FACET_PROMPT = """A student asked: "{query}"
+
+Below are the papers a search returned. Group them by SUBJECT MATTER — the
+distinct areas, cases, mechanisms, time periods, populations or schools of
+thought that this particular set of papers covers.
+
+{papers}
+
+Rules:
+- Between 3 and 6 groups. Fewer if the literature really is narrow.
+- Name each group the way a student would say it out loud: 2 to 5 plain words,
+  no jargon, no colons, no "The role of". Good: "Enforcement in poorer
+  economies", "Monopsony", "Method disputes", "Teen employment". Bad:
+  "Examining the impact of regulatory frameworks".
+- A group must contain at least 2 papers. Drop anything thinner.
+- A paper may belong to more than one group, but most belong to exactly one.
+- Do not create a group that just means "everything else".
+
+Return ONLY valid JSON:
+{{"facets": [{{"label": "...", "indices": [0, 3, 7]}}, ...]}}"""
+
+
+async def name_facets(query: str, papers: list[dict]) -> list[dict]:
+    """Subject-matter groupings present in this result set, with their members.
+
+    Returns [] on any failure, and the caller treats that as "no facets" rather
+    than an error. This runs after the results have already been sent, so a bad
+    day at the model costs a row of filter chips and nothing else.
+    """
+    if len(papers) < 6:
+        return []
+
+    lines = []
+    for i, p in enumerate(papers[:60]):
+        snippet = (p.get("abstract") or "")[:220]
+        lines.append(f'[{i}] {p.get("title", "")}\n    {snippet}')
+
+    try:
+        parsed = await chat_json(
+            FACET_PROMPT.format(query=query, papers="\n\n".join(lines)),
+            max_tokens=700,
+        )
+    except Exception:
+        print("[facets ERROR]")
+        traceback.print_exc()
+        return []
+
+    out = []
+    seen_labels = set()
+    for f in (parsed.get("facets") or [])[:6]:
+        label = str(f.get("label") or "").strip()
+        if not label or len(label) > 40:
+            continue
+        key = label.lower()
+        if key in seen_labels:
+            continue
+        idx = [i for i in (f.get("indices") or [])
+               if isinstance(i, int) and 0 <= i < len(papers)]
+        # Two is the floor. A facet with one paper in it is a label for a paper,
+        # and a student pressing it learns nothing they could not see already.
+        if len(idx) < 2:
+            continue
+        seen_labels.add(key)
+        out.append({"label": label, "indices": sorted(set(idx))})
+    return out
+
+
 # ── Research planning ─────────────────────────────────────────────────────────
 
 RESEARCH_PROMPT = """You are Firmo, an academic research assistant that helps students write essays and papers. A student typed this into the research box:
@@ -919,6 +1004,17 @@ async def research(req: ResearchRequest, request: Request):
                       question_shape=shape,
                       core_count=core_count, related_count=related_count,
                       total_considered=len(papers))
+
+            # Named after the results are on screen, for the same reason the
+            # PDF links are: the ranking is what the student is waiting for, and
+            # a grouping pass that held it up would be paying for a filter with
+            # the thing being filtered.
+            try:
+                facets = await name_facets(final_query, ranked)
+                if facets:
+                    yield _ev("facets", items=facets)
+            except Exception:
+                traceback.print_exc()
 
             # Now collect the free-PDF links and send only what changed. A
             # failure here costs an "open PDF" button, never the search.

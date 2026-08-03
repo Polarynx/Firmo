@@ -2,9 +2,11 @@ import { useWorkspaceStore } from '../../stores/useWorkspaceStore'
 import { useSavedSources } from '../../stores/selectors'
 import { useUIStore } from '../../stores/useUIStore'
 import { readStages } from '../../lib/stages'
+import { CITATION_STYLES } from '../../lib/constants'
 
 import { useState } from 'react'
 
+import { downloadFile } from '../../lib/api'
 import { downloadSession } from '../../lib/session'
 import SurfaceShell from './SurfaceShell'
 import BibliographyBlock from './BibliographyBlock'
@@ -20,14 +22,44 @@ import BibliographyBlock from './BibliographyBlock'
 
 export default function ExportSurface() {
   const [saved, setSaved] = useState(false)
+  const [building, setBuilding] = useState(false)
+  const [buildError, setBuildError] = useState('')
+
   function saveSession() {
     downloadSession()
     setSaved(true)
     setTimeout(() => setSaved(false), 2400)
   }
 
+  // The file that gets handed in.
+  //
+  // This existed and was three levels down: inside the works-cited block, behind
+  // an "Export ▾" dropdown, one of four formats. Which meant the single artefact
+  // the whole product is pointed at — the student's prose and its bibliography,
+  // in one Word document, formatted to the assignment's style — was harder to
+  // reach than a BibTeX dump. It is the thing this screen is for, so it is the
+  // thing this screen leads with.
+  async function buildDocx() {
+    if (building) return
+    setBuilding(true)
+    setBuildError('')
+    try {
+      await downloadFile('/api/export-docx', {
+        text: doc, papers: sources, style, title: projectName,
+      }, 'paper.docx')
+    } catch (e) {
+      setBuildError(e.message || "Couldn't build the document.")
+    } finally {
+      setBuilding(false)
+    }
+  }
+
   const doc = useWorkspaceStore(s => s.doc)
   const sources = useSavedSources()
+  const style = useWorkspaceStore(s => s.citationStyle)
+  const projectName = useWorkspaceStore(
+    s => s.projects.find(p => p.id === s.activeProjectId)?.name || ''
+  )
   const setStage = useUIStore(s => s.setStage)
   const stages = readStages()
 
@@ -88,6 +120,33 @@ export default function ExportSurface() {
           ))}
         </div>
       )}
+
+      {/* The one thing this screen is for. */}
+      <div className="flex flex-col gap-3 rounded-lg border border-brand-500/35
+        bg-brand-500/[0.06] px-5 py-4">
+        <div className="flex flex-col gap-1">
+          <span className="text-[15px] font-medium text-t1">Your paper, as one Word file</span>
+          <span className="text-[12.5px] text-t2 leading-relaxed">
+            {words.toLocaleString()} words and {sources.length} reference
+            {sources.length === 1 ? '' : 's'}, with the works-cited page built in and
+            formatted in {CITATION_STYLES.find(c => c.key === style)?.label || style.toUpperCase()}.
+          </span>
+        </div>
+        <div className="flex items-center gap-3 flex-wrap">
+          <button
+            data-demo="export-docx"
+            onClick={buildDocx}
+            disabled={building || !doc.trim()}
+            className="btn-primary text-xs"
+          >
+            {building ? 'Building…' : 'Download .docx'}
+          </button>
+          <button onClick={() => setStage('draft')} className="btn-ghost">
+            Back to the draft
+          </button>
+        </div>
+        {buildError && <p className="text-[11.5px] text-red-500">{buildError}</p>}
+      </div>
 
       {/* The paper as it will read, not as it is edited: no caret, no marks, no
           growing textarea. Seeing it set as a page is most of what a final

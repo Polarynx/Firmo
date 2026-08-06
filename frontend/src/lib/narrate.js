@@ -4,13 +4,15 @@ import { readingTime } from './demo'
 //
 // Web Speech is the fallback now, not the plan.
 //
-// The script is eighteen fixed lines. They do not change between visitors, so
-// synthesising them per-visitor was always slightly absurd — a live API call, a
-// key, a quota and a round trip, to produce a byte-identical result every time.
-// `scripts/render_narration.py` renders them once with edge-tts as
-// en-GB-RyanNeural, the young British male the script was written for, and the
-// MP3s are committed. Every visitor hears the same take, instantly, with no key
-// and nothing to run.
+// The script is a fixed set of lines — the full tour plus one per room. They do
+// not change between visitors, so synthesising them per-visitor was always
+// slightly absurd — a live API call, a key, a quota and a round trip, to produce
+// a byte-identical result every time. `scripts/render_narration.py` renders them
+// once with edge-tts and commits the MP3s. Every visitor hears the same take,
+// instantly, with no key and nothing to run.
+//
+// The voice and its tuning live in that script, not here; it is the one place
+// that decides how Firmo sounds, and this file only plays what it produced.
 //
 // `manifest.json` maps each line to its file. A line whose text has been edited
 // simply is not in the manifest — the filename is a hash of the text — so it

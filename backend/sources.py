@@ -1003,17 +1003,41 @@ FAST_CONNECTORS: list[tuple] = [
 # says so the first time. This does not fix anything by itself. It just means
 # the next one to break is noticed in a log line rather than in a benchmark six
 # weeks later.
-_dead_streak: dict[str, int] = {}
+# Two windows, because silence means different things to different databases.
+#
+# A general index has something for any topic a student brings, so three quiet
+# searches in a row is already odd. A specialist does not: INSPIRE holding
+# nothing on high-conflict divorce is INSPIRE working. Judging the two alike
+# would cry wolf at the physics database for every humanities session, and a
+# check that fires constantly is worth less than no check at all.
+#
+# What separates a quiet specialist from a broken one is the long run. A
+# specialist eventually gets a search in its own field and answers; a broken
+# connector never answers, whatever it is asked. Twenty-five is long enough for
+# that to show and short enough to notice within a session. It is why DOAJ gets
+# caught here — an open-access directory is not general enough for the short
+# window, but it was returning zero for every query on earth.
+_GENERAL_CONNECTORS = {
+    "search_openalex", "search_crossref", "search_semantic_scholar",
+    "search_openaire", "search_base", "search_zenodo",
+}
 _DEAD_AFTER = 3
+_DEAD_AFTER_SPECIALIST = 25
+
+_dead_streak: dict[str, int] = {}
+
+
+def _threshold(name: str) -> int:
+    return _DEAD_AFTER if name in _GENERAL_CONNECTORS else _DEAD_AFTER_SPECIALIST
 
 
 def _note_yield(name: str, count: int) -> None:
     if count > 0:
-        if _dead_streak.pop(name, 0) >= _DEAD_AFTER:
+        if _dead_streak.pop(name, 0) >= _threshold(name):
             print(f"[connector recovered] {name} is returning results again")
         return
     _dead_streak[name] = n = _dead_streak.get(name, 0) + 1
-    if n == _DEAD_AFTER:
+    if n == _threshold(name):
         # ASCII only. The Windows console is cp1252 and turns an em dash into a
         # replacement character, which is a poor look for the line whose whole
         # job is to be noticed.
@@ -1022,8 +1046,8 @@ def _note_yield(name: str, count: int) -> None:
 
 
 def connector_health() -> dict:
-    """Which connectors are currently returning nothing. For diagnostics."""
-    return {k: v for k, v in _dead_streak.items() if v >= _DEAD_AFTER}
+    """Connectors currently past their silence threshold. For diagnostics."""
+    return {k: v for k, v in _dead_streak.items() if v >= _threshold(k)}
 
 
 async def search_all(

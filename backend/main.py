@@ -936,20 +936,29 @@ async def research(req: ResearchRequest, request: Request):
                       message="Following citations from the best matches…")
             # Seeded from the closest papers, and NOT from the most-cited.
             #
-            # Tried and measured: adding the six most-cited papers of the pool
-            # as extra seeds made retrieval strictly worse — 5 cases lost, 0
-            # gained, recall_total 0.219 -> 0.109 on the 32-case benchmark. The
-            # mechanism explains it. This walk ranks references by CO-CITATION
-            # across the seeds, so the landmark is whatever several independent
-            # on-topic papers all cite. Seeding with papers chosen for citation
-            # count alone admits work that is famous but unrelated — a methods
-            # paper, a blockbuster from a neighbouring field — whose references
-            # share nothing with the rest, and the shared-reference signal that
-            # does the actual work gets diluted.
+            # The reasoning is mechanical and still stands: this walk ranks
+            # references by CO-CITATION across the seeds, so the landmark is
+            # whatever several independent on-topic papers all cite. Seeding
+            # with papers chosen for citation count alone admits work that is
+            # famous but unrelated — a methods paper, a blockbuster from a
+            # neighbouring field — whose references share nothing with the rest,
+            # and the shared-reference signal that does the work gets diluted.
             #
-            # Left as a comment rather than deleted because it is the obvious
-            # idea, and the next person to have it should get the measurement
-            # rather than the ten minutes.
+            # The number that used to be quoted here does not stand, and is
+            # removed rather than corrected. It read "5 cases lost, 0 gained,
+            # recall_total 0.219 -> 0.109", offered as proof. Three runs of the
+            # benchmark on identical code have since produced recall@10 of
+            # 0.031, 0.094 and 0.016 — a sixfold spread — and recall_total
+            # between 0.094 and 0.109. A single before-and-after pair on a
+            # 32-case set cannot see a change smaller than its own noise, and
+            # that one was well inside it. The papers found also nest: easy
+            # cases persist across runs and marginal ones flicker, so "lost 5,
+            # gained 0" is what variance looks like here, not evidence against
+            # a change.
+            #
+            # So: keep the seeding as it is on the mechanism, not on the
+            # measurement. Anyone revisiting this needs a bigger benchmark or
+            # several runs a side before the result means anything.
             try:
                 extra = await expand_by_citations(preview[:12], year_from=req.year_from)
             except Exception:

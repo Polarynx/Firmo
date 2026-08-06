@@ -49,10 +49,18 @@ def head_nouns(q: str) -> str:
     return " ".join(sorted(words, key=len, reverse=True)[:4]) or q
 
 
-async def openalex_dois(query, n=50, sort=None):
-    """One OpenAlex page, patient about rate limits so a 429 is never read as a miss."""
+async def openalex_dois(query, n=50, sort=None, field=None):
+    """One OpenAlex page, patient about rate limits so a 429 is never read as a miss.
+
+    `field` swaps the loose `search` parameter — which also reads full text, and
+    for a broad question returns thousands of papers that mention the words
+    somewhere — for a filter over a named field.
+    """
     for attempt in range(4):
-        p = {"search": query, "per-page": n, "select": "id,doi,title"}
+        if field:
+            p = {"filter": f"{field}.search:{query}", "per-page": n, "select": "id,doi,title"}
+        else:
+            p = {"search": query, "per-page": n, "select": "id,doi,title"}
         if sort:
             p["sort"] = sort
         try:
@@ -66,6 +74,51 @@ async def openalex_dois(query, n=50, sort=None):
     return None
 
 
+async def by_topic(query, n=50):
+    """The most-cited work in whatever OpenAlex topic the question lands in.
+
+    A different retrieval mode, aimed at a different failure. Keyword relevance
+    answers "which papers are about these words", and for a broad question the
+    answer is thousands, ranked by textual match. But the paper a supervisor
+    would name is rarely the closest textual match — it is the one the field is
+    built on, and it may share almost no vocabulary with how a student phrases
+    the question. Topic membership plus citation weight asks that question
+    instead: what is this corner of the literature founded on.
+    """
+    for attempt in range(3):
+        try:
+            r = await S.get_client().get(
+                "https://api.openalex.org/topics",
+                params=S._polite({"search": query, "per-page": 3, "select": "id,display_name"}),
+                timeout=25.0)
+        except Exception:
+            await asyncio.sleep(1.5 * (attempt + 1))
+            continue
+        if r.status_code == 200:
+            break
+        await asyncio.sleep(2.0 * (attempt + 1))
+    else:
+        return None
+
+    ids = [t["id"].rsplit("/", 1)[-1] for t in r.json().get("results", []) if t.get("id")]
+    if not ids:
+        return []
+
+    for attempt in range(3):
+        try:
+            r = await S.get_client().get(S.OPENALEX_URL, params=S._polite({
+                "filter": "topics.id:" + "|".join(ids),
+                "sort": "cited_by_count:desc",
+                "per-page": n, "select": "id,doi,title"}), timeout=30.0)
+        except Exception:
+            await asyncio.sleep(1.5 * (attempt + 1))
+            continue
+        if r.status_code == 200:
+            return r.json().get("results", [])
+        await asyncio.sleep(2.0 * (attempt + 1))
+    return None
+
+
 def _norm(d):
     return (S.normalize_doi(d) or "").lower()
 
@@ -75,11 +128,17 @@ def _hits(works, gold):
 
 
 async def one_hop(works, gold, fan=8):
-    """Walk the citation graph one step out from the best few hits, both ways.
+    """Walk one step out from the best few hits, following what they cite.
 
     The premise being tested: a landmark paper is the one that the on-topic
     papers all cite, so it should be reachable from them even when no phrasing
     of the question reaches it directly.
+
+    Outbound only, deliberately. The other direction — who cites these hits —
+    finds work newer than what we already have, and every gold paper in this
+    benchmark is older and more established than the topical results that lead
+    to it. Walking both ways would double the requests to answer a question
+    only one of them can.
     """
     seeds = [w["id"] for w in (works or [])[:fan]]
     if not seeds:
@@ -122,13 +181,18 @@ async def one_hop(works, gold, fan=8):
 
 async def main():
     cases = json.loads(Path(__file__).with_name("benchmark.json").read_text())["cases"]
+    # (query builder, OpenAlex field). None means the loose `search` parameter,
+    # which also reads full text; title_and_abstract is the strict one.
     strategies = {
-        "plain": lambda c: c["query"],
-        "stripped": lambda c: strip_question(c["query"]),
-        "head_nouns": lambda c: head_nouns(c["query"]),
+        "plain": (lambda c: c["query"], None),
+        "stripped": (lambda c: strip_question(c["query"]), None),
+        "head_nouns": (lambda c: head_nouns(c["query"]), None),
+        "plain / title+abs": (lambda c: c["query"], "title_and_abstract"),
+        "stripped / title+abs": (lambda c: strip_question(c["query"]), "title_and_abstract"),
     }
     score = {k: 0 for k in strategies}
-    score["union_of_three"] = 0
+    score["union_of_all"] = 0
+    score["topic + most cited"] = 0
     score["plain + one citation hop"] = 0
     total = 0
     # A rate-limited probe that reports zero is indistinguishable from a paper
@@ -145,8 +209,8 @@ async def main():
         union = set()
         plain_works = None
         line = [f"{c['id']:24}"]
-        for name, fn in strategies.items():
-            works = await openalex_dois(fn(c))
+        for name, (fn, field) in strategies.items():
+            works = await openalex_dois(fn(c), field=field)
             if works is None:
                 failures += 1
                 works = []
@@ -158,7 +222,16 @@ async def main():
             line.append(f"{name} {n}/{len(gold)}")
             await asyncio.sleep(0.3)
 
-        score["union_of_three"] += len(union)
+        topic_works = await by_topic(strip_question(c["query"]))
+        if topic_works is None:
+            failures += 1
+            topic_works = []
+        t_hits = _hits(topic_works, gold)
+        score["topic + most cited"] += t_hits
+        union |= {_norm(w.get("doi") or "") for w in topic_works} & gold
+        line.append(f"topic {t_hits}/{len(gold)}")
+
+        score["union_of_all"] += len(union)
         hop, reached = await one_hop(plain_works, gold)
         score["plain + one citation hop"] += len(union | set()) * 0 + hop
         line.append(f"hop {hop}/{len(gold)} (saw {reached})")

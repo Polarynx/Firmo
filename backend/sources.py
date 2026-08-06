@@ -1014,8 +1014,11 @@ def _note_yield(name: str, count: int) -> None:
         return
     _dead_streak[name] = n = _dead_streak.get(name, 0) + 1
     if n == _DEAD_AFTER:
+        # ASCII only. The Windows console is cp1252 and turns an em dash into a
+        # replacement character, which is a poor look for the line whose whole
+        # job is to be noticed.
         print(f"[connector silent] {name} has returned nothing for "
-              f"{n} consecutive searches — check its URL, params and key")
+              f"{n} consecutive searches - check its URL, params and key")
 
 
 def connector_health() -> dict:

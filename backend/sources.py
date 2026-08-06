@@ -13,6 +13,7 @@ import os
 import re
 import xml.etree.ElementTree as ET
 from typing import Callable, Optional
+from urllib.parse import quote
 
 import httpx
 
@@ -315,12 +316,17 @@ async def search_europe_pmc(query: str, limit: int = 8, year_from: Optional[int]
     q = query
     if year_from:
         q += f" FIRST_PDATE:[{year_from}-01-01 TO *]"
+    # No `sort`. Europe PMC sorts by relevance already, and it has no RELEVANCE
+    # keyword — asking for one is not an error, it is a silent empty envelope:
+    # `{"version": "6.9"}` with HTTP 200, no hitCount, no results. Paired with
+    # the `except: return []` below, that made this connector look like a
+    # database with nothing to say about any topic, for every query, invisibly.
+    # It indexes 40 million biomedical records; it was returning zero.
     params = {
         "query": q,
         "format": "json",
         "resultType": "core",
         "pageSize": limit,
-        "sort": "RELEVANCE",
     }
     try:
         data = (await _get(EUROPE_PMC_URL, params)).json()
@@ -538,9 +544,13 @@ async def search_arxiv(query: str, limit: int = 8, year_from: Optional[int] = No
 
 async def search_doaj(query: str, limit: int = 8, year_from: Optional[int] = None) -> list[dict]:
     """DOAJ: Directory of Open Access Journals, peer-reviewed open-access articles."""
-    params = {"q": query, "pageSize": limit}
+    # The search term goes in the path, not in `q`. DOAJ answers a query
+    # parameter with a flat 404 — which the bare `except` below turned into an
+    # empty result list, so this read as "DOAJ knows nothing about your topic"
+    # rather than "we have been calling the wrong URL".
+    url = f"{DOAJ_URL.rstrip('/')}/{quote(query, safe='')}"
     try:
-        data = (await _get(DOAJ_URL, params)).json()
+        data = (await _get(url, {"pageSize": limit})).json()
     except Exception:
         return []
 
@@ -974,6 +984,45 @@ FAST_CONNECTORS: list[tuple] = [
 ]
 
 
+# ── Connector health ────────────────────────────────────────────────────────
+#
+# Every connector ends in `except Exception: return []`, which is right for a
+# search — one database being down must not take the other fourteen with it.
+# What it is not is silent-by-design, and that is how it was behaving: an empty
+# list means "nothing on this topic" and "we have been calling a 404 for weeks"
+# equally well, and nothing downstream can tell them apart.
+#
+# Two connectors sat dead for exactly that reason. Europe PMC was being sent a
+# sort key it does not have and answering with an empty envelope; DOAJ was being
+# sent its search term as a query parameter when it wants one in the path. Both
+# returned zero for every query, for every user, and the only trace was a number
+# nobody was looking at. Between them that is 40 million biomedical records and
+# the whole open-access directory.
+#
+# So a connector that returns nothing for an entire fan-out gets counted, and
+# says so the first time. This does not fix anything by itself. It just means
+# the next one to break is noticed in a log line rather than in a benchmark six
+# weeks later.
+_dead_streak: dict[str, int] = {}
+_DEAD_AFTER = 3
+
+
+def _note_yield(name: str, count: int) -> None:
+    if count > 0:
+        if _dead_streak.pop(name, 0) >= _DEAD_AFTER:
+            print(f"[connector recovered] {name} is returning results again")
+        return
+    _dead_streak[name] = n = _dead_streak.get(name, 0) + 1
+    if n == _DEAD_AFTER:
+        print(f"[connector silent] {name} has returned nothing for "
+              f"{n} consecutive searches — check its URL, params and key")
+
+
+def connector_health() -> dict:
+    """Which connectors are currently returning nothing. For diagnostics."""
+    return {k: v for k, v in _dead_streak.items() if v >= _DEAD_AFTER}
+
+
 async def search_all(
     queries: list[str],
     year_from: Optional[int] = None,
@@ -997,11 +1046,14 @@ async def search_all(
             # per search arm rather than as one undifferentiated bar. A student
             # watching "Collecting results · 214 papers" learns nothing; watching
             # each of their seven queries land tells them which phrasing worked.
-            tasks[task] = q
+            # The connector name rides along so a database that has quietly
+            # stopped answering can be told apart from one with nothing to say.
+            tasks[task] = (q, fn.__name__)
 
     total = len(tasks)
     papers: list[dict] = []
     per_query: dict[str, int] = {q: 0 for q in queries}
+    per_connector: dict[str, int] = {fn.__name__: 0 for fn, _ in connectors}
     done_count = 0
 
     loop = asyncio.get_running_loop()
@@ -1014,17 +1066,26 @@ async def search_all(
         done, pending = await asyncio.wait(pending, timeout=timeout, return_when=asyncio.FIRST_COMPLETED)
         for t in done:
             done_count += 1
+            q, name = tasks[t]
             try:
                 found = t.result()
             except Exception:
                 continue
             papers.extend(found)
-            per_query[tasks[t]] = per_query.get(tasks[t], 0) + len(found)
+            per_query[q] = per_query.get(q, 0) + len(found)
+            per_connector[name] = per_connector.get(name, 0) + len(found)
         if done and on_progress:
             await on_progress(done_count, total, len(papers), dict(per_query))
 
+    # Only connectors that got to finish are judged. One cancelled at the
+    # deadline is slow, not broken, and counting it as silent would raise the
+    # alarm on whichever database happens to be furthest away.
+    finished: set[str] = {name for t, (_, name) in tasks.items() if t not in pending}
     for t in pending:
         t.cancel()
+    for name in finished:
+        _note_yield(name, per_connector.get(name, 0))
+
     return papers
 
 

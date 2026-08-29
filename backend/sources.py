@@ -128,6 +128,64 @@ def _host(url: str) -> str:
     return url.split("/", 3)[2] if "//" in url else url
 
 
+# ── One queue per host ──────────────────────────────────────────────────────
+#
+# A search fans out seven queries across fourteen databases at once, so every
+# host receives seven simultaneous requests. Most do not mind. Semantic Scholar
+# minds a great deal: it allows about one request a second even with a key, so
+# of seven fired together roughly one succeeds and the rest come back 429.
+#
+# Measured, on a clean process: one call returns 7 papers, three concurrent
+# return [0, 8, 8], seven concurrent return nothing at all. And the failure
+# compounds, because a 429 puts the host in a sixty-second cooldown — so the
+# burst does not merely lose six requests, it takes the database out of the
+# search that follows. Semantic Scholar is one of the best indexes there is and
+# it was contributing almost nothing, which read as "no results for this topic"
+# rather than as us shouting over it.
+#
+# A key does not fix this and was never the problem: the key is present, valid,
+# and was in use throughout. The fix is to queue.
+#
+# Only hosts that need a limit have one. Everything else stays unthrottled,
+# because slowing down a database that was coping is a pure loss.
+# Queueing alone is not enough. One at a time still means back to back, because
+# these requests return in well under a second, and a host that allows one per
+# second refuses the rest just the same: serialised, seven queries still lost
+# three. So a host can also declare a minimum gap between requests, and the
+# queue holds each one until that much time has passed since the last.
+#
+# The gap is what makes the limit real; the semaphore is what makes the gap
+# enforceable. Both are per host and both are opt-in.
+_HOST_LIMITS = {
+    "api.semanticscholar.org": (1, 1.15),   # (concurrent, minimum seconds between)
+}
+_host_gates: dict[str, asyncio.Semaphore] = {}
+_host_last: dict[str, float] = {}
+
+
+def _host_gate(host: str) -> Optional[asyncio.Semaphore]:
+    """The queue for a host, created on first use so it binds to the live loop."""
+    conf = _HOST_LIMITS.get(host)
+    if not conf:
+        return None
+    gate = _host_gates.get(host)
+    if gate is None:
+        gate = _host_gates[host] = asyncio.Semaphore(conf[0])
+    return gate
+
+
+async def _host_space(host: str) -> None:
+    """Wait out whatever is left of this host's minimum gap. Call inside its queue."""
+    conf = _HOST_LIMITS.get(host)
+    if not conf or not conf[1]:
+        return
+    loop = asyncio.get_running_loop()
+    wait = _host_last.get(host, 0.0) + conf[1] - loop.time()
+    if wait > 0:
+        await asyncio.sleep(wait)
+    _host_last[host] = loop.time()
+
+
 class RateLimited(Exception):
     """This host is in cooldown; the caller should degrade, not wait."""
 
@@ -147,8 +205,14 @@ async def _get(url: str, params: dict, timeout: float = 15.0, headers: Optional[
         raise RateLimited(host)
 
     delay = 0.6
+    gate = _host_gate(host)
     for attempt in range(retries + 1):
-        resp = await get_client().get(url, params=params, timeout=timeout, headers=headers)
+        if gate:
+            async with gate:
+                await _host_space(host)
+                resp = await get_client().get(url, params=params, timeout=timeout, headers=headers)
+        else:
+            resp = await get_client().get(url, params=params, timeout=timeout, headers=headers)
         if resp.status_code in (429, 503):
             if _budget_exhausted(resp):
                 after = resp.headers.get("retry-after")

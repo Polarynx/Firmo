@@ -3,6 +3,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { MotionConfig } from 'framer-motion'
 import App from './App'
+import ErrorBoundary from './components/ErrorBoundary'
 import './index.css'
 
 // `?lab` boots into a paper already in progress, so the workspace can be looked
@@ -29,7 +30,9 @@ if (isLab) {
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <MotionConfig reducedMotion="user">
-      <App />
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
     </MotionConfig>
   </React.StrictMode>
 )

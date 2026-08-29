@@ -492,6 +492,219 @@
         "hippocampus",
         "memoir"
       ]
+    },
+    {
+      "id": "stanford-prison",
+      "query": "what did the stanford prison experiment actually show",
+      "discipline": "psychology",
+      "must_find": [
+        "10.2307/j.ctv36xvxrb.6",
+        "10.1348/014466605x48998"
+      ]
+    },
+    {
+      "id": "replication-crisis",
+      "query": "how many psychology studies replicate",
+      "discipline": "psychology",
+      "must_find": [
+        "10.1126/science.aac4716",
+        "10.1371/journal.pmed.0020124"
+      ]
+    },
+    {
+      "id": "bilingual-cognition",
+      "query": "does being bilingual improve executive function",
+      "discipline": "psychology",
+      "must_find": [
+        "10.1037/0882-7974.19.2.290"
+      ]
+    },
+    {
+      "id": "nudge-effectiveness",
+      "query": "how big are nudge effects really",
+      "discipline": "behavioural economics",
+      "must_find": [
+        "10.3386/w27594"
+      ]
+    },
+    {
+      "id": "trade-china-shock",
+      "query": "did chinese imports cost american manufacturing jobs",
+      "discipline": "economics",
+      "must_find": [
+        "10.3386/w18054"
+      ]
+    },
+    {
+      "id": "mass-incarceration",
+      "query": "why did the us prison population grow so much",
+      "discipline": "criminology",
+      "must_find": [
+        "10.17226/18613"
+      ]
+    },
+    {
+      "id": "antibiotic-resistance",
+      "query": "how does antibiotic resistance spread between bacteria",
+      "discipline": "microbiology",
+      "must_find": [
+        "10.18869/mphbs.2016.162"
+      ]
+    },
+    {
+      "id": "herd-immunity-threshold",
+      "query": "what fraction of a population needs to be immune to stop an outbreak",
+      "discipline": "epidemiology",
+      "must_find": [
+        "10.1093/cid/cir007"
+      ]
+    },
+    {
+      "id": "placebo-mechanism",
+      "query": "how do placebos actually work",
+      "discipline": "medicine",
+      "must_find": [
+        "10.1111/j.1749-6632.2009.04424.x"
+      ]
+    },
+    {
+      "id": "exercise-depression",
+      "query": "does exercise help depression as much as therapy",
+      "discipline": "clinical psychology",
+      "must_find": [
+        "10.1055/s-0035-1567129"
+      ]
+    },
+    {
+      "id": "mindfulness-evidence",
+      "query": "how strong is the evidence for mindfulness meditation",
+      "discipline": "clinical psychology",
+      "must_find": [
+        "10.1016/j.dza.2014.07.007",
+        "10.1177/1745691617709589"
+      ]
+    },
+    {
+      "id": "database-consistency",
+      "query": "why cant distributed databases have consistency and availability at once",
+      "discipline": "computer science",
+      "must_find": [
+        "10.1145/564585.564601"
+      ]
+    },
+    {
+      "id": "np-completeness",
+      "query": "what does it mean for a problem to be np complete",
+      "discipline": "computer science",
+      "must_find": [
+        "10.1145/800157.805047",
+        "10.1007/978-1-4684-2001-2_9"
+      ]
+    },
+    {
+      "id": "dark-matter-evidence",
+      "query": "what is the evidence that dark matter exists",
+      "discipline": "astrophysics",
+      "must_find": [
+        "10.1086/508162"
+      ]
+    },
+    {
+      "id": "tipping-points-climate",
+      "query": "what are climate tipping points",
+      "discipline": "climate science",
+      "must_find": [
+        "10.1126/science.abn7950"
+      ]
+    },
+    {
+      "id": "pollinator-decline",
+      "query": "are insect populations actually collapsing",
+      "discipline": "ecology",
+      "must_find": [
+        "10.1371/journal.pone.0185809",
+        "10.1126/science.aax9931"
+      ]
+    },
+    {
+      "id": "soil-carbon",
+      "query": "can farming practices store meaningful carbon in soil",
+      "discipline": "environmental science",
+      "must_find": [
+        "10.1126/science.1097396"
+      ]
+    },
+    {
+      "id": "sapir-whorf",
+      "query": "does the language you speak shape how you think",
+      "discipline": "linguistics",
+      "must_find": [
+        "10.1073/pnas.0701644104"
+      ]
+    },
+    {
+      "id": "orality-literacy",
+      "query": "how did writing change human thought",
+      "discipline": "literary theory",
+      "must_find": [
+        "10.2307/40139364"
+      ]
+    },
+    {
+      "id": "subaltern-speak",
+      "query": "what is the postcolonial critique of who gets to write history",
+      "discipline": "postcolonial theory",
+      "must_find": [
+        "10.4324/9781912281770"
+      ]
+    },
+    {
+      "id": "witch-trials",
+      "query": "why did european witch trials happen when they did",
+      "discipline": "history",
+      "must_find": [
+        "10.1257/089533004773563502"
+      ]
+    },
+    {
+      "id": "industrial-revolution-why-britain",
+      "query": "why did the industrial revolution start in britain",
+      "discipline": "economic history",
+      "must_find": [
+        "10.5871/bacad/9780197264775.003.0007"
+      ]
+    },
+    {
+      "id": "democratic-peace",
+      "query": "do democracies really not fight each other",
+      "discipline": "political science",
+      "must_find": [
+        "10.2307/2938740"
+      ]
+    },
+    {
+      "id": "resource-curse",
+      "query": "why do oil rich countries often stay poor",
+      "discipline": "political science",
+      "must_find": [
+        "10.1353/wp.2001.0011"
+      ]
+    },
+    {
+      "id": "contact-hypothesis",
+      "query": "does contact between groups reduce prejudice",
+      "discipline": "social psychology",
+      "must_find": [
+        "10.1037/0022-3514.90.5.751"
+      ]
+    },
+    {
+      "id": "stereotype-threat",
+      "query": "how solid is the evidence for stereotype threat",
+      "discipline": "social psychology",
+      "must_find": [
+        "10.1037/0022-3514.69.5.797"
+      ]
     }
   ]
 }

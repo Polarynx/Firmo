@@ -104,15 +104,30 @@ def get_client() -> httpx.AsyncClient:
 # connector we have, so each attempt burns a slot in the student's fan-out only
 # to be told "no" again, while the other fourteen wait.
 #
-# Ten minutes, and not longer, because the window was measured rather than
-# assumed. An hour was the first guess and it was wrong: after eight consecutive
-# budget rejections the same endpoint was serving 200s again within minutes, so
-# the allowance refills far faster than "come back tomorrow" suggests. Writing
-# the best database off for an hour to save it a handful of requests would cost
-# far more than it saves. If the host tells us when to return, believe it over
-# any number chosen here.
+# The allowance is daily, and the host says so: the full message ends "Resets at
+# midnight UTC." So a spent budget is written off until that reset rather than
+# retried on a timer.
+#
+# This was got wrong once in the obvious way. After a run of budget rejections
+# the same endpoint started answering again within minutes, which looked like
+# fast replenishment and became a ten-minute backoff. It was not replenishment:
+# the clock had crossed midnight UTC between the two probes. A reset boundary
+# and a short refill look identical from one side, and the difference is a
+# hundred and forty pointless retries a day against a host that has already
+# said no.
+#
+# Capped at six hours so a misparse can never bench a database indefinitely,
+# and Retry-After still wins when it is shorter.
 _COOLDOWN_S = 60.0
-_BUDGET_COOLDOWN_S = 600.0
+_BUDGET_COOLDOWN_MAX_S = 6 * 3600.0
+
+
+def _until_utc_midnight() -> float:
+    """Seconds until the next midnight UTC, when daily API budgets reset."""
+    from datetime import datetime, timedelta, timezone
+    now = datetime.now(timezone.utc)
+    nxt = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    return max(60.0, (nxt - now).total_seconds())
 _limited_until: dict[str, float] = {}
 
 
@@ -216,11 +231,12 @@ async def _get(url: str, params: dict, timeout: float = 15.0, headers: Optional[
         if resp.status_code in (429, 503):
             if _budget_exhausted(resp):
                 after = resp.headers.get("retry-after")
-                cool = (min(float(after), _BUDGET_COOLDOWN_S)
-                        if (after or "").isdigit() else _BUDGET_COOLDOWN_S)
+                cool = min(_until_utc_midnight(), _BUDGET_COOLDOWN_MAX_S)
+                if (after or "").isdigit():
+                    cool = min(float(after), cool)
                 if loop.time() >= _limited_until.get(host, 0.0):
-                    print(f"[budget spent] {host} has no API budget left; standing down "
-                          f"for {cool / 60:.0f} min and letting the other databases carry it")
+                    print(f"[budget spent] {host} has no API budget left until it resets; "
+                          f"standing down for {cool / 3600:.1f}h and letting the others carry it")
                 _limited_until[host] = loop.time() + cool
                 resp.raise_for_status()
             _limited_until[host] = loop.time() + _COOLDOWN_S

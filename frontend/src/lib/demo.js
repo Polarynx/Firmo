@@ -22,7 +22,7 @@ import { useWorkspaceStore } from '../stores/useWorkspaceStore'
 // breaks loudly, in front of whoever changed it.
 //
 // What is faked is exactly one thing: the network. `executeSearch` would spend
-// thirty seconds and sixteen API calls to arrive at the fixture we already have,
+// thirty seconds and fourteen API calls to arrive at the fixture we already have,
 // so the search *result* is written straight in while the search *interface*
 // does everything it normally does.
 
@@ -139,12 +139,12 @@ export const SCRIPT = [
     hold: 500,
   },
   {
-    say: "One search hits sixteen databases.",
+    say: "One search hits fourteen databases.",
     at: 'question-search',
     run: async () => {
       useResearchStore.setState({ isSearching: true, statusMsg: 'Reading your question…', gathered: 0 })
       await sleep(700)
-      useResearchStore.setState({ statusMsg: 'Searching sixteen databases…', gathered: 214 })
+      useResearchStore.setState({ statusMsg: 'Searching fourteen databases…', gathered: 214 })
       await sleep(800)
       useResearchStore.setState({ statusMsg: 'Reading abstracts…', gathered: 428 })
       await sleep(800)

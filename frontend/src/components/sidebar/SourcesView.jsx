@@ -154,7 +154,7 @@ export default function SourcesView() {
       >
         {savedSources.length > 0
           ? `You have ${savedSources.length} source${savedSources.length === 1 ? '' : 's'} on the shelf beside you. Search again to add to them.`
-          : 'Firmo searches sixteen databases at once and files what comes back by what each paper will do in your argument.'}
+          : 'Firmo searches fourteen databases at once and files what comes back by what each paper will do in your argument.'}
         </EmptyNote>
       </div>
     )

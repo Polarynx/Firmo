@@ -141,7 +141,7 @@ export default function QuestionSurface() {
 
           <motion.p variants={FADE_UP}
             className="text-[14.5px] text-t2 leading-relaxed max-w-[48ch]">
-            Type a question and Firmo searches sixteen databases, files every source by what
+            Type a question and Firmo searches fourteen databases, files every source by what
             it will do in your paper, and checks every citation you end up with against the
             publisher's record.
           </motion.p>

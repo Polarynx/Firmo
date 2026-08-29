@@ -7,7 +7,7 @@ import { paperId } from './projects'
 // never on the shared-record route.
 //
 // This exists because the workspace cannot be looked at otherwise. Reaching a
-// populated state the normal way costs a live search — thirty seconds, sixteen
+// populated state the normal way costs a live search — thirty seconds, fourteen
 // APIs, an LLM — and in some environments that request never completes at all,
 // which is how a whole panel once shipped without anyone having seen it render.
 // A fixture is not a test; it is a way to put eyes on the thing being built.

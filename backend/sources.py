@@ -136,7 +136,7 @@ async def _get(url: str, params: dict, timeout: float = 15.0, headers: Optional[
                retries: int = 0) -> httpx.Response:
     """One GET, with a per-host rate-limit breaker and optional backoff.
 
-    `retries` is opt-in per call site: a connector that is one of sixteen firing
+    `retries` is opt-in per call site: a connector that is one of fourteen firing
     in parallel should fail fast and let the others carry the search, but a
     citation hop is a chain — if the seed lookup gets a 429 the whole walk is
     lost, so those calls are worth one patient retry.
@@ -1005,11 +1005,32 @@ ALL_CONNECTORS: list[tuple] = [
     (search_plos, 6),
     (search_hal, 8),
     (search_openaire, 8),
-    (search_base, 8),
     (search_zenodo, 8),
     (search_inspire, 8),
     (search_doab, 6),
 ]
+
+# BASE is off unless the deployment has registered for it.
+#
+# It authorises by IP, not by key or user agent: every request from an
+# unregistered address comes back as HTTP 200 carrying
+# `<error>Access denied for IP address ...</error>`, which the connector reads
+# as a search with no results. Tested from this machine with a plain httpx
+# agent, a polite contact agent and a browser agent — the address is what it
+# objects to, so no amount of header work reaches it.
+#
+# Left in the fan-out it was a guaranteed failure in every search: one of the
+# ~98 request slots spent to be refused, on every query a student types. Off by
+# default, and switched on by a deployment that has registered its address with
+# Bielefeld:
+#
+#     FIRMO_ENABLE_BASE=1
+#
+# Kept rather than deleted because the index is real and worth having — 400
+# million documents, unusually strong on European and grey literature — and the
+# only thing standing between us and it is a form.
+if os.getenv("FIRMO_ENABLE_BASE") == "1":
+    ALL_CONNECTORS.append((search_base, 8))
 
 # A fast, broad-coverage subset for latency-sensitive lookups where we only need a
 # handful of solid abstracts per query rather than exhaustive coverage, e.g. checking

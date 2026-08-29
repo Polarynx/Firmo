@@ -28,6 +28,25 @@ const STARTERS = [
 
 function chatKey(id) { return `firmo_chat_${id}` }
 
+// Whether this person has ever asked Firmo anything.
+//
+// The chat is the one part of the product that knows the whole project at once
+// — every saved source, the question, the outline and the draft — and it was
+// the part nobody found. It only offered its examples once the bar already had
+// focus, which asks the reader to click a box before it will say what the box
+// is for. A student who reads it as a search field never clicks, and never
+// learns the difference.
+//
+// So the examples show themselves once, unprompted, at the moment they first
+// mean anything: when there are a couple of saved sources for them to work on.
+// After the first question they go back to appearing on focus only, because by
+// then the person knows, and a hint that will not stop hinting is clutter.
+const ASKED_KEY = 'firmo_has_asked'
+
+function hasAskedBefore() {
+  try { return localStorage.getItem(ASKED_KEY) === '1' } catch { return true }
+}
+
 function loadChat(id) {
   try {
     const raw = JSON.parse(localStorage.getItem(chatKey(id)) || '[]')
@@ -53,6 +72,12 @@ export default function OmniBar() {
   const [messages, setMessages] = useState(() => (projectId ? loadChat(projectId) : []))
   const [busy, setBusy] = useState(false)
   const [focused, setFocused] = useState(false)
+  const [knowsChat, setKnowsChat] = useState(hasAskedBefore)
+  // The demo drives this same bar and has its own beat for the chat. A hint
+  // volunteering itself over the top of a scripted walkthrough is two things
+  // talking at once. Read from the store rather than isDemoActive(), which is a
+  // module flag and would not re-render this when the demo starts or ends.
+  const demoRunning = useUIStore(s => s.showWalkthrough)
   const inputRef = useRef(null)
   const abortRef = useRef(null)
 
@@ -82,6 +107,17 @@ export default function OmniBar() {
   async function ask(question) {
     const q = question.trim()
     if (!q || busy) return
+
+    // They have found it. Stop volunteering the examples.
+    //
+    // Not for the demo's own scripted question, which runs through this same
+    // function: someone who watched the walkthrough and never typed anything
+    // has not found the chat, and spending their one first-run hint on a beat
+    // they only watched would be exactly backwards.
+    if (!knowsChat && !isDemoActive()) {
+      setKnowsChat(true)
+      try { localStorage.setItem(ASKED_KEY, '1') } catch {}
+    }
 
     if (sources.length === 0) {
       pushPopover({
@@ -172,7 +208,9 @@ export default function OmniBar() {
     } catch {}
   }
 
-  const showStarters = focused && !value && sources.length >= 2
+  // Focus shows them always; the first-run nudge shows them without it.
+  const showStarters = !value && sources.length >= 2
+    && (focused || (!knowsChat && !demoRunning))
 
   return (
     <>
@@ -202,8 +240,16 @@ export default function OmniBar() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 8 }}
                 transition={SPRING}
-                className="flex flex-wrap justify-center gap-1.5"
+                className="flex flex-col items-center gap-1.5"
               >
+                {/* Only the first time. Once they have asked something, the
+                    pills are a shortcut and no longer need introducing. */}
+                {!knowsChat && (
+                  <p className="text-[11px] text-t2">
+                    Firmo can read all {sources.length} of your sources at once. Try:
+                  </p>
+                )}
+                <div className="flex flex-wrap justify-center gap-1.5">
                 {STARTERS.map(s => (
                   <button
                     key={s.label}
@@ -214,6 +260,7 @@ export default function OmniBar() {
                     {s.label}
                   </button>
                 ))}
+                </div>
               </motion.div>
             )}
           </AnimatePresence>

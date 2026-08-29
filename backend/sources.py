@@ -90,8 +90,38 @@ def get_client() -> httpx.AsyncClient:
 # and with retries attached it is actively harmful: a search that should take 17
 # seconds took 29, spent entirely on sleeping between rejections. So when a host
 # rate-limits us, stop calling it for a cooldown and fail instantly instead.
+#
+# Two different things arrive as 429, and a minute is the right answer to only
+# one of them. A burst limit clears in seconds. A spent daily budget does not:
+#
+#   {"error": "Rate limit exceeded",
+#    "message": "Insufficient budget. This request costs $0.001 but you only
+#                have $0 remaining."}
+#
+# OpenAlex meters by spend as well as by rate, and a spent allowance does not
+# clear on the timescale a burst limit does. Retrying it every sixty seconds is
+# worse than pointless inside a search: OpenAlex is the highest-yielding
+# connector we have, so each attempt burns a slot in the student's fan-out only
+# to be told "no" again, while the other fourteen wait.
+#
+# Ten minutes, and not longer, because the window was measured rather than
+# assumed. An hour was the first guess and it was wrong: after eight consecutive
+# budget rejections the same endpoint was serving 200s again within minutes, so
+# the allowance refills far faster than "come back tomorrow" suggests. Writing
+# the best database off for an hour to save it a handful of requests would cost
+# far more than it saves. If the host tells us when to return, believe it over
+# any number chosen here.
 _COOLDOWN_S = 60.0
+_BUDGET_COOLDOWN_S = 600.0
 _limited_until: dict[str, float] = {}
+
+
+def _budget_exhausted(resp: httpx.Response) -> bool:
+    """A 429 that means "come back tomorrow", not "slow down"."""
+    try:
+        return "insufficient budget" in resp.text[:400].lower()
+    except Exception:
+        return False
 
 
 def _host(url: str) -> str:
@@ -120,6 +150,15 @@ async def _get(url: str, params: dict, timeout: float = 15.0, headers: Optional[
     for attempt in range(retries + 1):
         resp = await get_client().get(url, params=params, timeout=timeout, headers=headers)
         if resp.status_code in (429, 503):
+            if _budget_exhausted(resp):
+                after = resp.headers.get("retry-after")
+                cool = (min(float(after), _BUDGET_COOLDOWN_S)
+                        if (after or "").isdigit() else _BUDGET_COOLDOWN_S)
+                if loop.time() >= _limited_until.get(host, 0.0):
+                    print(f"[budget spent] {host} has no API budget left; standing down "
+                          f"for {cool / 60:.0f} min and letting the other databases carry it")
+                _limited_until[host] = loop.time() + cool
+                resp.raise_for_status()
             _limited_until[host] = loop.time() + _COOLDOWN_S
             if attempt < retries:
                 wait = resp.headers.get("retry-after")

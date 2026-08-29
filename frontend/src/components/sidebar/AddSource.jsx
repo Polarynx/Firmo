@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 
 import { API, postJSON } from '../../lib/api'
 import { useWorkspaceStore } from '../../stores/useWorkspaceStore'
-import { useSavedIds } from '../../stores/selectors'
+import { useSavedIds, useSavedSources } from '../../stores/selectors'
 import { paperId } from '../../lib/projects'
 import { SPRING } from '../../lib/constants'
 import SourceCard from './SourceCard'
@@ -29,7 +29,13 @@ import SourceCard from './SourceCard'
 export default function AddSource({ query = '', shape = 'none' }) {
   const addSources = useWorkspaceStore(s => s.addSources)
   const savedIds = useSavedIds()
-  const sources = useWorkspaceStore(s => s.activeProject()?.sources || [])
+  // Through the shared hook, never `s.activeProject()?.sources || []`. That
+  // builds a new array on every render, zustand compares selector results by
+  // identity, and the component re-renders until React gives up with "Maximum
+  // update depth exceeded" — a blank screen, not an error anyone can read. It
+  // fired the moment Sources was opened with nothing in it, because this
+  // section is the one thing that surface always draws.
+  const sources = useSavedSources()
 
   // Folded by default. Adding a source you already have is a real thing people
   // do and a rare one next to reading the results, and an input box plus two

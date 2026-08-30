@@ -1358,6 +1358,96 @@ async def _cited_by(work_id: str, limit: int, year_from: Optional[int] = None) -
     return [p for p in (_openalex_paper(w) for w in data.get("results", [])) if p]
 
 
+
+# ── The same hop, over Semantic Scholar ─────────────────────────────────────
+#
+# The citation walk is the single most effective thing in this pipeline. Against
+# 58 benchmark cases it recovered 17% of the gold papers, where the best
+# rewording of the student's question managed 6% and the question as typed
+# managed nothing at all. The vocabulary gap is not partial: a student's words
+# essentially never match the title of the paper their supervisor would name,
+# and the graph is what bridges it.
+#
+# And all of it ran through OpenAlex alone, which meters by daily spend. When
+# that allowance is gone, `expand_by_citations` returns zero papers — verified
+# by calling it with the budget spent — so on any day heavy enough to exhaust
+# the quota, the best mechanism in the product silently stops existing. It fails
+# in exactly the way this codebase keeps being bitten by: an empty list that
+# reads as "the literature has nothing", not as "we were refused".
+#
+# Semantic Scholar answers the same question, indexes references for most of the
+# corpus, and has no daily budget — only a rate limit, which is a delay rather
+# than a wall, and which the per-host queue above already handles.
+async def _s2_references(doi: str, limit: int = 100) -> list[dict]:
+    """What one paper cites, from Semantic Scholar, in our own paper shape."""
+    if not doi:
+        return []
+    headers = {"x-api-key": _S2_KEY} if _S2_KEY else None
+    try:
+        resp = await _get(
+            f"https://api.semanticscholar.org/graph/v1/paper/DOI:{doi}/references",
+            {"limit": limit,
+             "fields": "title,externalIds,year,abstract,citationCount,venue,authors"},
+            headers=headers, timeout=25.0, retries=1)
+    except Exception:
+        return []
+
+    out = []
+    for row in (resp.json().get("data") or []):
+        w = row.get("citedPaper") or {}
+        title = (w.get("title") or "").strip()
+        if not title:
+            continue
+        ext = w.get("externalIds") or {}
+        ref_doi = ext.get("DOI")
+        out.append({
+            "title": title,
+            "authors": [a.get("name", "") for a in (w.get("authors") or [])],
+            "year": w.get("year"),
+            "abstract": w.get("abstract") or "",
+            "url": f"https://doi.org/{ref_doi}" if ref_doi else "",
+            "doi": ref_doi,
+            "journal": w.get("venue") or None,
+            "citationCount": w.get("citationCount") or 0,
+            "source": "semantic_scholar",
+        })
+    return out
+
+
+async def _expand_via_s2(seeds: list[dict], max_seeds: int, max_refs: int) -> list[dict]:
+    """The co-citation walk again, when OpenAlex cannot answer.
+
+    Same principle as the OpenAlex path and for the same reason: a paper cites
+    a hundred works, most of them method notes and tangents, so taking them in
+    list order is close to sampling at random. What several independent on-topic
+    seeds all cite is the landmark of that literature.
+    """
+    withdoi = [p for p in seeds if p.get("doi")][:max_seeds]
+    if len(withdoi) < 2:
+        return []   # one seed gives no co-citation signal, only a reading list
+
+    lists = await asyncio.gather(*(_s2_references(p["doi"]) for p in withdoi),
+                                 return_exceptions=True)
+    lists = [l for l in lists if isinstance(l, list) and l]
+    if not lists:
+        return []
+
+    shared: dict[str, int] = {}
+    first: dict[str, int] = {}
+    by_key: dict[str, dict] = {}
+    for refs in lists:
+        for i, paper in enumerate(refs):
+            key = normalize_doi(paper.get("doi")) or _title_key(paper["title"])
+            if not key:
+                continue
+            shared[key] = shared.get(key, 0) + 1
+            first.setdefault(key, i)
+            by_key.setdefault(key, paper)
+
+    ranked = sorted(shared, key=lambda k: (-shared[k], first[k]))[:max_refs]
+    return [by_key[k] for k in ranked]
+
+
 async def expand_by_citations(
     seeds: list[dict],
     max_seeds: int = 6,
@@ -1392,18 +1482,22 @@ async def expand_by_citations(
     # Resolving seeds gets its own clock. Folded into the fetch budget it ate
     # the whole window — a dozen title lookups can take longer than the hop
     # they exist to start — and the walk returned nothing at all.
+    # Every failure below means the same thing to the caller — no papers — and
+    # they are the failures that actually happen: OpenAlex refusing on a spent
+    # daily budget resolves no seeds at all. So each one hands over to the other
+    # graph rather than reporting an empty neighbourhood.
     try:
         resolved = await asyncio.wait_for(
             asyncio.gather(*(_seed_work(p) for p in candidates), return_exceptions=True),
             timeout=seed_budget,
         )
     except asyncio.TimeoutError:
-        return []
+        return await _fallback(seeds, max_seeds, max_refs)
     works = [w for w in resolved
              if isinstance(w, dict) and w.get("id") and w.get("referenced_works")]
     works = works[:max_seeds]
     if not works:
-        return []
+        return await _fallback(seeds, max_seeds, max_refs)
 
     deadline = loop.time() + budget
 
@@ -1438,8 +1532,22 @@ async def expand_by_citations(
     for t in pending:
         t.cancel()
 
+    # OpenAlex had nothing for us. That is usually its daily budget rather than
+    # an empty neighbourhood, and the difference is invisible from here, so try
+    # the other graph rather than reporting the literature as bare.
+    if not papers:
+        papers = await _expand_via_s2(seeds, max_seeds, max_refs)
+
     # Mark provenance so the UI can say *why* a paper is in the pool. These did
     # not answer a query; they were reached from something that did.
+    for p in papers:
+        p["via"] = "citations"
+    return papers
+
+
+async def _fallback(seeds: list[dict], max_seeds: int, max_refs: int) -> list[dict]:
+    """The S2 walk, with provenance attached, for the early exits above."""
+    papers = await _expand_via_s2(seeds, max_seeds, max_refs)
     for p in papers:
         p["via"] = "citations"
     return papers

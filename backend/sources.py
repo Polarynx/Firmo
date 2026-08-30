@@ -229,6 +229,19 @@ async def _get(url: str, params: dict, timeout: float = 15.0, headers: Optional[
         else:
             resp = await get_client().get(url, params=params, timeout=timeout, headers=headers)
         if resp.status_code in (429, 503):
+            # A host we already pace ourselves against is a different case. Its
+            # 429 means "that was a shade too fast", not "you are overloading
+            # me", and benching it for a minute over one is catastrophic when
+            # the calls are sequential: the first refusal short-circuits every
+            # lookup after it, so the citation walk went from two working seeds
+            # to none. Let the retry loop below handle it on its own timescale.
+            if host in _HOST_LIMITS and not _budget_exhausted(resp):
+                if attempt < retries:
+                    await asyncio.sleep(delay)
+                    delay *= 2
+                    continue
+                resp.raise_for_status()
+
             if _budget_exhausted(resp):
                 after = resp.headers.get("retry-after")
                 cool = min(_until_utc_midnight(), _BUDGET_COOLDOWN_MAX_S)
@@ -1383,12 +1396,20 @@ async def _s2_references(doi: str, limit: int = 100) -> list[dict]:
     if not doi:
         return []
     headers = {"x-api-key": _S2_KEY} if _S2_KEY else None
+    # `retries=2` because the two failures here are not the same thing and only
+    # one of them is worth waiting out. A 404 means Semantic Scholar has never
+    # heard of this DOI — true for a surprising number of older economics and
+    # education titles — and no amount of patience changes that. A 429 means it
+    # will answer, just not yet. Both arrive at the caller as an empty list, so
+    # without the retry the walk quietly treats "ask again in a second" as "this
+    # paper cites nothing", which is the same conflation that hid three dead
+    # connectors and an empty citation walk earlier in this file's history.
     try:
         resp = await _get(
             f"https://api.semanticscholar.org/graph/v1/paper/DOI:{doi}/references",
             {"limit": limit,
              "fields": "title,externalIds,year,abstract,citationCount,venue,authors"},
-            headers=headers, timeout=25.0, retries=1)
+            headers=headers, timeout=25.0, retries=2)
     except Exception:
         return []
 
@@ -1426,6 +1447,11 @@ async def _expand_via_s2(seeds: list[dict], max_seeds: int, max_refs: int) -> li
     if len(withdoi) < 2:
         return []   # one seed gives no co-citation signal, only a reading list
 
+    # Gathered, and left that way. The per-host queue above already admits one
+    # Semantic Scholar request at a time with a gap between them, so these do
+    # not actually race; what gather buys is that one seed failing does not stop
+    # the seeds after it. A sequential version was tried and was worse for
+    # exactly that reason.
     lists = await asyncio.gather(*(_s2_references(p["doi"]) for p in withdoi),
                                  return_exceptions=True)
     lists = [l for l in lists if isinstance(l, list) and l]

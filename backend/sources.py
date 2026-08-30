@@ -1441,6 +1441,21 @@ async def _s2_references(doi: str, limit: int = 100) -> list[dict]:
 # control arm when measuring whether the fallback earns its place.
 S2_CITATION_FALLBACK = os.getenv("FIRMO_S2_CITATION_FALLBACK", "1") != "0"
 
+# Walk both graphs every time, rather than reaching for the second only when the
+# first comes back empty.
+#
+# Worth testing rather than assuming, because the two indexes are demonstrably
+# complementary rather than redundant: Semantic Scholar has no record of a good
+# many NBER working papers and older AER and QJE titles, which OpenAlex holds,
+# and the reverse is true often enough that the fallback alone lifted
+# recall_total from 0.069 to 0.310 while OpenAlex was unavailable. If that lift
+# survives OpenAlex being healthy, then this is not a fallback and should not be
+# arranged like one.
+#
+# Costs a second set of requests on every search, which is why it is a flag and
+# not yet the default.
+S2_CITATION_ALWAYS = os.getenv("FIRMO_S2_CITATION_ALWAYS", "0") == "1"
+
 
 async def _expand_via_s2(seeds: list[dict], max_seeds: int, max_refs: int) -> list[dict]:
     """The co-citation walk again, when OpenAlex cannot answer.
@@ -1572,6 +1587,16 @@ async def expand_by_citations(
     # the other graph rather than reporting the literature as bare.
     if not papers:
         papers = await _expand_via_s2(seeds, max_seeds, max_refs)
+    elif S2_CITATION_ALWAYS:
+        # Both graphs. Only what OpenAlex did not already supply is worth
+        # carrying downstream; process_papers dedupes again, but there is no
+        # sense spending the trip.
+        known = {normalize_doi(p.get("doi")) or _title_key(p.get("title") or "")
+                 for p in papers}
+        extra = await _expand_via_s2(seeds, max_seeds, max_refs)
+        papers += [p for p in extra
+                   if (normalize_doi(p.get("doi")) or _title_key(p.get("title") or ""))
+                   not in known]
 
     # Mark provenance so the UI can say *why* a paper is in the pool. These did
     # not answer a query; they were reached from something that did.

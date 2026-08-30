@@ -1435,6 +1435,13 @@ async def _s2_references(doi: str, limit: int = 100) -> list[dict]:
     return out
 
 
+# Off by setting it to "0". A kill switch rather than a preference: this path
+# only ever runs when OpenAlex has already returned nothing, so disabling it
+# restores the previous behaviour exactly, which is what makes it usable as the
+# control arm when measuring whether the fallback earns its place.
+S2_CITATION_FALLBACK = os.getenv("FIRMO_S2_CITATION_FALLBACK", "1") != "0"
+
+
 async def _expand_via_s2(seeds: list[dict], max_seeds: int, max_refs: int) -> list[dict]:
     """The co-citation walk again, when OpenAlex cannot answer.
 
@@ -1443,6 +1450,8 @@ async def _expand_via_s2(seeds: list[dict], max_seeds: int, max_refs: int) -> li
     list order is close to sampling at random. What several independent on-topic
     seeds all cite is the landmark of that literature.
     """
+    if not S2_CITATION_FALLBACK:
+        return []
     withdoi = [p for p in seeds if p.get("doi")][:max_seeds]
     if len(withdoi) < 2:
         return []   # one seed gives no co-citation signal, only a reading list

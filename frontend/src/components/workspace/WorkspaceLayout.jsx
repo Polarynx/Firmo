@@ -16,6 +16,7 @@ import { saveSnapshot } from '../../lib/backup'
 import ImportSheet from '../sidebar/ImportSheet'
 import AuthSheet from './AuthSheet'
 import RecordSheet from './RecordSheet'
+import ExampleNote from './ExampleNote'
 
 // ── The workspace ──────────────────────────────────────────────────────────
 // Three zones, one screen, no page ever reloads. The window itself never
@@ -81,6 +82,9 @@ export default function WorkspaceLayout() {
   return (
     <div className="relative h-full w-full flex flex-col bg-app text-t1 overflow-hidden">
       <TopBar />
+
+      {/* Says so on every screen, not just the one it opened on. */}
+      <ExampleNote />
 
       <div className="relative z-10 flex-1 flex min-h-0 overflow-hidden">
         {/* The ledger rail. Outside Zone A rather than inside it, because the

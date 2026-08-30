@@ -3,6 +3,9 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 
 import { useResearchStore } from '../../stores/useResearchStore'
 import { useUIStore } from '../../stores/useUIStore'
+import { useWorkspaceStore } from '../../stores/useWorkspaceStore'
+import { useAnnotationStore } from '../../stores/useAnnotationStore'
+import { openExample } from '../../lib/example'
 import { guessShape } from '../../lib/claims'
 import { EXAMPLE_TOPICS } from '../../lib/constants'
 
@@ -159,6 +162,21 @@ export default function QuestionSurface() {
               border-hair/25 group-hover:border-brand-500 dark:group-hover:border-signal
               transition-colors text-[8px] leading-none pl-[2px]">▶</span>
             Watch it work, in 60 seconds
+          </motion.button>
+
+          {/* And one you can actually press the buttons on. The video shows
+              what Firmo does; this lets someone take a finished paper apart,
+              which is the part an empty workspace can never show. */}
+          <motion.button
+            variants={FADE_UP}
+            onClick={() => openExample({ useWorkspaceStore, useResearchStore, useAnnotationStore, useUIStore })}
+            className="group self-start flex items-center gap-2 text-[12.5px] font-medium
+              text-t2 hover:text-t1 transition-colors -mt-1"
+          >
+            <span className="grid place-items-center w-5 h-5 rounded-full border
+              border-hair/25 group-hover:border-brand-500 dark:group-hover:border-signal
+              transition-colors text-[10px] leading-none">◆</span>
+            Or open a finished example and take it apart
           </motion.button>
         </motion.div>
       )}

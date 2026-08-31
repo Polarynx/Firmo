@@ -60,16 +60,37 @@ if _mailto.lower().endswith(("@example.com", "@example.org", "@example.net")):
     _mailto = ""
 OPENALEX_MAILTO = _mailto or None
 
+# An API key, where there is one, beats the mailto outright.
+#
+# OpenAlex has moved past the polite pool. Under load it now answers an
+# unkeyed caller with "Anonymous search is temporarily rate-limited while the
+# search cluster is under elevated load ... or use a free API key for
+# uninterrupted access", and separately meters anonymous callers by daily
+# spend. Measured here on the same request, same second: mailto alone returned
+# 429, api_key returned 200.
+#
+# That daily wall is not a detail. It halted retrieval work for two days, and
+# it silently emptied the citation walk — the single most effective mechanism
+# in the pipeline — because every call in that walk goes to OpenAlex, and a
+# refused call and a bare neighbourhood look identical from the inside.
+#
+# The mailto is still sent alongside: it is how OpenAlex attributes traffic,
+# it costs nothing, and it remains the fallback if the key is ever removed.
+OPENALEX_API_KEY = (os.getenv("OPENALEX_API_KEY") or "").strip() or None
+
 
 def _polite(params: dict) -> dict:
-    """Query params with the polite-pool contact attached, when there is one.
+    """Query params identifying us to OpenAlex, by key and contact where we have them.
 
     httpx renders a None param as an empty `mailto=`, which is its own kind of
-    junk, so the key is omitted entirely rather than sent blank.
+    junk, so each key is omitted entirely rather than sent blank.
     """
+    out = dict(params)
+    if OPENALEX_API_KEY:
+        out["api_key"] = OPENALEX_API_KEY
     if OPENALEX_MAILTO:
-        return {**params, "mailto": OPENALEX_MAILTO}
-    return params
+        out["mailto"] = OPENALEX_MAILTO
+    return out
 
 _client: Optional[httpx.AsyncClient] = None
 

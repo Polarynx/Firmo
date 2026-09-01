@@ -27,6 +27,37 @@ _TOKEN_LIFETIME = timedelta(days=TOKEN_DAYS)
 
 _DEV_SECRET = "firmo-dev-secret-not-for-production"
 
+# Markers that mean "this is not somebody's laptop".
+#
+# The check used to know about Render and nothing else, so Firmo deployed to
+# any other host would quietly fall back to the development key below - which
+# is printed in this file, in the repository, in public. Every session token
+# would be forgeable by anyone who can read it.
+#
+# Failing to notice a deployment is the expensive direction of this error, so
+# the list covers the hosts somebody would plausibly reach for. It is still a
+# guess about the environment, which is why FIRMO_ENV=production remains the
+# explicit way to say so, and setting FIRMO_SECRET everywhere makes the whole
+# question moot.
+_DEPLOY_MARKERS = (
+    "RENDER",                   # Render
+    "FLY_APP_NAME",             # Fly.io
+    "RAILWAY_ENVIRONMENT",      # Railway
+    "DYNO",                     # Heroku
+    "VERCEL",                   # Vercel
+    "KUBERNETES_SERVICE_HOST",  # any Kubernetes cluster
+    "WEBSITE_INSTANCE_ID",      # Azure App Service
+    "GAE_ENV",                  # Google App Engine
+    "ECS_CONTAINER_METADATA_URI",   # AWS ECS
+    "AWS_LAMBDA_FUNCTION_NAME",     # AWS Lambda
+)
+
+
+def _looks_deployed() -> bool:
+    if os.getenv("FIRMO_ENV") == "production":
+        return True
+    return any(os.getenv(m) for m in _DEPLOY_MARKERS)
+
 
 def _secret() -> str:
     """The signing key.
@@ -38,7 +69,7 @@ def _secret() -> str:
     secret = os.getenv("FIRMO_SECRET", "").strip()
     if secret:
         return secret
-    if os.getenv("RENDER") or os.getenv("FIRMO_ENV") == "production":
+    if _looks_deployed():
         raise RuntimeError(
             "FIRMO_SECRET is not set. Set it in the host's environment: without it "
             "session tokens are signed with a public value and can be forged."

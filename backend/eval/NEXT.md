@@ -1,65 +1,76 @@
-# The next measurement, and only the next one
+# Where retrieval stands, and what is worth measuring next
 
-**One run. Not a campaign.** Firmo's own Mistral quota is the budget that
-matters; the benchmark is a diagnostic and should cost a fraction of it. Three
-runs a side is the right standard for deciding whether to *change* something,
-and it is the wrong standard for recording a number we already believe.
+## The number
 
-## Run this
+`keyed-1`, 58 cases, the first run ever taken with a healthy OpenAlex:
 
-```
-cd backend
-FIRMO_LLM_CONCURRENCY=2 RERANK_CONCURRENCY=2 \
-  ./.venv/Scripts/python.exe eval/run_eval.py --save eval/runs/keyed-1.json
-```
+| | before (3 runs) | keyed-1 (1 run) |
+|---|---|---|
+| `recall_total` | 0.078 – 0.103 | **0.543** |
+| `recall_at_k` | 0.043 – 0.069 | **0.399** |
+| `hit_rate` | 0.052 – 0.103 | **0.500** |
 
-~35 minutes, 58 cases. Then:
+Firmo finds more than half the papers a person who knows the field would name,
+and half of all questions surface at least one of them. It was one in ten.
 
-```
-./.venv/Scripts/python.exe eval/band.py band58-1 band58-2 band58-3 -- keyed-1
-```
+`band.py` says this is weak evidence, and it is right to: one run a side. It is
+reported anyway because the gap is about fivefold and the widest spread ever
+seen between runs of one build on this benchmark is about 2.6x. Believe the
+direction; do not quote the third decimal.
 
-## What it answers
+## What this retires
 
-Every retrieval number on record was measured while OpenAlex was throttled or
-refusing outright, because the API key arrived after the runs. The last one,
-`recall_total` 0.356, was taken on an OpenAlex that was degrading toward zero
-during the run. With the key wired in it should be higher, and nobody knows by
-how much.
+The gap this file used to point at is gone, and it went without being worked on.
 
-`band.py` will say CANNOT TELL against a single run, which is correct and
-expected. Read the number, do not treat it as a verdict.
+Measured with no model calls, on 20 cases and 30 gold papers: keyword search
+alone puts 13% of gold into the pool, and the citation walk takes that to 57%.
+End-to-end recall was 0.356 at the time, so about twenty points of gold were
+being retrieved and then discarded at the ~58-paper cut. That looked like the
+cheapest remaining win.
 
-## The interesting gap, if there is appetite for one more thing later
-
-Measured with no LLM at all, on 20 cases and 30 gold papers, keyed:
-
-| | gold reaching the pool |
-|---|---|
-| keyword search alone | 4/30 (13%) |
-| plus the citation walk | 17/30 (57%) |
-
-But end-to-end `recall_total` was 0.356. So roughly twenty points of gold are
-being retrieved and then discarded: the pool is cut to about 58 papers a case,
-and papers that made it into the pool do not survive the cut.
-
-That is a ranking and cap problem, not a retrieval one, and it is the cheapest
-remaining win — the retrieval half is already solved. Raising the cut and
-measuring would be a handful of runs rather than a day.
-
-Related and already measured: walking both citation graphs on every search
-(`FIRMO_S2_CITATION_ALWAYS=1`) made recall *worse* in its one run, 0.264
-against 0.305–0.374. Consistent with the same cause — more candidates
-displacing good ones rather than adding to them. Worth finishing that arm
-before touching the cap, since they are the same question from two directions.
+End-to-end is now 0.543 against the same 57% reaching the pool, so the cut is
+costing roughly three points rather than twenty. The earlier figure was taken
+while OpenAlex was degrading toward nothing, which starved the citation walk —
+every call in that walk goes to OpenAlex — and made the pool look far richer
+than what survived it. Raising the cap is no longer worth a day.
 
 ## What needs no further measurement
 
-Settled by direct observation rather than statistics, and not worth re-running:
+Settled by direct observation rather than statistics:
 
 - Europe PMC, DOAJ and Semantic Scholar were returning zero papers for every
-  query and now return papers.
-- The citation fallback: `recall_total` 0.069 → 0.310, three runs a side.
+  query, and now return papers. Europe PMC was being sent a sort key it does
+  not have and answering with an empty envelope; DOAJ wants its search term in
+  the path and was getting it as `?q=`.
 - The OpenAlex API key: 12/12 queries answered against 0/12 unkeyed.
-- The benchmark itself: 58 cases, 86 gold papers, noise floor 6.6× tighter
-  than the 32-case set it replaced.
+- The citation fallback: `recall_total` 0.069 → 0.310, three runs a side.
+- The benchmark: 58 cases, 86 gold papers, noise floor 6.6x tighter than the
+  32-case set it replaced.
+- BASE authorises by IP and refuses this one whatever user agent it is sent, so
+  it is out of the fan-out behind `FIRMO_ENABLE_BASE=1` rather than spending a
+  request slot per query to be refused.
+
+## If there is appetite for more
+
+In rough order of expected value:
+
+1. **A second and third keyed run.** Cheapest way to turn the headline number
+   from believable into established. ~35 minutes each.
+2. **`FIRMO_S2_CITATION_ALWAYS=1`, finished properly.** Walking both citation
+   graphs measured *worse* in its one run (0.264 against 0.305–0.374) but that
+   arm was cut short by the Mistral quota. Same question as the cap from the
+   other direction: whether more candidates displace good ones.
+3. **The remaining third.** 46% of gold is still not found. Nothing cheap is
+   known to be left; this is new work rather than a fix.
+
+## House rules for this file
+
+**One run, not a campaign.** Firmo's own Mistral and OpenAlex quotas are the
+budget that matters, and the harness drinks from both. Three runs a side is the
+standard for deciding whether to *change* something; it is the wrong standard
+for recording a number already believed.
+
+**A run without the reranker degrades silently to cosine ranking rather than
+failing.** That is how the wrong conclusions in this repository have been
+reached before. If a run looks strange, check its per-case timing for a
+collapse partway through before believing it.

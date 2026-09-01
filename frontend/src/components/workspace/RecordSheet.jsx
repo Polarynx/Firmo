@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 
-import { API } from '../../lib/api'
+import { API, humanError, safeFetch } from '../../lib/api'
 import { flush } from '../../lib/record'
 import { authToken } from '../../stores/useAuthStore'
 import { useRecordStore } from '../../stores/useRecordStore'
@@ -66,6 +66,7 @@ export default function RecordSheet({ onClose }) {
   const [loading, setLoading] = useState(false)
   const [shareToken, setShareToken] = useState(null)
   const [copied, setCopied] = useState(false)
+  const [shareError, setShareError] = useState('')
 
   const signedIn = !!authToken()
   const mine = localEvents.filter(e => e.projectId === projectId)
@@ -103,21 +104,44 @@ export default function RecordSheet({ onClose }) {
   const verification = server?.verification
 
   async function share() {
-    const res = await fetch(`${API}/api/record/share`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken()}` },
-      body: JSON.stringify({ project_id: projectId, title: projectName }),
-    })
-    if (res.ok) setShareToken((await res.json()).token)
+    setShareError('')
+    try {
+      const res = await safeFetch(`${API}/api/record/share`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken()}` },
+        body: JSON.stringify({ project_id: projectId, title: projectName }),
+      })
+      if (!res.ok) throw new Error(humanError(res.status))
+      setShareToken((await res.json()).token)
+    } catch (e) {
+      // It used to check `res.ok` and do nothing when it was false, so a failed
+      // share was a button that did not respond.
+      setShareError(e.message || 'Could not create the link just now.')
+    }
   }
 
   async function revoke() {
-    await fetch(`${API}/api/record/unshare`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken()}` },
-      body: JSON.stringify({ project_id: projectId }),
-    })
-    setShareToken(null)
+    // The token is cleared only once the server has actually revoked it.
+    //
+    // This used to clear it whatever happened, which is the worst available
+    // outcome: the link stays live and public while the screen says it is gone,
+    // so the one person who could revoke it believes they already have. A
+    // failed revoke has to look like a failure.
+    setShareError('')
+    try {
+      const res = await safeFetch(`${API}/api/record/unshare`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken()}` },
+        body: JSON.stringify({ project_id: projectId }),
+      })
+      if (!res.ok) throw new Error(humanError(res.status))
+      setShareToken(null)
+    } catch (e) {
+      setShareError(
+        (e.message || 'That did not work.') +
+        ' The link is still live, so try again in a moment.'
+      )
+    }
   }
 
   const shareUrl = shareToken ? `${window.location.origin}/record/${shareToken}` : ''
@@ -230,6 +254,14 @@ export default function RecordSheet({ onClose }) {
         </div>
 
         <div className="shrink-0 border-t border-hair/10 px-6 py-4 flex flex-col gap-3">
+          {/* A failed share or revoke has to be visible. The revoke case is the
+              one that matters: the link stays live, and the only person who can
+              take it down is the one reading this. */}
+          {shareError && (
+            <p className="text-[11.5px] leading-relaxed text-rose-600 dark:text-rose-400">
+              {shareError}
+            </p>
+          )}
           {/* What a link actually publishes, said before it is minted rather
               than in a help page nobody opens. Sharing your process record is a
               genuinely irreversible act — you cannot un-see a URL — and the

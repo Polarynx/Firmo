@@ -5,9 +5,17 @@ Firmo searches fourteen academic databases and briefs you; paste a draft and it
 marks every claim that needs backing and offers sources for each; paste a
 reference list and it checks every entry against the publisher's record.
 
-Firmo explains, plans, and finds evidence. It does not write the paper — the
-grounded chat is hard-limited to outlines and explanations, which is the point
-rather than a limitation.
+The chat works on your words rather than supplying its own. Written a
+paragraph? It will rewrite it, tighten it, restructure it, fix the logic, or
+show you two versions of your own sentence, and say what changed. Written
+nothing yet? It gives you the structure — the points in order, what each needs,
+which source carries it — and asks for a first line, however rough, to work on
+with you.
+
+What it will not do is hand you prose you could paste in. That boundary is
+recorded rather than merely claimed: when the model declines, it marks the
+moment itself, so the process record shows a refusal actually happened instead
+of asserting the policy exists.
 
 ## What it does
 
@@ -35,9 +43,12 @@ that fails is reported as *unchecked*, never as *not found* — a student should
 never be told their real source is fake because an API hiccuped.
 
 **Also:** argument review (thesis, paragraph-by-paragraph, missing
-counterargument), outline builder, annotated bibliography, verbatim quote
-finder with page numbers from open-access PDFs, and a grounded chat over your
-saved sources.
+counterargument), outline builder, annotated bibliography, and a chat grounded
+in your sources, question, outline and draft at once.
+
+The verbatim quote finder is gone. It pulled page numbers out of open-access
+PDFs and was wrong often enough that a student could have cited a page the
+sentence was not on, which is worse than not offering it.
 
 **Import and export.** Bring in RIS, BibTeX, or a list of DOIs. Export a real
 Word document — your draft plus a works-cited page with hanging indents in APA,

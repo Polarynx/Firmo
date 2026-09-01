@@ -1802,6 +1802,30 @@ def candidate_rank(paper: dict, query_terms: set) -> float:
 
 
 def deduplicate(papers: list[dict]) -> list[dict]:
+    """One paper per work, across fourteen databases that each spell it
+    differently.
+
+    A title key of sixty characters merges anything that agrees that far, even
+    when both papers carry different DOIs, and that looks wrong: a DOI is the
+    publisher's claim that this is a distinct work, and two long titles can
+    agree up to the truncation without being the same paper.
+
+    It was changed on that reasoning and the change was measured on a live
+    fan-out of 172 papers. Three title collisions, and all three were the same
+    work twice rather than two works:
+
+      - ERIC with no DOI, OpenAlex with 10.2307/145715
+      - arXiv with no DOI, Semantic Scholar with 10.2139/ssrn.5015033
+      - the same article under a JSTOR DOI and a publisher DOI
+
+    Nothing distinct was being lost, and trusting the DOI produced three
+    duplicates instead. Registries issue several DOIs for one work far more
+    often than two works share sixty characters of title, so the title is the
+    better identity here despite being the weaker one in principle.
+
+    Left as it is, with the measurement, because the argument for changing it
+    is genuinely persuasive and wrong.
+    """
     seen_dois: set[str] = set()
     seen_titles: set[str] = set()
     unique = []

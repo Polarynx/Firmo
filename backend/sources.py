@@ -112,6 +112,11 @@ def get_client() -> httpx.AsyncClient:
 # seconds took 29, spent entirely on sleeping between rejections. So when a host
 # rate-limits us, stop calling it for a cooldown and fail instantly instead.
 #
+# 502 and 504 join 429 and 503 because a database that is down is as useless to
+# this search as one that is throttling us, and just as pointless to keep
+# asking. DOAJ was returning 502 from its front end while this was written, and
+# without the breaker every query in every search would still have gone to it.
+#
 # Two different things arrive as 429, and a minute is the right answer to only
 # one of them. A burst limit clears in seconds. A spent daily budget does not:
 #
@@ -249,7 +254,7 @@ async def _get(url: str, params: dict, timeout: float = 15.0, headers: Optional[
                 resp = await get_client().get(url, params=params, timeout=timeout, headers=headers)
         else:
             resp = await get_client().get(url, params=params, timeout=timeout, headers=headers)
-        if resp.status_code in (429, 503):
+        if resp.status_code in (429, 502, 503, 504):
             # A host we already pace ourselves against is a different case. Its
             # 429 means "that was a shade too fast", not "you are overloading
             # me", and benching it for a minute over one is catastrophic when

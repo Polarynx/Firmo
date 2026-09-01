@@ -141,6 +141,17 @@ if not os.getenv("OPENALEX_API_KEY"):
           "key, searches quietly return a fraction of what they should. Keys are "
           "free: https://openalex.org/ - then set it in backend/.env")
 
+# Quieter than the OpenAlex warning because the failure is smaller, but the same
+# shape: unkeyed Semantic Scholar is fine until Firmo is busy, then it starts
+# returning 429 and the connector goes silent. Observed during a benchmark run -
+# the health check reported it silent for three consecutive searches while the
+# rest of the fan-out carried on normally. A key is free and removes it.
+if not os.getenv("SEMANTIC_SCHOLAR_API_KEY"):
+    print("[startup WARN] SEMANTIC_SCHOLAR_API_KEY is not set. Semantic Scholar "
+          "throttles unkeyed callers under load, so it drops out of searches exactly "
+          "when Firmo is busiest. Keys are free: "
+          "https://www.semanticscholar.org/product/api#api-key-form")
+
 if not OPENALEX_MAILTO:
     print("[startup WARN] OPENALEX_MAILTO is not set to a real address. It is how "
           "OpenAlex attributes traffic and it costs nothing. Set it in backend/.env "

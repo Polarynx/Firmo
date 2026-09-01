@@ -2,21 +2,28 @@
 
 ## The number
 
-`keyed-1`, 58 cases, the first run ever taken with a healthy OpenAlex:
+Two runs with a keyed OpenAlex, against three of the same build before the
+citation and connector work:
 
-| | before (3 runs) | keyed-1 (1 run) |
+| | before (3 runs) | keyed (2 runs) |
 |---|---|---|
-| `recall_total` | 0.078 – 0.103 | **0.543** |
-| `recall_at_k` | 0.043 – 0.069 | **0.399** |
-| `hit_rate` | 0.052 – 0.103 | **0.500** |
+| `recall_total` | 0.078 - 0.103 | **0.382 - 0.543** |
+| `recall_at_k` | 0.043 - 0.069 | **0.270 - 0.399** |
+| `hit_rate` | 0.052 - 0.103 | **0.379 - 0.500** |
 
-Firmo finds more than half the papers a person who knows the field would name,
-and half of all questions surface at least one of them. It was one in ten.
+Firmo finds roughly two fifths to a half of the papers a person who knows the
+field would name, against one in ten before. `band.py` still says two runs a
+side is weak evidence and it is right; the ranges do not come close to
+overlapping, and the worst keyed run is nearly four times the best control.
 
-`band.py` says this is weak evidence, and it is right to: one run a side. It is
-reported anyway because the gap is about fivefold and the widest spread ever
-seen between runs of one build on this benchmark is about 2.6x. Believe the
-direction; do not quote the third decimal.
+The spread between the two keyed runs is not noise, and it is worth reading.
+`keyed-2` ran with Semantic Scholar throttled to silence, DOAJ behind its bot
+challenge, and six Mistral rate-limit retries. So 0.382 is roughly what Firmo
+does with two indexes missing and the model under pressure, and 0.543 is what
+it does on a good day. Both numbers are useful; neither is the third decimal.
+
+`keyed-3` was not run. Mistral began rate-limiting partway through `keyed-2`,
+and the rule below exists precisely for that moment.
 
 ## What this retires
 
@@ -49,13 +56,21 @@ Settled by direct observation rather than statistics:
 - BASE authorises by IP and refuses this one whatever user agent it is sent, so
   it is out of the fan-out behind `FIRMO_ENABLE_BASE=1` rather than spending a
   request slot per query to be refused.
+- DOAJ is behind a Cloudflare bot challenge (403, "Just a moment..."). The
+  connector is correct and returned papers for a day after its URL was fixed;
+  the challenge is not something to work around. The breaker treats it as an
+  outage.
+- Semantic Scholar needs `SEMANTIC_SCHOLAR_API_KEY`. It is fine idle and
+  throttles to silence under load, which is when it matters. Free, and it was
+  silent through all of `keyed-2`.
 
 ## If there is appetite for more
 
 In rough order of expected value:
 
-1. **A second and third keyed run.** Cheapest way to turn the headline number
-   from believable into established. ~35 minutes each.
+1. **A third keyed run.** Cheapest way to turn the headline number from
+   believable into established, and the only thing band.py is still asking for.
+   ~35 minutes. Run it when the Mistral quota is fresh, not after a day of use.
 2. **`FIRMO_S2_CITATION_ALWAYS=1`, finished properly.** Walking both citation
    graphs measured *worse* in its one run (0.264 against 0.305–0.374) but that
    arm was cut short by the Mistral quota. Same question as the cap from the

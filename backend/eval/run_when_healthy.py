@@ -30,21 +30,52 @@ from dotenv import load_dotenv
 load_dotenv(BACKEND / ".env")
 
 import llm
+import sources
 
 HEALTHY_IN_A_ROW = 3        # consecutive good probes before we believe it
 PROBE_GAP_S = 60.0          # spread out, so a lucky second does not qualify
 RETRY_GAP_S = 300.0         # while it is down, ask every five minutes
-MAX_WAIT_S = 8 * 3600.0     # give up rather than wait forever
+MAX_WAIT_S = 14 * 3600.0    # long enough to outlast an OpenAlex daily budget
 
 
 async def probe() -> bool:
-    """One cheap call. True only on a real answer."""
+    """One cheap call to each thing a valid run needs. True only if both answer.
+
+    Mistral and OpenAlex, because either one being down ruins a run and neither
+    ruins it loudly. Without the reranker the search silently falls back to
+    cosine ranking; without OpenAlex the citation walk - which every call in it
+    makes to OpenAlex, and which is where most of the recall comes from - simply
+    returns nothing, and an empty neighbourhood looks exactly like a refused
+    request from the inside.
+
+    This gate originally checked only the model, and the run it let through came
+    back at 0.236 against a band of 0.382-0.543. Not a regression: OpenAlex's
+    daily budget had run out and it was silent for all 58 cases. The number was
+    only readable because the run records which connectors went quiet.
+    """
     try:
         out = await llm.chat_json('Return ONLY {"ok": 1}', max_tokens=20)
-        return bool(out)
+        if not out:
+            print("  probe failed: model returned nothing", flush=True)
+            return False
     except Exception as e:
-        print(f"  probe failed: {type(e).__name__}: {str(e)[:80]}", flush=True)
+        print(f"  probe failed: model {type(e).__name__}: {str(e)[:70]}", flush=True)
         return False
+
+    try:
+        r = await sources.get_client().get(
+            sources.OPENALEX_URL,
+            params=sources._polite({"search": "minimum wage", "per-page": 1, "select": "id"}),
+            timeout=20.0)
+        if r.status_code != 200:
+            detail = "daily budget spent" if "budget" in r.text[:300].lower() else f"HTTP {r.status_code}"
+            print(f"  probe failed: OpenAlex {detail}", flush=True)
+            return False
+    except Exception as e:
+        print(f"  probe failed: OpenAlex {type(e).__name__}: {str(e)[:70]}", flush=True)
+        return False
+
+    return True
 
 
 async def wait_for_health() -> bool:

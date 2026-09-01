@@ -22,7 +22,25 @@ challenge, and six Mistral rate-limit retries. So 0.382 is roughly what Firmo
 does with two indexes missing and the model under pressure, and 0.543 is what
 it does on a good day. Both numbers are useful; neither is the third decimal.
 
-`keyed-3` has been attempted twice and abandoned twice, both times on purpose.
+`keyed-3` has now been attempted three times and is still owed.
+
+The third attempt completed, and its number is not usable: `recall_total` 0.236
+against a band of 0.382-0.543. That reads as a collapse and is not one. The run
+records what it could search, and the line underneath says
+`connectors_silent: ["search_openalex"]` - OpenAlex's daily budget ran out and
+it was absent for all 58 cases, taking the citation walk with it, since every
+call in that walk goes to OpenAlex. The file is kept as
+`keyed-3-no-openalex.json` and must not be counted in the band.
+
+Two things worth taking from it. Without the conditions block this would have
+looked exactly like a ranking regression, and somebody would have spent a day
+on it. And 0.236 with the strongest index missing entirely is still more than
+double the 0.078-0.103 the same benchmark gave before this work, which says the
+connector repairs carry real recall on their own.
+
+The gate now checks OpenAlex as well as Mistral, which is what let this through.
+
+Before that: two attempts abandoned on purpose.
 The first attempt stopped when Mistral began rate-limiting partway through
 `keyed-2`. The second was killed after one case: 29 consecutive 503s
 ("Service temporarily unavailable due to high load"), that single case scoring

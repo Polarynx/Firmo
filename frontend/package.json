@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/check-selectors.mjs && vite build",
+    "build": "node scripts/check-frontend.mjs && vite build",
     "preview": "vite preview",
-    "check": "node scripts/check-selectors.mjs"
+    "check": "node scripts/check-frontend.mjs"
   },
   "dependencies": {
     "framer-motion": "^12.42.2",

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 
-import { API } from '../../lib/api'
+import { API, safeFetch } from '../../lib/api'
 import { authToken } from '../../stores/useAuthStore'
 import { useSavedSources } from '../../stores/selectors'
 import { useUIStore } from '../../stores/useUIStore'
@@ -48,7 +48,7 @@ export default function EvidenceDrawer({ claim, projectId }) {
     if (!text || !projectId || !signedIn) return
     let cancelled = false
     setState(s => ({ ...s, status: 'loading' }))
-    fetch(`${API}/api/corpus/search`, {
+    safeFetch(`${API}/api/corpus/search`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken()}` },
       body: JSON.stringify({ project_id: projectId, claim: text, top_k: 3 }),

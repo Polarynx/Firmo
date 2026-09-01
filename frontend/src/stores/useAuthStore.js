@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { API } from '../lib/api'
+import { API, safeFetch } from '../lib/api'
 
 // Who is signed in.
 //
@@ -39,7 +39,7 @@ export function authToken() {
 }
 
 async function post(path, body) {
-  const res = await fetch(`${API}${path}`, {
+  const res = await safeFetch(`${API}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),

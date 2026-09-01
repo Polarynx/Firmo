@@ -1,4 +1,4 @@
-import { API } from './api'
+import { API, safeFetch } from './api'
 import { authToken } from '../stores/useAuthStore'
 
 // Reading a project's papers, in the background.
@@ -49,7 +49,7 @@ export async function ingest(projectId, papers) {
   if (running || !authToken()) return
   running = true
   try {
-    const res = await fetch(`${API}/api/corpus/ingest`, {
+    const res = await safeFetch(`${API}/api/corpus/ingest`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken()}` },
       body: JSON.stringify({ project_id: projectId, papers }),

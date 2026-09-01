@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-import { API } from '../lib/api'
+import { API, safeFetch } from '../lib/api'
 
 // The shared process record, as an instructor sees it.
 //
@@ -62,7 +62,7 @@ export default function PublicRecord({ token }) {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    fetch(`${API}/api/record/public/${token}`)
+    safeFetch(`${API}/api/record/public/${token}`)
       .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
       .then(d => {
         setData(d)

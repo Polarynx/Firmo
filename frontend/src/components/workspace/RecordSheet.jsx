@@ -78,7 +78,7 @@ export default function RecordSheet({ onClose }) {
     // Flush first: a record read a second after the work was done should
     // include that work, not lag four seconds behind it.
     flush()
-      .then(() => fetch(`${API}/api/record/${projectId}`, {
+      .then(() => safeFetch(`${API}/api/record/${projectId}`, {
         headers: { Authorization: `Bearer ${authToken()}` },
       }))
       .then(r => (r.ok ? r.json() : null))

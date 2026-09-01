@@ -200,3 +200,41 @@ def test_a_paper_with_no_doi_dedupes_against_the_same_paper_with_one():
 def test_two_untitled_undoied_papers_do_not_collapse_into_one():
     papers = [_paper(doi=None, title="First"), _paper(doi=None, title="Second")]
     assert len(S.deduplicate(papers)) == 2
+
+
+# ── Titles that arrive in capitals ─────────────────────────────────────────
+
+@pytest.mark.parametrize("shouted,expected", [
+    ("THE ECONOMIC IMPACT OF A HIGH NATIONAL MINIMUM WAGE",
+     "The Economic Impact of a High National Minimum Wage"),
+    ("MINIMUM WAGE EFFECTS ON EMPLOYMENT IN THE US AND THE EU",
+     "Minimum Wage Effects on Employment in the US and the EU"),
+    ("HIV PREVALENCE AND GDP GROWTH IN SUB-SAHARAN AFRICA",
+     "HIV Prevalence and GDP Growth in Sub-Saharan Africa"),
+    ("WORLD WAR II AND THE LABOUR SUPPLY",
+     "World War II and the Labour Supply"),
+])
+def test_a_shouted_title_is_brought_back_down(shouted, expected):
+    assert S._unshout(shouted) == expected
+
+
+@pytest.mark.parametrize("already_fine", [
+    "The RAND Health Insurance Experiment",
+    "Minimum Wages and Employment: A Case Study",
+    "DNA methylation and ageing",
+    "eLife: a new model",
+])
+def test_a_title_with_any_real_lowercase_is_left_alone(already_fine):
+    # Deliberate casing and its acronyms must survive untouched. Recasing by
+    # guesswork is how the first version of this turned "IMPACT OF A HIGH" into
+    # "Impact OF A HIGH".
+    assert S._unshout(already_fine) == already_fine
+
+
+def test_a_short_all_caps_string_is_not_a_shouted_title():
+    assert S._unshout("NBER") == "NBER"
+
+
+def test_de_shouting_runs_as_part_of_cleaning_a_paper():
+    out = S.clean_paper(_paper(title="MINIMUM WAGES AND EMPLOYMENT IN NEW JERSEY"))
+    assert out["title"] == "Minimum Wages and Employment in New Jersey"

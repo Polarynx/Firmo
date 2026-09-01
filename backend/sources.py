@@ -1718,10 +1718,60 @@ def normalize_doi(doi) -> Optional[str]:
     return d if d.startswith("10.") else None
 
 
+# ── Titles that arrive shouting ─────────────────────────────────────────────
+#
+# Some indexes store titles in capitals - Europe PMC and ERIC both do - so a
+# result list reads as THE ECONOMIC IMPACT OF A HIGH NATIONAL MINIMUM WAGE next
+# to sentence-cased neighbours. It looks like emphasis, or like a bug, and it is
+# neither: it is how that record was typed in.
+#
+# Only titles that are entirely capitals are touched. Anything with real
+# lowercase in it is left exactly as written, so a deliberately cased title and
+# its acronyms survive untouched.
+#
+# Acronyms inside an all-caps title cannot be recovered by rule - the first
+# attempt here guessed from word length and turned "THE ECONOMIC IMPACT OF A
+# HIGH NATIONAL MINIMUM WAGE" into "The Economic Impact OF A HIGH National
+# Minimum WAGE", which is worse than leaving it shouting. So the ones worth
+# keeping are listed instead. A long acronym outside this list loses its
+# capitals; that is a smaller and rarer wrong than the alternatives.
+_KEEP_CAPS = {
+    "US", "USA", "UK", "EU", "UN", "USSR", "OECD", "NBER", "WHO", "GDP", "CPI",
+    "DNA", "RNA", "HIV", "AIDS", "COVID", "SARS", "MRI", "PTSD", "ADHD", "IQ",
+    "STEM", "AI", "GPT", "CO2", "PISA", "NAEP", "SAT", "GPA", "OLS", "GMM",
+    "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X",
+}
+_SMALL_WORDS = {
+    "a", "an", "and", "as", "at", "but", "by", "for", "from", "in", "nor", "of",
+    "on", "or", "the", "to", "vs", "via", "with",
+}
+
+
+def _unshout(title: str) -> str:
+    letters = [c for c in title if c.isalpha()]
+    if len(letters) < 12 or any(c.islower() for c in letters):
+        return title
+
+    out = []
+    for i, word in enumerate(title.split()):
+        bare = word.strip(".,:;()[]'\"")
+        if bare.upper() in _KEEP_CAPS:
+            out.append(word)
+            continue
+        low = word.lower()
+        if i > 0 and low.strip(".,:;()[]'\"") in _SMALL_WORDS:
+            out.append(low)
+        else:
+            # Each half of a hyphenated word, so SUB-SAHARAN comes back as
+            # Sub-Saharan rather than Sub-saharan.
+            out.append("-".join(part[:1].upper() + part[1:] for part in low.split("-")))
+    return " ".join(out)
+
+
 def clean_paper(paper: dict) -> dict:
     return {
         **paper,
-        "title": clean_text(paper.get("title", "")),
+        "title": _unshout(clean_text(paper.get("title", ""))),
         "abstract": clean_text(paper.get("abstract", "")),
         "doi": normalize_doi(paper.get("doi")),
     }

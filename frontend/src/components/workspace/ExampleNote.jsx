@@ -2,7 +2,9 @@ import { motion } from 'framer-motion'
 
 import { useWorkspaceStore } from '../../stores/useWorkspaceStore'
 import { useUIStore } from '../../stores/useUIStore'
-import { isExampleProject } from '../../lib/example'
+import { useResearchStore } from '../../stores/useResearchStore'
+import { useAnnotationStore } from '../../stores/useAnnotationStore'
+import { clearExampleState, isExampleProject } from '../../lib/example'
 import { SPRING } from '../../lib/constants'
 
 // ── "This one isn't yours" ──────────────────────────────────────────────────
@@ -43,7 +45,15 @@ export default function ExampleNote() {
       </p>
       <div className="flex items-center gap-3 ml-auto shrink-0">
         <button
-          onClick={() => { createProject('Untitled paper'); setStage('question') }}
+          onClick={() => {
+            // The new project clears the sources, because those belong to it.
+            // The question, brief, outline, draft and citations do not - they
+            // are global state the example seeded - so they have to be cleared
+            // too, or the student's first paper opens holding someone else's.
+            createProject('Untitled paper')
+            clearExampleState({ useResearchStore, useAnnotationStore })
+            setStage('question')
+          }}
           className="text-[11.5px] font-medium text-brand-600 dark:text-signal hover:opacity-75
             transition-opacity"
         >
@@ -51,7 +61,11 @@ export default function ExampleNote() {
         </button>
         <span className="text-t3 text-[11px]">·</span>
         <button
-          onClick={() => project && deleteProject(project.id)}
+          onClick={() => {
+            if (!project) return
+            deleteProject(project.id)
+            clearExampleState({ useResearchStore, useAnnotationStore })
+          }}
           className="text-[11.5px] font-medium text-t3 hover:text-t1 transition-colors"
         >
           Remove the example

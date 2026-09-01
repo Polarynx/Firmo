@@ -94,3 +94,61 @@ export function openExample({ useWorkspaceStore, useResearchStore, useAnnotation
   // from the outside, and it is what the empty workspace can never show.
   useUIStore.getState().setStage('sources')
 }
+
+/** Everything openExample writes outside the project, put back as it was.
+ *
+ * The example is a real project, so `createProject` gives a student their own
+ * empty one and the sources go with it. The question, the brief, the outline,
+ * the claims and the reference audit do not: those live in the research and
+ * annotation stores, which are global rather than per-project, and openExample
+ * seeds them directly.
+ *
+ * So "Start my own" used to hand somebody a fresh paper still carrying the
+ * example's question, its 127-word draft, its three outline sections and its
+ * three checked references - the tab counters even kept the numbers. The one
+ * screen whose entire job is to say "this part is not yours" was leaving most
+ * of it behind.
+ *
+ * Kept next to openExample deliberately. These two have to agree about what the
+ * example touches, and the way that guarantee breaks is by living in different
+ * files.
+ */
+export function clearExampleState({ useResearchStore, useAnnotationStore }) {
+  useResearchStore.setState({
+    query: '',
+    searchedQuery: '',
+    brief: null,
+    inputType: 'topic',
+    questionShape: 'none',
+    results: [],
+    provisional: false,
+    roleCounts: null,
+    facets: [],
+    activeFacet: null,
+    hiddenSources: new Set(),
+    showRelated: false,
+    isSearching: false,
+    statusMsg: '',
+    arms: [],
+    stage: '',
+    gathered: 0,
+    kept: 0,
+    error: '',
+    moreLoading: false,
+  })
+
+  useAnnotationStore.setState({
+    claims: null,
+    typos: null,
+    meta: null,
+    selectedClaimId: null,
+    argument: null,
+    citations: null,
+    outline: null,
+    outlineThesis: '',
+    draftError: '',
+    argError: '',
+    citeError: '',
+    outlineError: '',
+  })
+}

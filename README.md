@@ -131,6 +131,7 @@ looks like a brand-new user. Add `?keep` to the URL to keep your work.
 | `DATABASE_URL` | backend | Postgres for accounts. Omitted, Firmo uses a local SQLite file. |
 | `FIRMO_SECRET` | backend | Signs session tokens. **Required in production** — startup refuses without it. |
 | `ALLOWED_ORIGINS` | backend | Comma-separated origins allowed by CORS. Must include the deployed frontend. |
+| `SEMANTIC_SCHOLAR_API_KEY` | backend | Semantic Scholar throttles unkeyed callers under load, so it drops out exactly when Firmo is busiest. Note that a key being *set* is not the same as it working: an unrecognised or expired key gets the same 429 as an anonymous caller, so if the connector goes quiet with a key present, check the key's status rather than the code. |
 | `FIRMO_REASONING_MODEL` | backend | Model for claim verdicts and argument review. Falls back automatically if the key cannot serve it. |
 | `FIRMO_DAILY_LIMIT` / `FIRMO_IP_CEILING` | backend | Per-person allowance and the per-network ceiling above it. |
 | `VITE_API_URL` | frontend | The backend's origin, with no trailing slash and no `/api`. Without it a deployed frontend calls itself and every request fails. |

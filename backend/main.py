@@ -151,6 +151,16 @@ if not os.getenv("SEMANTIC_SCHOLAR_API_KEY"):
           "throttles unkeyed callers under load, so it drops out of searches exactly "
           "when Firmo is busiest. Keys are free: "
           "https://www.semanticscholar.org/product/api#api-key-form")
+# A set key is not the same as a working one, and the difference is invisible
+# here. Semantic Scholar answers an unrecognised key with the same 429 it gives
+# an anonymous caller, wording and all - "apply for a key for higher rate
+# limits" - so a key that has expired or was never activated looks exactly like
+# no key at all. Measured: identical 429 with the header and without it.
+#
+# Nothing at startup can tell them apart without spending a request on every
+# boot, so this is left to the connector-health check, which reports the
+# silence during real use. If Semantic Scholar is quiet while a key is set,
+# check the key's status rather than the code.
 
 if not OPENALEX_MAILTO:
     print("[startup WARN] OPENALEX_MAILTO is not set to a real address. It is how "

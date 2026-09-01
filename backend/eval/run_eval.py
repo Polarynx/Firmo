@@ -43,6 +43,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import main as firmo  # noqa: E402
+import sources  # noqa: E402
 from sources import (  # noqa: E402
     build_query_terms,
     expand_by_citations,
@@ -281,9 +282,34 @@ async def main() -> int:
     summary = summarise(results, args.k)
     print_report(results, summary)
 
+    # What the run was actually able to search.
+    #
+    # keyed-2 came back at 0.382 against keyed-1's 0.543 on identical code, and
+    # the difference was not noise: Semantic Scholar was throttled to silence
+    # and DOAJ was behind a bot challenge for the whole run. That was only
+    # recoverable by grepping the console afterwards, and only because someone
+    # happened to still have the log.
+    #
+    # A number measured with two of the indexes missing is a different number,
+    # so the run records which ones went quiet. Without it, every comparison is
+    # between two runs whose conditions nobody can reconstruct - which is how
+    # most of the wrong conclusions in this repository were reached.
+    conditions = {
+        "connectors_searched": [fn.__name__ for fn, _ in sources.ALL_CONNECTORS],
+        "connectors_silent": sorted(sources.connector_health()),
+        "openalex_keyed": bool(os.getenv("OPENALEX_API_KEY")),
+        "semantic_scholar_keyed": bool(os.getenv("SEMANTIC_SCHOLAR_API_KEY")),
+    }
+    if conditions["connectors_silent"]:
+        print()
+        print("!! these databases returned nothing for this whole run: "
+              + ", ".join(conditions["connectors_silent"]))
+        print("   the numbers above are for a search missing them.")
+
     payload = {
         "run_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         "k": args.k,
+        "conditions": conditions,
         "summary": summary,
         "results": results,
     }

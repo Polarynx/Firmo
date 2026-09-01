@@ -2544,7 +2544,14 @@ async def import_docx(request: Request, file: UploadFile = File(...)):
                    "'Save As' .docx first. Google Docs: File → Download → .docx.",
         )
 
-    data = await file.read()
+    # Read to the cap and one byte past it, never the whole upload.
+    #
+    # `await file.read()` pulls the entire body into memory first and checks the
+    # size afterwards, which makes the limit advisory: a multi-gigabyte POST is
+    # fully resident before the 413 is raised, and the process can be exhausted
+    # by one request. Reading a bounded amount means an oversized file costs 8 MB
+    # and a clear answer instead of the server.
+    data = await file.read(MAX_UPLOAD_BYTES + 1)
     if len(data) > MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="That file is larger than 8 MB.")
     if not data[:2] == b"PK":

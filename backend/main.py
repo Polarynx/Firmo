@@ -126,11 +126,25 @@ if not os.getenv("MISTRAL_API_KEY"):
     print("[startup WARN] MISTRAL_API_KEY is not set, so briefs and ranking will use "
           "fallbacks. Check backend/.env and restart the server.")
 
+# The loudest warning here, because it is the one that costs the most and shows
+# the least. Every call in the citation walk goes to OpenAlex, and the walk is
+# where most of retrieval's recall comes from - keyword search alone reaches 13%
+# of known-good papers, the walk takes it to 57%. Unkeyed, OpenAlex rate-limits
+# under load and meters by daily spend, so those calls start failing; and a
+# refused call and a genuinely empty neighbourhood are the same empty list from
+# the inside. Nothing errors. Searches simply return less, quietly, and the
+# benchmark reads it as bad ranking. That is exactly how two days went.
+if not os.getenv("OPENALEX_API_KEY"):
+    print("[startup WARN] OPENALEX_API_KEY is not set. OpenAlex rate-limits unkeyed "
+          "callers under load and meters them by daily spend, and the citation walk "
+          "that finds most of Firmo's sources runs entirely on OpenAlex. Without a "
+          "key, searches quietly return a fraction of what they should. Keys are "
+          "free: https://openalex.org/ - then set it in backend/.env")
+
 if not OPENALEX_MAILTO:
-    print("[startup WARN] OPENALEX_MAILTO is not set to a real address, so OpenAlex "
-          "calls go to the common pool. OpenAlex meters by budget as well as rate, "
-          "and citation expansion leans on it hardest, so searches will throttle "
-          "sooner. Set it in backend/.env to an address you own.")
+    print("[startup WARN] OPENALEX_MAILTO is not set to a real address. It is how "
+          "OpenAlex attributes traffic and it costs nothing. Set it in backend/.env "
+          "to an address you own.")
 
 limiter = Limiter(key_func=_rate_key)
 

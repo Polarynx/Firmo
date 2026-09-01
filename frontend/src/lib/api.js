@@ -64,7 +64,15 @@ export function humanError(status, detail) {
   return 'That did not work. Try again in a moment.'
 }
 
-/** Wrap fetch so a dead connection reads like one, not like a TypeError. */
+/** Wrap fetch so a dead connection reads like one, not like a TypeError.
+ *
+ * Every request a student can trigger goes through here. It existed and was
+ * bypassed: postJSON, streamNDJSON and both file uploads each called `fetch`
+ * directly, so with the backend unreachable the browser's own TypeError
+ * travelled all the way to the screen and a student read "Failed to fetch", or
+ * "Load failed" in Safari. Those say nothing and suggest nothing, which is the
+ * exact failure the human error messages were written to end.
+ */
 export async function safeFetch(url, init) {
   try {
     return await fetch(url, init)
@@ -75,7 +83,7 @@ export async function safeFetch(url, init) {
 }
 
 export async function postJSON(path, body, signal) {
-  const res = await fetch(`${API}${path}`, {
+  const res = await safeFetch(`${API}${path}`, {
     method: 'POST',
     headers: headers(),
     body: JSON.stringify(body),
@@ -96,7 +104,7 @@ export async function postJSON(path, body, signal) {
  * Calls onEvent(eventObject) for every line as it arrives.
  */
 export async function streamNDJSON(path, body, { signal, onEvent }) {
-  const res = await fetch(`${API}${path}`, {
+  const res = await safeFetch(`${API}${path}`, {
     method: 'POST',
     headers: headers(),
     body: JSON.stringify(body),
@@ -136,7 +144,7 @@ export async function streamNDJSON(path, body, { signal, onEvent }) {
  * server assembles the document and the browser only has to offer it.
  */
 export async function downloadFile(path, body, fallbackName) {
-  const res = await fetch(`${API}${path}`, {
+  const res = await safeFetch(`${API}${path}`, {
     method: 'POST',
     headers: headers(),
     body: JSON.stringify(body),

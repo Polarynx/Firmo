@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 
-import { API } from '../../lib/api'
+import { API, safeFetch } from '../../lib/api'
 import { useUIStore } from '../../stores/useUIStore'
 import { importSession } from '../../lib/session'
 import { useWorkspaceStore } from '../../stores/useWorkspaceStore'
@@ -67,7 +67,7 @@ export default function DocumentDrop() {
     try {
       const body = new FormData()
       body.append('file', file)
-      const res = await fetch(`${API}/api/import-docx`, { method: 'POST', body })
+      const res = await safeFetch(`${API}/api/import-docx`, { method: 'POST', body })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.detail || 'Firmo could not read that file.')
       if (!data.text?.trim()) throw new Error('That document appears to be empty.')

@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 
-import { API, postJSON } from '../../lib/api'
+import { API, postJSON, safeFetch } from '../../lib/api'
 import { useWorkspaceStore } from '../../stores/useWorkspaceStore'
 import { useSavedIds, useSavedSources } from '../../stores/selectors'
 import { paperId } from '../../lib/projects'
@@ -76,7 +76,7 @@ export default function AddSource({ query = '', shape = 'none' }) {
     try {
       const body = new FormData()
       body.append('file', file)
-      const res = await fetch(`${API}/api/import-docx`, { method: 'POST', body })
+      const res = await safeFetch(`${API}/api/import-docx`, { method: 'POST', body })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.detail || 'Could not read that file.')
       const added = addSources([data.paper], 'Your file')

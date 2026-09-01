@@ -117,6 +117,12 @@ def get_client() -> httpx.AsyncClient:
 # asking. DOAJ was returning 502 from its front end while this was written, and
 # without the breaker every query in every search would still have gone to it.
 #
+# 403 is here for the same reason and a different cause. DOAJ has since put its
+# API behind a Cloudflare bot challenge - a 403 carrying "Just a moment..." -
+# which a server-side client cannot answer and should not try to. Without the
+# breaker that is three refusals per search, forever, for a connector that
+# cannot work. See the note on search_doaj.
+#
 # Two different things arrive as 429, and a minute is the right answer to only
 # one of them. A burst limit clears in seconds. A spent daily budget does not:
 #
@@ -254,7 +260,7 @@ async def _get(url: str, params: dict, timeout: float = 15.0, headers: Optional[
                 resp = await get_client().get(url, params=params, timeout=timeout, headers=headers)
         else:
             resp = await get_client().get(url, params=params, timeout=timeout, headers=headers)
-        if resp.status_code in (429, 502, 503, 504):
+        if resp.status_code in (403, 429, 502, 503, 504):
             # A host we already pace ourselves against is a different case. Its
             # 429 means "that was a shade too fast", not "you are overloading
             # me", and benching it for a minute over one is catastrophic when
@@ -701,7 +707,26 @@ async def search_arxiv(query: str, limit: int = 8, year_from: Optional[int] = No
 
 
 async def search_doaj(query: str, limit: int = 8, year_from: Optional[int] = None) -> list[dict]:
-    """DOAJ: Directory of Open Access Journals, peer-reviewed open-access articles."""
+    """DOAJ: Directory of Open Access Journals, peer-reviewed open-access articles.
+
+    Currently answering nothing, and not because of anything here.
+
+    The URL was wrong for a long time - the search term goes in the path, and it
+    was being sent as ?q=, which DOAJ answers with a flat 404 that the bare
+    `except` below turned into "no results on this topic". That is fixed, and it
+    returned papers again for about a day.
+
+    It has since gone behind a Cloudflare bot challenge: requests come back 403
+    with "Just a moment...", the interstitial meant for a browser to solve. A
+    server-side client cannot answer it, and working around bot protection is
+    not something Firmo should do to a public-good index that has decided it
+    wants fewer robots. The breaker treats the 403 as an outage so a dead
+    connector costs one refused request rather than three per search.
+
+    The legitimate route back is an arrangement with DOAJ rather than a clever
+    header. Until then this returns nothing and the connector-health check says
+    so on its twenty-fifth consecutive silence, which is how it was noticed.
+    """
     # The search term goes in the path, not in `q`. DOAJ answers a query
     # parameter with a flat 404 — which the bare `except` below turned into an
     # empty result list, so this read as "DOAJ knows nothing about your topic"

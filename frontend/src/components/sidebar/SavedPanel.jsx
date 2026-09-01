@@ -82,7 +82,10 @@ export default function SavedPanel() {
       />
 
       <div className="flex flex-col gap-2">
-        <span className="eyebrow">Where this paper stands</span>
+        {/* Not "Where this paper stands" - that is the panel's own title,
+            two inches above, and reading it twice makes the checklist look like
+            a second panel rather than the contents of this one. */}
+        <span className="eyebrow">Progress</span>
         <ul className="flex flex-col gap-1.5">
           <Row done={st.question.state === 'done'}>
             {st.question.state === 'done'

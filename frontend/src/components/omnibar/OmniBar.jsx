@@ -240,7 +240,14 @@ export default function OmniBar() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 8 }}
                 transition={SPRING}
-                className="flex flex-col items-center gap-1.5"
+                // A backdrop, because this floats over Zone A rather than
+                // sitting in it. The pills carry `glass` and were legible, but
+                // the line above them was bare text, so on a page with a brief
+                // already drawn it rendered straight through the prose and left
+                // both unreadable. Anything floating over live content has to
+                // bring its own ground.
+                className="flex flex-col items-center gap-1.5 rounded-2xl bg-app/85
+                  backdrop-blur-sm px-3.5 py-2.5 border border-line/60"
               >
                 {/* Only the first time. Once they have asked something, the
                     pills are a shortcut and no longer need introducing. */}

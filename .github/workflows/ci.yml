@@ -1,0 +1,63 @@
+# Run the checks that already exist, so they actually check.
+#
+# The backend tests and the two frontend rules were written after bugs that had
+# each survived for weeks: two databases returning zero papers for every query,
+# and a store selector that turned the Sources tab into a white page. A guard
+# that only runs when somebody remembers to run it is the same guard that was
+# missing both times.
+#
+# No network in any of it. The backend tests never call a model or an index -
+# that is what eval/ is for, and eval costs real quota, so it stays a thing a
+# person starts deliberately rather than something a push triggers.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Tests
+        working-directory: backend
+        # No secrets are set, so this also proves Firmo imports and its suite
+        # passes on a machine that has never been configured.
+        run: python -m pytest tests/ -q
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        working-directory: frontend
+        run: npm ci
+
+      # `npm run build` runs check-frontend.mjs first, so this covers both the
+      # rules and the bundle. Kept as one step because a build that succeeds
+      # while the checks fail is not a state worth having.
+      - name: Checks and build
+        working-directory: frontend
+        run: npm run build

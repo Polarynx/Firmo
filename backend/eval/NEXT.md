@@ -2,58 +2,41 @@
 
 ## The number
 
-Two runs with a keyed OpenAlex, against three of the same build before the
-citation and connector work:
+Three runs a side, 58 cases, same benchmark. `band.py` no longer qualifies it.
 
-| | before (3 runs) | keyed (2 runs) |
+| | before (3 runs) | keyed (3 runs) |
 |---|---|---|
-| `recall_total` | 0.078 - 0.103 | **0.382 - 0.543** |
-| `recall_at_k` | 0.043 - 0.069 | **0.270 - 0.399** |
-| `hit_rate` | 0.052 - 0.103 | **0.379 - 0.500** |
+| `recall_total` | 0.078 - 0.103 | **0.382 - 0.552**, median 0.543 |
+| `recall_at_k` | 0.043 - 0.069 | **0.270 - 0.420**, median 0.399 |
+| `hit_rate` | 0.052 - 0.103 | **0.379 - 0.517**, median 0.500 |
 
-Firmo finds roughly two fifths to a half of the papers a person who knows the
-field would name, against one in ten before. `band.py` still says two runs a
-side is weak evidence and it is right; the ranges do not come close to
-overlapping, and the worst keyed run is nearly four times the best control.
+Verdict on all three metrics: REAL and better, with no overlap between the
+bands and no weak-evidence warning. Median `recall_total` is up about 5.7x.
+Firmo finds a little over half the papers a person who knows the field would
+name, and half of all questions surface at least one. It was one in ten.
 
-The spread between the two keyed runs is not noise, and it is worth reading.
-`keyed-2` ran with Semantic Scholar throttled to silence, DOAJ behind its bot
-challenge, and six Mistral rate-limit retries. So 0.382 is roughly what Firmo
-does with two indexes missing and the model under pressure, and 0.543 is what
-it does on a good day. Both numbers are useful; neither is the third decimal.
+`keyed-3` is the run to quote when one number is needed: 0.552, and the only
+one taken with nothing missing - `connectors_silent: []`, both keys live.
 
-`keyed-3` has now been attempted three times and is still owed.
+It is also the run that most needed checking, because it averaged 158s a case
+against keyed-1's 33s and absorbed eighteen rate-limit retries. A run whose
+reranker dies does not fail, it silently drops to cosine ranking, so the
+timing was split into thirds:
 
-The third attempt completed, and its number is not usable: `recall_total` 0.236
-against a band of 0.382-0.543. That reads as a collapse and is not one. The run
-records what it could search, and the line underneath says
-`connectors_silent: ["search_openalex"]` - OpenAlex's daily budget ran out and
-it was absent for all 58 cases, taking the citation walk with it, since every
-call in that walk goes to OpenAlex. The file is kept as
-`keyed-3-no-openalex.json` and must not be counted in the band.
+  first third   34.4s   mean recall_total 0.421
+  middle       414.2s   mean recall_total 0.553
+  last third    32.0s   mean recall_total 0.675
 
-Two things worth taking from it. Without the conditions block this would have
-looked exactly like a ranking regression, and somebody would have spent a day
-on it. And 0.236 with the strongest index missing entirely is still more than
-double the 0.078-0.103 the same benchmark gave before this work, which says the
-connector repairs carry real recall on their own.
+The middle third is where the throttling landed. Recall rose across the run
+rather than collapsing, and no case came back empty, which is the opposite of
+what a dying reranker looks like - that would be faster and worse, not slower
+and better. The run stands.
 
-The gate now checks OpenAlex as well as Mistral, which is what let this through.
-
-Before that: two attempts abandoned on purpose.
-The first attempt stopped when Mistral began rate-limiting partway through
-`keyed-2`. The second was killed after one case: 29 consecutive 503s
-("Service temporarily unavailable due to high load"), that single case scoring
-0.00, and Mistral unreachable altogether a minute later.
-
-That is the failure this file warns about, met head on. A run without a working
-reranker does not fail - it silently falls back to cosine ranking and produces
-a number that looks like a ranking regression. Banking one would have meant
-retracting it later, which is how most of the wrong conclusions here were
-reached. No partial file was written.
-
-So the third run is still owed, and it needs a day when Mistral is healthy
-rather than the end of a long one.
+The spread across the three is explained rather than mysterious, which is the
+point of recording conditions. `keyed-2` at 0.382 ran with Semantic Scholar
+throttled to silence and DOAJ behind its bot challenge. `keyed-3` at 0.552 ran
+with everything answering. That is the real range: about 0.38 with two indexes
+missing, about 0.55 with all of them.
 
 ## What this retires
 
@@ -103,14 +86,14 @@ Settled by direct observation rather than statistics:
 
 In rough order of expected value:
 
-1. **A third keyed run, on a healthy day.** Cheapest way to turn the headline number from
-   believable into established, and the only thing band.py is still asking for.
-   ~35 minutes. Run it when the Mistral quota is fresh, not after a day of use.
+1. **Nothing on the measurement side.** Three runs a side is the standard this
+   file sets and it has been met. The next run should be a control on a change,
+   not another confirmation of this one.
 2. **`FIRMO_S2_CITATION_ALWAYS=1`, finished properly.** Walking both citation
    graphs measured *worse* in its one run (0.264 against 0.305–0.374) but that
    arm was cut short by the Mistral quota. Same question as the cap from the
    other direction: whether more candidates displace good ones.
-3. **The remaining third.** 46% of gold is still not found. Nothing cheap is
+3. **The remaining half.** About 45% of gold is still not found. Nothing cheap is
    known to be left; this is new work rather than a fix.
 
 ## House rules for this file

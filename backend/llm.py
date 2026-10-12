@@ -17,6 +17,43 @@ from openai import (
 
 load_dotenv()
 
+# ── Provider ────────────────────────────────────────────────────────────────
+#
+# Every call in this file uses the OpenAI SDK against a provider's
+# OpenAI-compatible endpoint, so the provider is a base_url + key + default-model
+# choice and nothing else here moves. Gemini is selected automatically when a
+# GEMINI_API_KEY is present — its free tier serves both chat and embeddings,
+# which is what let Firmo drop a paid Mistral key — otherwise Mistral. Force
+# either side explicitly with FIRMO_PROVIDER=gemini|mistral. Individual model
+# ids still override through FIRMO_MODEL / FIRMO_REASONING_MODEL /
+# FIRMO_EMBED_MODEL, so a provider's defaults are only a starting point.
+_PROVIDER = (os.getenv("FIRMO_PROVIDER")
+             or ("gemini" if os.getenv("GEMINI_API_KEY") else "mistral")).lower()
+
+if _PROVIDER == "gemini":
+    _KEY_ENV = "GEMINI_API_KEY"
+    _API_KEY = os.getenv("GEMINI_API_KEY")
+    _BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
+    _DEF_MODEL = "gemini-2.5-flash"
+    # The reasoning jobs could point at gemini-2.5-pro, but Pro's free tier is a
+    # few dozen requests a day where Flash is ~1,500, so the free default stays
+    # on Flash; a deployment with a paid key sets FIRMO_REASONING_MODEL to Pro.
+    _DEF_REASONING = "gemini-2.5-flash"
+    _DEF_EMBED = "text-embedding-004"
+else:
+    _KEY_ENV = "MISTRAL_API_KEY"
+    _API_KEY = os.getenv("MISTRAL_API_KEY")
+    _BASE_URL = "https://api.mistral.ai/v1"
+    _DEF_MODEL = "mistral-small-latest"
+    _DEF_REASONING = "mistral-large-latest"
+    _DEF_EMBED = "mistral-embed"
+
+# Public, so the app's startup check warns about the key that is actually in use
+# rather than always naming Mistral.
+PROVIDER = _PROVIDER
+KEY_ENV = _KEY_ENV
+HAS_KEY = bool(_API_KEY)
+
 # Two models, routed by how hard the job actually is.
 #
 # MODEL does the volume work: planning search queries, formatting, summarising
@@ -25,8 +62,8 @@ load_dotenv()
 # genuinely backed by a source, and whether a paragraph serves the thesis.
 # Those two jobs set the quality ceiling of the whole product, so they do not
 # share a budget with query planning.
-MODEL = os.getenv("FIRMO_MODEL", "mistral-small-latest")
-REASONING_MODEL = os.getenv("FIRMO_REASONING_MODEL", "mistral-large-latest")
+MODEL = os.getenv("FIRMO_MODEL", _DEF_MODEL)
+REASONING_MODEL = os.getenv("FIRMO_REASONING_MODEL", _DEF_REASONING)
 
 # Which model judges relevance and assigns roles during a search.
 #
@@ -68,7 +105,7 @@ RERANK_MODEL = os.getenv("FIRMO_RERANK_MODEL", MODEL)
 # So the gate is the price of the better model. It costs wall-clock time, which
 # is why it is tunable: raise it on a key with a bigger quota.
 RERANK_CONCURRENCY = int(os.getenv("FIRMO_RERANK_CONCURRENCY", "2"))
-EMBED_MODEL = "mistral-embed"
+EMBED_MODEL = os.getenv("FIRMO_EMBED_MODEL", _DEF_EMBED)
 
 # Timeouts, because the SDK's default is ten minutes.
 #
@@ -82,8 +119,8 @@ EMBED_MODEL = "mistral-embed"
 # student giving up. `max_retries=0` because the retry loop below is ours: the
 # SDK retrying underneath it would silently multiply every wait by three.
 _client = AsyncOpenAI(
-    api_key=os.getenv("MISTRAL_API_KEY"),
-    base_url="https://api.mistral.ai/v1",
+    api_key=_API_KEY,
+    base_url=_BASE_URL,
     timeout=45.0,
     max_retries=0,
 )
@@ -178,8 +215,8 @@ async def chat(prompt: str, max_tokens: int = 512, json_mode: bool = False,
         except AuthenticationError as e:
             # A bad/expired key fails every call, so surface it loudly instead of
             # silently degrading to fallbacks on every request.
-            print(f"[llm AUTH ERROR] Mistral rejected the API key. Check MISTRAL_API_KEY "
-                  f"in backend/.env and RESTART the server. {e}")
+            print(f"[llm AUTH ERROR] {_PROVIDER} rejected the API key. Check {_KEY_ENV} "
+                  f"and RESTART the server. {e}")
             raise
         except _RETRYABLE as e:
             last_exc = e
@@ -243,8 +280,8 @@ async def chat_stream(messages: list[dict], max_tokens: int = 512,
                     yield text
             return
         except AuthenticationError as e:
-            print(f"[llm AUTH ERROR] Mistral rejected the API key. Check MISTRAL_API_KEY "
-                  f"in backend/.env and RESTART the server. {e}")
+            print(f"[llm AUTH ERROR] {_PROVIDER} rejected the API key. Check {_KEY_ENV} "
+                  f"and RESTART the server. {e}")
             raise
         except _RETRYABLE as e:
             if yielded:

@@ -26,8 +26,8 @@ load_dotenv()
 import auth
 import db
 
-from llm import (REASONING_MODEL, RERANK_CONCURRENCY, RERANK_MODEL,
-                 chat, chat_json, chat_stream, embed_texts)
+from llm import (HAS_KEY, KEY_ENV, PROVIDER, REASONING_MODEL, RERANK_CONCURRENCY,
+                 RERANK_MODEL, chat, chat_json, chat_stream, embed_texts)
 
 # One gate for the whole process, not one per search: the quota being protected
 # belongs to the API key, so two concurrent searches must share it rather than
@@ -122,9 +122,11 @@ def _rate_key(request: Request) -> str:
     return f"ip:{_get_client_ip(request)}"
 
 
-if not os.getenv("MISTRAL_API_KEY"):
-    print("[startup WARN] MISTRAL_API_KEY is not set, so briefs and ranking will use "
-          "fallbacks. Check backend/.env and restart the server.")
+if not HAS_KEY:
+    print(f"[startup WARN] {KEY_ENV} is not set (provider: {PROVIDER}), so briefs and "
+          "ranking will use fallbacks. Set it and restart the server.")
+else:
+    print(f"[startup] LLM provider: {PROVIDER}")
 
 # The loudest warning here, because it is the one that costs the most and shows
 # the least. Every call in the citation walk goes to OpenAlex, and the walk is

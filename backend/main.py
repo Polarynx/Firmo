@@ -224,7 +224,14 @@ _allowed_origin_regex = os.getenv(
     r"^((chrome|moz|safari-web)-extension://[a-z0-9-]+"
     r"|https://[a-z0-9-]+\.officeapps\.live\.com"
     r"|https://[a-z0-9-]+\.office\.com"
-    r"|https://[a-z0-9-]+\.microsoft365\.com)$",
+    r"|https://[a-z0-9-]+\.microsoft365\.com"
+    # Every push gives the frontend a fresh Vercel URL — production is stable but
+    # each preview deploy is its own subdomain — and a CORS allow-list pinned to
+    # one origin rejects the preflight from every other, which reads downstream
+    # as "Firmo could not be reached". Matching the project's vercel.app hosts
+    # ends that. Safe because CORS is not the security boundary here (see above):
+    # bearer tokens, no cookies, so an allowed origin rides on nothing.
+    r"|https://firmo[a-z0-9-]*\.vercel\.app)$",
 )
 
 app.add_middleware(

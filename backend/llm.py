@@ -34,12 +34,15 @@ if _PROVIDER == "gemini":
     _KEY_ENV = "GEMINI_API_KEY"
     _API_KEY = os.getenv("GEMINI_API_KEY")
     _BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
-    _DEF_MODEL = "gemini-2.5-flash"
-    # The reasoning jobs could point at gemini-2.5-pro, but Pro's free tier is a
-    # few dozen requests a day where Flash is ~1,500, so the free default stays
-    # on Flash; a deployment with a paid key sets FIRMO_REASONING_MODEL to Pro.
-    _DEF_REASONING = "gemini-2.5-flash"
-    _DEF_EMBED = "text-embedding-004"
+    _DEF_MODEL = "gemini-3.8-flash"
+    # The reasoning jobs could point at a Pro model, but Pro's free tier is a few
+    # dozen requests a day where Flash is ~1,500, so the free default stays on
+    # Flash; a deployment with a paid key sets FIRMO_REASONING_MODEL to Pro.
+    _DEF_REASONING = "gemini-3.8-flash"
+    # text-embedding-004 and gemini-2.5-flash were retired for new keys; the live
+    # ids come straight from the API's own 404s. If this embedding id 404s on a
+    # given key, FIRMO_EMBED_MODEL=gemini-embedding-2 is the other candidate.
+    _DEF_EMBED = "gemini-embedding-001"
 else:
     _KEY_ENV = "MISTRAL_API_KEY"
     _API_KEY = os.getenv("MISTRAL_API_KEY")

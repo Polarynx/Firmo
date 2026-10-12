@@ -95,7 +95,11 @@ export default function SavedPanel() {
           <Row done={sources.length > 0}>
             {sources.length
               ? `${sources.length} source${sources.length === 1 ? '' : 's'} on the shelf`
-              : 'No sources saved'}
+              /* Results back but nothing bookmarked yet is its own state, and the
+                 one the student is usually in right after a search. Saying "none
+                 saved" alone hides that sixty papers are already waiting; the
+                 note names the count so the find is visible on the checklist. */
+              : st.sources.note || 'No sources saved'}
           </Row>
           <Row done={st.outline.state !== 'empty'}>
             {st.outline.note || 'No outline yet'}
@@ -118,14 +122,33 @@ export default function SavedPanel() {
           animate={{ opacity: 1, y: 0 }}
           transition={SPRING}
           onClick={() => setStage(move.stage)}
-          className="group flex flex-col gap-1.5 rounded-lg border border-brand-500/30
-            bg-brand-500/[0.06] px-3.5 py-3 text-left hover:bg-brand-500/[0.11] transition-colors"
+          /* This is the one move worth making right now, and until it was asked
+             for people did not know to reach for it — the find happened in the
+             centre and the way on sits over here on the right. So it carries a
+             little more weight than a plain card: a stronger edge, a soft cobalt
+             cast under it, a live dot by the label, and an arrow that keeps
+             nudging the way it wants you to go. Still one accent, not a klaxon. */
+          className="group flex flex-col gap-1.5 rounded-lg border border-brand-500/50
+            bg-brand-500/[0.08] px-3.5 py-3 text-left transition-colors
+            hover:bg-brand-500/[0.13]
+            shadow-[0_0_0_1px_rgb(77_124_254/0.12),0_10px_28px_-14px_rgb(77_124_254/0.55)]"
         >
-          <span className="eyebrow !text-brand-600 dark:!text-signal">Next</span>
+          <span className="flex items-center gap-1.5">
+            <span className="h-1.5 w-1.5 rounded-full bg-brand-500 dark:bg-signal animate-pulseDot" />
+            <span className="eyebrow !text-brand-600 dark:!text-signal">Next</span>
+          </span>
           <span className="text-[12px] text-t1 leading-relaxed">{move.text}</span>
-          <span className="text-[11.5px] font-medium text-brand-600 dark:text-signal
-            group-hover:translate-x-0.5 transition-transform">
-            {move.label} →
+          <span className="flex items-center gap-1 text-[11.5px] font-medium
+            text-brand-600 dark:text-signal">
+            {move.label}
+            <motion.span
+              aria-hidden
+              animate={{ x: [0, 4, 0] }}
+              transition={{ duration: 1.5, ease: 'easeInOut', repeat: Infinity }}
+              className="text-brand-500 dark:text-signal"
+            >
+              →
+            </motion.span>
           </span>
         </motion.button>
       )}
